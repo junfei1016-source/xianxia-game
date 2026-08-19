@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>法言天地 · AI 开放修仙世界</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- 标题/开始页 -->
+  <div id="landing" class="landing">
+    <div class="landing-mist"></div>
+    <div class="landing-inner">
+      <img class="landing-seal-img" src="./icon.svg" alt="法言" />
+      <div class="landing-logo">法言天地</div>
+      <div class="landing-sub">AI 开放修仙世界 · 每局皆不同</div>
+      <p class="landing-tag">一念成仙，一念成魔。每一次开局，世界、人物、剧情都由你与天道共同书写。</p>
+      <div class="landing-btns">
+        <button id="enterBtn" class="primary" type="button">进入游戏</button>
+        <button id="helpBtn" class="secondary" type="button">游戏说明</button>
+        <button id="landingContinueBtn" class="secondary hidden" type="button">继续上次游戏</button>
+      </div>
+      <div class="landing-ladder">凡人 · 炼气 · 筑基 · 金丹 · 元婴 · 化神 · 合体 · 大乘 · 渡劫 · <span class="gold">飞升</span></div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-seal-img" src="./icon.svg" alt="法言" />
+      <span class="brand-title">法言天地</span>
+      <span class="brand-sub">AI 开放修仙世界</span>
+    </div>
+    <div class="top-right">
+      <button id="helpTopBtn" class="icon-btn" type="button" title="游戏说明">?</button>
+      <div class="top-status" id="topStatus">未开始</div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- 左侧：配置 + 新游戏 + 存档 -->
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>模型配置</h2>
+        <label>Base URL
+          <input id="baseUrl" type="text" placeholder="https://api.deepseek.com" />
+        </label>
+        <label>API Key
+          <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+        </label>
+        <label>Model
+          <select id="model">
+            <option value="deepseek-v4-flash">deepseek-v4-flash（快）</option>
+            <option value="deepseek-v4-pro">deepseek-v4-pro（旗舰）</option>
+            <option value="deepseek-chat">deepseek-chat（V3）</option>
+            <option value="deepseek-reasoner">deepseek-reasoner（R1）</option>
+          </select>
+        </label>
+        <label class="inline">
+          <input id="jsonMode" type="checkbox" checked /> JSON 模式（结构化输出）
+        </label>
+        <p class="hint">Key 只存在你浏览器里，服务器仅做转发。</p>
+      </section>
+
+      <section class="panel">
+        <h2>新游戏</h2>
+
+        <details class="opt-group" open>
+          <summary>⚔ 挑战参数（想赢的策略家看这里）</summary>
+          <div class="q-group">
+            <div class="q-title">难度</div>
+            <div class="chips" id="difficultyChips"></div>
+          </div>
+          <div class="q-group">
+            <div class="q-title">节奏</div>
+            <div class="chips" id="paceChips"></div>
+          </div>
+          <div class="q-group">
+            <div class="q-title">通关回合上限</div>
+            <div class="chips" id="turnLimitChips"></div>
+          </div>
+          <div class="q-group">
+            <div class="q-title">修为增益</div>
+            <div class="chips" id="cultGainChips"></div>
+            <p class="hint">每回合修为成长倍率。开了回合上限想提速，可拉高。</p>
+          </div>
+          <div class="q-group">
+            <div class="q-title">游戏模式</div>
+            <div class="chips" id="modeChips"></div>
+            <p class="hint">「言出法随」= 外挂模式：心想事成、AI 完全依附，想怎么玩就怎么玩，不会失败。</p>
+          </div>
+        </details>
+
+        <details class="opt-group" open>
+          <summary>📜 沉浸参数（想入戏的代入派看这里）</summary>
+          <div class="q-group">
+            <div class="q-title">出身设定</div>
+            <div class="mode-tabs">
+              <button id="modeRandom" class="mode-btn active" type="button">完全随机</button>
+              <button id="modeQuestionnaire" class="mode-btn" type="button">出身问卷</button>
+            </div>
+            <div id="questionnaire" class="questionnaire hidden">
+              <div class="q-group" data-key="origin">
+                <div class="q-title">出身</div>
+                <div class="chips"></div>
+              </div>
+              <div class="q-group" data-key="personality">
+                <div class="q-title">性格</div>
+                <div class="chips"></div>
+              </div>
+              <div class="q-group" data-key="ambition">
+                <div class="q-title">志向</div>
+                <div class="chips"></div>
+              </div>
+            </div>
+          </div>
+          <div class="q-group">
+            <div class="q-title">叙事篇幅</div>
+            <div class="chips" id="lengthChips"></div>
+            <p class="hint">每回合叙事字数。精简省 tokens、更快；丰富更沉浸。</p>
+          </div>
+          <div class="q-group">
+            <div class="q-title">天下大势</div>
+            <div class="chips" id="eraChips"></div>
+          </div>
+        </details>
+
+        <button id="continueBtn" class="secondary hidden" type="button">继续上次游戏</button>
+        <button id="startBtn" class="primary" type="button">开始新游戏</button>
+      </section>
+
+      <section class="panel">
+        <h2>存档</h2>
+        <div class="save-slots" id="saveSlots"></div>
+        <p class="hint">每回合结束自动存档；手动可保留 3 个档位，互不干扰。</p>
+        <button id="exportLogBtn" class="mini" type="button" title="把本局对话与状态导出到桌面，方便反馈意见">📄 导出本局日志</button>
+      </section>
+    </aside>
+
+    <!-- 中间：对话区 -->
+    <main class="chat">
+      <div class="chat-scroll" id="chatScroll">
+        <div class="welcome">
+          <div class="welcome-inner">
+            <img class="welcome-mark-img" src="./icon.svg" alt="法言" />
+            <p class="welcome-title">法言天地</p>
+            <p class="welcome-desc">一念成仙，一念成魔。每一次开局，世界、人物、剧情都由你与天道共同书写，绝无雷同。</p>
+            <p class="muted">先在左侧填好模型配置，然后点「开始新游戏」。</p>
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <textarea id="input" rows="2" placeholder="你想做什么？" disabled></textarea>
+        <button id="demoMenuBtn" class="composer-icon" type="button" title="辅助设置">⚙</button>
+        <button id="sendBtn" type="button" disabled>发送</button>
+        <div id="demoPanel" class="demo-panel hidden">
+          <div class="demo-row">
+            <span>温度（创意度）</span>
+            <select id="tempSelect" title="生成文本的随机性：低=稳定，高=奔放">
+              <option value="0.5">0.5 稳定</option>
+              <option value="0.8" selected>0.8 默认</option>
+              <option value="1.2">1.2 奔放</option>
+            </select>
+          </div>
+          <div class="demo-row">
+            <span>演示速度</span>
+            <select id="demoSpeed" title="演示速度（每回合间隔）">
+              <option value="1000">1秒</option>
+              <option value="2000">2秒</option>
+              <option value="3000" selected>3秒</option>
+              <option value="5000">5秒</option>
+            </select>
+          </div>
+          <button id="demoBtn" class="demo-btn" type="button" title="让 AI 自动替玩家行动，实时演示实际体验">开始自动演示</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- 右侧：标签页（状态 / 任务 / 图鉴 / 成就） -->
+    <aside class="sidebar status-side">
+      <div class="tabs">
+        <button class="tab active" data-tab="status" type="button">状态</button>
+        <button class="tab" data-tab="quest" type="button">任务<span class="tab-dot hidden" data-dot="quest"></span></button>
+        <button class="tab" data-tab="bag" type="button">背包<span class="tab-dot hidden" data-dot="bag"></span></button>
+        <button class="tab" data-tab="equip" type="button">装备<span class="tab-dot hidden" data-dot="equip"></span></button>
+        <button class="tab" data-tab="chronicle" type="button">事迹<span class="tab-dot hidden" data-dot="chronicle"></span></button>
+        <button class="tab" data-tab="codex" type="button">图鉴<span class="tab-dot hidden" data-dot="codex"></span></button>
+        <button class="tab" data-tab="achieve" type="button">成就<span class="tab-dot hidden" data-dot="achieve"></span></button>
+      </div>
+      <div class="tab-pane" id="pane-status">
+        <dl id="statusPanel" class="stat-list"></dl>
+      </div>
+      <div class="tab-pane hidden" id="pane-quest">
+        <div id="questPanel"></div>
+      </div>
+      <div class="tab-pane hidden" id="pane-bag">
+        <div id="bagPanel"></div>
+      </div>
+      <div class="tab-pane hidden" id="pane-equip">
+        <div id="equipPanel"></div>
+      </div>
+      <div class="tab-pane hidden" id="pane-chronicle">
+        <div id="chroniclePanel"></div>
+      </div>
+      <div class="tab-pane hidden" id="pane-codex">
+        <dl id="codexPanel" class="stat-list"></dl>
+      </div>
+      <div class="tab-pane hidden" id="pane-achieve">
+        <ul id="achievementList" class="ach-list"></ul>
+      </div>
+    </aside>
+  </div>
+
+  <div id="helpModal" class="modal hidden">
+    <div class="modal-card help-card">
+      <div class="modal-title">游戏说明</div>
+      <div class="help-body">
+        <details class="help-group" open>
+          <summary>目标与结局</summary>
+          <p>修炼至渡劫期、渡过天劫，<span class="gold">飞升成仙</span>即通关。结局：飞升成仙 / 身死道消 / 堕入魔道 / 寿元耗尽 / 时不我待 / 一统江湖。</p>
+        </details>
+        <details class="help-group" open>
+          <summary>怎么玩</summary>
+          <p>在输入框自由行动（修炼、寻宝、拜师、经商、复仇、索要……），AI 主持实时演绎后果；剧情、人物、世界每局现场生成，绝无雷同。属性：气血、寿元、灵石、正邪、声望、修为。</p>
+        </details>
+        <details class="help-group" open>
+          <summary>修炼与突破</summary>
+          <p><b>闭关</b>：任何阶段都正常涨修为；但连续闭关收益递减（100%→85%→70%→60%），出游/探索后恢复。</p>
+          <p><b>小境界</b>（初期→中期→后期）：修为圆满即可破；有丹药/天材地宝辅助可更快、甚至连破多个小境界。</p>
+          <p><b>大境界</b>（如炼气后期→筑基初期）：修为圆满后还需<span class="gold">机缘</span>（丹药/天材地宝/传承/顿悟）才能跨过。</p>
+          <p><b>化神→飞升</b>：还需道心（正邪/声望达标）+ 渡劫准备（护法/法宝）。</p>
+          <p><b>走火入魔</b>：强行突破失败可能走火入魔，修炼收益下降，需丹药或静养化解。</p>
+        </details>
+        <details class="help-group" open>
+          <summary>渡劫（关键）</summary>
+          <p>修为圆满后，状态面板出现「<b>突破大境界</b> / <b>渡劫飞升</b>」按钮。点击后显示<b>真实成功率</b>（装备稀有度、词条、道侣护法、道心都会加成），可「确认突破」或「再准备准备」。</p>
+          <p>失败后果：修为大降；渡劫失败还有<span class="gold">概率身死道消</span>——准备越充分越安全，裸渡致死约 13%~48%（随难度：简单 13% / 普通 25% / 困难 36% / 炼狱 48%）；永远保留 5% 搏一搏的机会。</p>
+        </details>
+        <details class="help-group">
+          <summary>物品与装备</summary>
+          <p>品类：丹药 / 天材地宝 / 法宝 / 武器 / 衣物 / 材料。丹药、天材地宝可「使用」；法宝、武器、衣物可「装备」（武器/法宝槽位各 1 个，<span class="gold">双持</span>/<span class="gold">多宝</span>词条各 +1）；「弃」可丢弃。材料可在丹炉/炼器中<b>炼丹炼器</b>，产出品阶看材料与运气。</p>
+          <p><b>稀有度</b>（由获得难度决定）：凡品 / 灵品 / 玄品 / 仙品 / 神品，越难越强。<b>词条三分流</b>：<span class="gold">金色机械词条</span>有真实效果（修炼更快、护体、破劫、双持、多宝、锋芒、疾风、铁骨、噬血、回春、隐匿、破障、镇心、长青、气运、聚财、威仪、慧眼、逆天改命=免死一次）；<span class="muted">灰色叙事词条</span>纯趣味、无数值效果。带功能词条的法宝<b>常驻生效</b>：无需装备、不占法宝槽、不提供修炼倍率。探索掉物与凶险挂钩——境界越高，越要去凶险秘境才有高稀有度收获。</p>
+        </details>
+        <details class="help-group">
+          <summary>战斗</summary>
+          <p>敌人境界 vs 你的境界决定受伤与致死：同级占优、越级凶险但高回报（掉高品阶装备）。战斗后有一行淡色结算。衣物/法宝减伤、武器降致死。</p>
+          <p><b>死亡规则</b>：只有叙事<span class="gold">明确写死</span>（殒命/气绝/身死道消）才会真正死亡。重伤到血尽、或高危行为触发死亡判定时，只会坠入<span class="gold">「生死一线」</span>濒死状态——下一回合是生死抉择：脱险即解除，应对不当才会死。渡劫失败例外：可能直接身死道消（可用回退一个回合）。</p>
+        </details>
+        <details class="help-group">
+          <summary>关系与势力</summary>
+          <p>道侣 +25% 修炼、师徒 +20%、挚友/结义 +10%（取最高一档）；每个结盟势力 +5%（上限 +15%）。</p>
+        </details>
+        <details class="help-group">
+          <summary>时间</summary>
+          <p>以"天"为粒度：短场景不流逝时间；闭关、赶路才推进。「闭关十年」一句话跨越十年，修为按十年放大，寿元与世界局势也如实流逝。</p>
+        </details>
+        <details class="help-group">
+          <summary>选项说明</summary>
+          <p><b>难度</b>：简单（受伤×0.7、灵石收益×1.25、突破+8%、致命行为坠入濒死 25%）/ 普通（基准：致命坠入濒死 40%）/ 困难（受伤×1.5、收益×0.85、突破-5%、致命坠入濒死 60%）/ 炼狱（受伤×2、收益×0.7、突破-10%、致命坠入濒死 85%）。高危行为坠入濒死的概率依次为 2%/5%/12%/25%；坠入濒死≠死亡，会有一回合脱险机会（见「战斗」里的死亡规则）。渡劫失败致死率随难度升降。<b>节奏</b>：快（成长 2 倍速）/ 慢。通关回合上限：超时未飞升则失败。修为增益：0.5x~5x。叙事篇幅：精简/标准/丰富。温度：输入框 ⚙ 里调（0.5 稳定 / 0.8 默认 / 1.2 奔放）。<b>言出法随</b>：外挂模式，心想事成、不会失败。</p>
+        </details>
+        <details class="help-group">
+          <summary>存档</summary>
+          <p>每回合自动存档，另有 3 个手动档位。Key 只存你浏览器里。</p>
+          <p>结局时（或存档面板）可选<span class="gold">「导出本局日志」</span>：完整对话与状态保存为 txt 到桌面（不含 Key），方便反馈意见给开发者。</p>
+        </details>
+      </div>
+      <button id="helpCloseBtn" class="primary" type="button">知道了</button>
+    </div>
+  </div>
+
+  <div id="noticeModal" class="modal hidden">
+    <div class="modal-card">
+      <div id="noticeTitle" class="modal-title"></div>
+      <p id="noticeText" class="modal-text"></p>
+      <button id="noticeCloseBtn" class="primary" type="button">知道了</button>
+    </div>
+  </div>
+
+  <div id="endingModal" class="modal hidden">
+    <div class="modal-card">
+      <div id="endingTitle" class="modal-title"></div>
+      <div id="endingBadge" class="modal-badge"></div>
+      <p id="endingText" class="modal-text"></p>
+      <div class="modal-actions">
+        <button id="endingRollbackBtn" class="primary" type="button">⏪ 回退一个回合</button>
+        <button id="endingExportBtn" class="ghost" type="button">📄 导出本局日志</button>
+        <button id="endingCloseBtn" class="ghost" type="button">收起（继续看剧情）</button>
+        <button id="restartBtn" class="primary" type="button">再开一局</button>
+      </div>
+      <div id="endingExportStatus" class="ending-export-status hidden"></div>
+    </div>
+  </div>
+
+  <button id="endingReopenBtn" class="ending-reopen hidden" type="button">⚰ 结局回顾</button>
+
+  <div id="breakFlash" class="break-flash"></div>
+
+  <div id="breakModal" class="modal hidden">
+    <div class="modal-card">
+      <div id="breakTitle" class="modal-title"></div>
+      <div id="breakBody" class="modal-text break-body"></div>
+      <button id="breakConfirmBtn" class="primary" type="button">确认突破</button>
+      <button id="breakCancelBtn" class="secondary" type="button">再准备准备</button>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

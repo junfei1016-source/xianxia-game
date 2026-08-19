@@ -1,0 +1,5 @@
+{
+  "main": "test-sea-main.cjs",
+  "output": "sea-test.blob",
+  "disableExperimentalSEAWarning": true
+}

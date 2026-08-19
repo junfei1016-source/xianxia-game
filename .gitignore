@@ -1,0 +1,25 @@
+# Dependencies and local environment
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Generated logs and test artifacts
+*.log
+_sea_err.txt
+test-debug-log-*.txt
+coverage/
+
+# Node SEA build outputs
+*.blob
+*.exe
+
+# Editor and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local Codex/agent state
+.codex/
+.agents/
