@@ -134,6 +134,13 @@ try {
     record(pace + '：特殊名称在事迹两种视图、图鉴、背包及获得通知中安全显示');
 
     if (pace === 'fast') {
+      // 结算早于打字机动画完成；截图前确认屏幕叙事与已存日志一致。
+      await page.waitForFunction(() => {
+        const save = JSON.parse(localStorage.getItem('xianxia_saves_v1')).auto;
+        const expected = save.log.filter((message) => message.kind === 'gm').map((message) => message.text);
+        const visible = [...document.querySelectorAll('#chatScroll .msg.gm .msg-body')].map((element) => element.textContent);
+        return expected.length === visible.length && expected.every((text, index) => text === visible[index]);
+      });
       await page.locator('[data-tab="quest"]').click();
       await page.locator('.quest-ended summary').click();
       await page.screenshot({ path: fileURLToPath(new URL('2026-10-21-state-guards.png', outputDir)), fullPage: true });
