@@ -128,9 +128,10 @@ assert('势力关系结盟', fWorld.factions.find((f) => f.name === '剑宗').re
 
 // 支线任务期限
 const dWorld = newWorldState();
-applyStateUpdates(newPlayerState(), dWorld, { newQuests: [{ title: '护送商队', objective: '护送到青州', timeNode: '三日内', reward: '30灵石', deadlineTurns: 3 }] });
+applyStateUpdates(newPlayerState(), dWorld, { newQuests: [{ title: '护送商队', objective: '护送到青州', timeNode: '三日内', reward: '30灵石', deadlineDays: 3 }] });
 const dq = dWorld.quests.find((q) => q.title === '护送商队');
-assert('任务期限记录(第1回合+3=第4回合)', dq && dq.deadlineTurn === 4);
+assert('任务期限按游戏日期记录（三日后为1年1月4日）', dq && dq.deadlineDate?.year === 1 && dq.deadlineDate?.month === 1 && dq.deadlineDate?.day === 4);
+assert('新任务不再保存回合截止字段', dq && dq.deadlineTurn === undefined);
 
 // 自动命名：身份代称→姓名，血缘同姓
 const nWorld = newWorldState();

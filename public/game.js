@@ -25,7 +25,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.1.1';
+export const GAME_VERSION = '1.1.2';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -447,7 +447,7 @@ const RULES_CORE = `你是一个沉浸式"武侠·修仙"开放世界文字游�
 - 严格遵守"当前世界状态快照"里已存在的事实，不得自相矛盾；新生成的内容要与已有设定衔接。
 - 【权责评估】你有权决定玩家得到或失去什么，但必须基于对玩家行为的评估：这个行动在当前处境下是否合理可行、是否付出努力或代价、结果是否合乎逻辑。玩家空口索要（如"给我一万灵石""直接把我变金丹"）不能无条件满足——应被剧情合理拒绝，或附带沉重代价；收益与付出相匹配。用故事自然体现这些结果，不要写成上帝式直接发奖。
 - 【词条注册表】装备/法宝的词条只能引用以下注册表（可组合，用"·"分隔）：${AFFIX_CATALOG}。注册表之外的花哨描述一律视为"叙事词条"（趣味描述，无数值效果）。玩家索要注册表外的效果时：(a) 发最接近的注册表词条并在叙事中明说其效果；(b) 或发叙事词条并在叙事中明示"此物暂无神效"；(c) 或按权责评估合理拒绝。绝不虚构数值效果。
-- 【支线任务】当剧情中自然出现可做之事（委托、寻宝、悬赏、解救、护送等）时，把它写进故事里，并让目标、期限（如"三日内""月圆之前"）、奖励都清晰可辨；但只有真正值得做的（有明确目标+期限+奖励）才算支线任务，普通闲聊或琐事不算。
+- 【支线任务】当剧情中自然出现可做之事（委托、寻宝、悬赏、解救、护送等）时，把它写进故事里，并让目标、期限、奖励都清晰可辨；期限按游戏日期计算（每月30天、每年12月），不要把回合数当作天数。短对话、探查、打斗未跨日时不消耗期限，截止当日仍可交付。用明确天数或年月日表达期限；旧任务的 deadlinePending 表示旧期限尚未确认，应通过剧情明确一个新期限，不能凭旧回合数猜日期。已有合法 deadlineDate 的任务日期保持固定，不得重复登记期限或擅自延期，本版本不支持已确认期限改期。普通闲聊或琐事不算支线任务。
 - 玩家突破境界、获得法宝时，必须符合其当前境界与机缘，不可凭空赐予逆天之物。`;
 
 const WORLD_RULES = RULES_CORE + `
@@ -479,8 +479,8 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - npcRelations：与 NPC 的长期关系变化，每项 {name, relation}（结义/拜师/道侣/结仇等）。
 - newEvents：本回合重要事件，每项 {subject, title, desc, relation}（subject 为人物/地点/势力/目标名，relation 为关系状态）。
 - itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}（获得正、消耗负）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
-- newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineTurns}（deadlineTurns 为期限回合数）。
-- questUpdates：任务完成/失败，每项 {title, status}，status 取 "completed" 或 "failed"。
+- newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
+- questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
 - factionRelations：与势力关系变化，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
 - newFactions：叙事中新出现/新遇见的江湖势力（宗门/帮派/魔门/世家/商会/朝廷/散修联盟等），有名有实（有名字且叙事有所着墨）时登记，每项 {name, desc, type, alignment}；type 取类型（宗门/帮派/魔门/世家/商会/朝廷/散修联盟/其他），alignment 取「正道」「魔道」「中立」（可省略，系统会自动判定）。仅被一句话带过、毫无着墨的势力不要登记（避免图鉴冗杂）。
 - 机缘钩子 hooks：本回合叙事中你抛给玩家的机缘/邀请（奇遇、秘境、委托、悬赏、人物上门、势力招揽、追杀、黑市来客等），每项 {theme, title, declined}；theme 取类型（秘境/奇遇/委托/悬赏/人物/势力/追杀/黑市/其他），declined 在玩家明确拒绝该钩子时填 true。系统据此记忆"最近抛过什么、哪些被拒"，防止同类机缘反复出现。没有抛出钩子则留空数组。
@@ -726,8 +726,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 物品 itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}；获得填正 delta（如获得 3 枚疗伤丹 → delta:3），消耗填负 delta（如用掉 1 枚 → delta:-1）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
-- 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineTurns}；deadlineTurns 为期限的回合数（如"三日内"→3），无法判断则省略。普通闲聊或琐事不要登记。
-- 任务进度 questUpdates：叙事中某任务完成或失败时，登记 {title, status, note}，status 取 "completed" 或 "failed"。
+- 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
+- 任务进度 questUpdates：叙事中某任务完成或失败时，登记 {title, status, note}，status 取 "completed" 或 "failed"。仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且本回合叙事明确约定/澄清期限时，附 deadlineDays 或 deadlineDate，相对期限从本回合结束日起算；这种补录可省略 status。世界快照中 deadlinePending 为旧期限待确认，需根据本回合明确的新约定补录，不得从 legacyDeadlineTurn 猜日期。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期；本回合已完成的任务优先按完成结算。
 - 势力关系 factionRelations：当玩家与某势力关系变化时登记，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
 - 新势力 newFactions：叙事中新出现、玩家打听或遇见的江湖势力（宗门/帮派/魔门/世家/商会/朝廷/散修联盟等），有名有实（有名字且叙事有所着墨，如行事风格、宗旨、所在、立场）就登记 {name, desc, type, alignment}；type 取类型（宗门/帮派/魔门/世家/商会/朝廷/散修联盟/其他），alignment 取「正道」「魔道」「中立」（可省略，系统会自动判定）。仅被一句话提及、毫无着墨的势力不要登记（避免图鉴冗杂）。
 - 机缘钩子 hooks：本回合叙事中 GM 抛给玩家的机缘/邀请（奇遇、秘境、委托、悬赏、人物上门、势力招揽、追杀、黑市来客等），每项 {theme, title, declined}；theme 取类型（秘境/奇遇/委托/悬赏/人物/势力/追杀/黑市/其他），declined 在玩家明确拒绝该钩子时填 true。系统据此记忆"最近抛过什么、哪些被拒"，防止同类机缘反复出现。没有抛出钩子则留空数组。
@@ -1114,6 +1114,7 @@ export function autoNameNpcs(world, newNpcs) {
 
 // ---------- 状态合并 ----------
 export function applyStateUpdates(player, world, out) {
+  migrateQuestDeadlines(world);
   const s = world.settings || {};
   const god = s.godMode === true; // 言出法随（外挂模式）：不受伤害、不掷死亡骰
   const diff = DIFFICULTIES[s.difficulty] || DIFFICULTIES['普通'];
@@ -1417,12 +1418,13 @@ export function applyStateUpdates(player, world, out) {
   }
 
   // 支线任务登记
+  if (!Array.isArray(world.quests)) world.quests = [];
+  const questAnchorDate = addGameDays(worldGameDate(world), elapsedGameDays(out.timeMonths) ?? 0);
   if (Array.isArray(out.newQuests)) {
     for (const q of out.newQuests) {
       if (q && q.title && (q.objective || q.reward)) {
         if (!world.quests.some((t) => t.title === q.title)) {
-          const deadlineTurns = (typeof q.deadlineTurns === 'number' && q.deadlineTurns > 0) ? q.deadlineTurns : null;
-          world.quests.push({
+          const quest = {
             id: 'side-' + Math.random().toString(36).slice(2, 8),
             type: 'side',
             title: q.title,
@@ -1431,8 +1433,16 @@ export function applyStateUpdates(player, world, out) {
             timeNode: q.timeNode || '',
             reward: q.reward || '',
             status: 'active',
-            deadlineTurn: deadlineTurns ? eventTurn + deadlineTurns : null,
-          });
+            deadlineDate: null,
+            deadlineVersion: 2,
+            deadlinePending: false,
+          };
+          applyQuestDeadline(quest, q, questAnchorDate);
+          // 有原文期限却无法提取日期时，保留可见的待确认状态，不猜测天数。
+          if (!quest.deadlineDate && hasNarrativeDeadline(quest)) {
+            quest.deadlinePending = true;
+          }
+          world.quests.push(quest);
         }
       }
     }
@@ -1440,10 +1450,17 @@ export function applyStateUpdates(player, world, out) {
   // 任务进度 / 完成 / 失败
   if (Array.isArray(out.questUpdates)) {
     for (const u of out.questUpdates) {
-      if (u && u.title && ['completed', 'failed', 'active'].includes(u.status)) {
+      if (u && u.title) {
         const q = world.quests.find((t) => t.title === u.title);
         if (q) {
-          q.status = u.status;
+          // 期限补录不能把已终结的旧任务重新打开。
+          if (q.status !== 'active' && u.status === 'active') continue;
+          if (['completed', 'failed', 'active'].includes(u.status)) q.status = u.status;
+          if (q.status === 'active') {
+            const awaitingDeadline = gameDateOrdinal(q.deadlineDate) === null;
+            applyQuestDeadline(q, u, questAnchorDate);
+            if (awaitingDeadline && typeof u.timeNode === 'string' && u.timeNode.trim()) q.timeNode = u.timeNode.trim();
+          }
           if (u.status === 'completed' || u.status === 'failed') {
             const et = u.status === 'completed' ? '已完成' : '已失败';
             if (!world.events.some((e) => e.subject === u.title && e.title === et)) {
@@ -1528,21 +1545,140 @@ export function applyStateUpdates(player, world, out) {
   return null;
 }
 
+// ---------- 游戏历法与任务期限（30天/月、12月/年，不与回合数换算） ----------
+function gameDateOrdinal(date) {
+  if (!date || typeof date !== 'object' || Array.isArray(date)) return null;
+  const { year, month, day } = date;
+  if (!Number.isSafeInteger(year) || year < 1 || !Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(day) || day < 1 || day > 30) return null;
+  const total = (year - 1) * 360 + (month - 1) * 30 + day - 1;
+  return Number.isSafeInteger(total) ? total : null;
+}
+
+function elapsedGameDays(months) {
+  if (typeof months !== 'number' || !Number.isFinite(months) || months < 0) return null;
+  const days = Math.round(months * 30);
+  return Number.isSafeInteger(days) ? days : null;
+}
+
+// 旧存档可缺整个日期或仅缺日；锚点与实际推进必须采用相同的兼容规则。
+// 已存在但非法的年月日不修正为另一个日期，以免凭空制造期限或超时。
+function worldGameDate(world) {
+  const date = world && world.date;
+  if (date === null || date === undefined) return { year: 1, month: 1, day: 1 };
+  if (typeof date !== 'object' || Array.isArray(date)) return null;
+  return addGameDays({ ...date, day: date.day === undefined ? 1 : date.day }, 0);
+}
+
+export function addGameDays(date, days) {
+  const start = gameDateOrdinal(date);
+  if (start === null || !Number.isSafeInteger(days)) return null;
+  const total = start + days;
+  if (!Number.isSafeInteger(total) || total < 0) return null;
+  return { year: Math.floor(total / 360) + 1, month: Math.floor((total % 360) / 30) + 1, day: (total % 30) + 1 };
+}
+
+export function daysUntil(date, deadlineDate) {
+  const start = gameDateOrdinal(date);
+  const end = gameDateOrdinal(deadlineDate);
+  return start === null || end === null ? null : end - start;
+}
+
+function gameDateText(date) {
+  return `${date.year}年${date.month}月${date.day}日`;
+}
+
+function hasNarrativeDeadline(quest) {
+  return typeof quest.timeNode === 'string' && !!quest.timeNode.trim() && !/^(无期限|不限(?:期|时|制)?|不设期限|无时间限制|长期(?:有效)?|永久(?:有效)?)[。.!！]?$/.test(quest.timeNode.trim());
+}
+
+// 已确认日期固定，防止模型反复输出相对期限使任务无限续期；只为待确认任务补录。
+function applyQuestDeadline(quest, data, anchorDate) {
+  if (gameDateOrdinal(quest.deadlineDate) !== null) return;
+  const hasDate = Object.prototype.hasOwnProperty.call(data, 'deadlineDate');
+  const hasDays = Object.prototype.hasOwnProperty.call(data, 'deadlineDays');
+  const hasOldTurns = Object.prototype.hasOwnProperty.call(data, 'deadlineTurns');
+  if (!hasDate && !hasDays && !hasOldTurns) return;
+  let deadline = gameDateOrdinal(data.deadlineDate) === null ? null : addGameDays(data.deadlineDate, 0);
+  if (!deadline && Number.isSafeInteger(data.deadlineDays) && data.deadlineDays >= 0) {
+    deadline = addGameDays(anchorDate, data.deadlineDays);
+  }
+  if (deadline) {
+    quest.deadlineDate = deadline;
+    quest.deadlinePending = false;
+    quest.deadlineVersion = 2;
+  } else if (gameDateOrdinal(quest.deadlineDate) === null) {
+    quest.deadlineDate = null;
+    quest.deadlinePending = true;
+    quest.deadlineVersion = 2;
+  }
+}
+
+export function migrateQuestDeadlines(world) {
+  if (!world || !Array.isArray(world.quests)) return 0;
+  let count = 0;
+  for (const quest of world.quests) {
+    if (!quest || typeof quest !== 'object' || Array.isArray(quest)) continue;
+    let changed = false;
+    if (Object.prototype.hasOwnProperty.call(quest, 'deadlineTurn')) {
+      if (quest.deadlineTurn !== null && quest.deadlineTurn !== undefined && !Object.prototype.hasOwnProperty.call(quest, 'legacyDeadlineTurn')) {
+        quest.legacyDeadlineTurn = quest.deadlineTurn;
+      }
+      delete quest.deadlineTurn;
+      changed = true;
+    }
+    const validDate = gameDateOrdinal(quest.deadlineDate) !== null;
+    const hadInvalidDate = quest.deadlineDate !== null && quest.deadlineDate !== undefined && !validDate;
+    const hasLegacy = quest.legacyDeadlineTurn !== null && quest.legacyDeadlineTurn !== undefined;
+    const pending = !validDate && (quest.deadlinePending === true || hasLegacy || hadInvalidDate || hasNarrativeDeadline(quest));
+    if (!validDate && quest.deadlineDate !== null) { quest.deadlineDate = null; changed = true; }
+    if (quest.deadlinePending !== pending) { quest.deadlinePending = pending; changed = true; }
+    if (quest.deadlineVersion !== 2) { quest.deadlineVersion = 2; changed = true; }
+    if (changed) count += 1;
+  }
+  return count;
+}
+
+export function questDeadlineInfo(quest, world) {
+  const q = quest && typeof quest === 'object' ? quest : {};
+  const deadlineDate = addGameDays(q.deadlineDate, 0);
+  if (deadlineDate) {
+    const remainingDays = daysUntil(world && world.date, deadlineDate);
+    const suffix = remainingDays === null ? '' : remainingDays > 0 ? `（剩余${remainingDays}天）` : remainingDays === 0 ? '（今日截止）' : `（已逾期${-remainingDays}天）`;
+    return { deadlineDate, remainingDays, pending: false, text: gameDateText(deadlineDate) + suffix };
+  }
+  const legacy = q.legacyDeadlineTurn !== null && q.legacyDeadlineTurn !== undefined || q.deadlineTurn !== null && q.deadlineTurn !== undefined;
+  const invalidDate = q.deadlineDate !== null && q.deadlineDate !== undefined;
+  const pending = q.deadlinePending === true || legacy || invalidDate || hasNarrativeDeadline(q);
+  return { deadlineDate: null, remainingDays: null, pending, text: pending ? (legacy ? '旧期限待确认' : '期限待确认') : '无期限' };
+}
+
+export function expireQuestDeadlines(player, world) {
+  migrateQuestDeadlines(world);
+  if (!world || !Array.isArray(world.quests) || gameDateOrdinal(world.date) === null) return [];
+  const expired = [];
+  for (const quest of world.quests) {
+    if (!quest || quest.status !== 'active') continue;
+    const remaining = daysUntil(world.date, quest.deadlineDate);
+    if (remaining === null || remaining >= 0) continue;
+    quest.status = 'failed';
+    quest.failureReason = `已超过游戏日期期限（截止${gameDateText(quest.deadlineDate)}，当前${gameDateText(world.date)}）`;
+    quest.failedAtDate = addGameDays(world.date, 0);
+    addChronicleEvent(world, player, quest.title, '已失败（超时）', quest.failureReason, '');
+    expired.push(quest);
+  }
+  return expired;
+}
+
 // ---------- 时间流逝 & 寿元消耗 ----------
 export function advanceTime(world, player, months = 0) {
-  if (!world.date || typeof world.date !== 'object') world.date = { year: 1, month: 1, day: 1 };
-  if (!world.date.year) world.date.year = 1;
-  if (!world.date.month) world.date.month = 1;
-  if (!world.date.day) world.date.day = 1;
-  // 以"天"为粒度：1 月 ≈ 30 天，月数可为小数（0 = 短场景不流逝时间）
-  const addDays = Math.round((months || 0) * 30);
-  let d = world.date.day + addDays;
-  while (d > 30) { d -= 30; world.date.month += 1; }
-  while (world.date.month > 12) { world.date.month -= 12; world.date.year += 1; }
-  world.date.day = d;
+  const days = elapsedGameDays(months);
+  if (days === null) return;
+  const nextDate = addGameDays(worldGameDate(world), days);
+  if (!nextDate) return;
+  world.date = nextDate;
   const god = world && world.settings && world.settings.godMode === true;
   const evergreen = activeHas(world.inventory, 'evergreen') ? 0.5 : 1; // 长青词条：寿元消耗减半
-  if (!god) player.lifespan = Math.max(0, player.lifespan - ((months || 0) / 12) * evergreen); // 言出法随：寿元不流逝
+  if (!god) player.lifespan = Math.max(0, player.lifespan - (months / 12) * evergreen); // 言出法随：寿元不流逝
 }
 
 // ---------- 大势时间轴（有期限的大势必须按时演变，不能无限拖延）----------

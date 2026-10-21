@@ -1,0 +1,279 @@
+{
+  "date": "2026-10-21",
+  "baselineCommit": "6ef7a65",
+  "sourceVersion": "1.1.1",
+  "comparison": {
+    "identical": 38,
+    "updated": 9,
+    "added": 6
+  },
+  "sourceDirectory": "C:/Users/junfe/Desktop/dsh-test/xianxia-game",
+  "sourceFilesPreserved": true,
+  "files": [
+    {
+      "path": "启动说明.txt",
+      "sha256": "8471F523FB7B4EF10A894B3EB1E7CA07173E34BDF7748E9145CC34FE2F63960E",
+      "matchedOnImport": true
+    },
+    {
+      "path": "build-exe.ps1",
+      "sha256": "B64589CE1AD6EB9FBEABDFC119B0C001D0DB17C91D4619D67E1132A1D5C96F4F",
+      "matchedOnImport": true
+    },
+    {
+      "path": "fix_css.mjs",
+      "sha256": "17F8673D567FB6DD25A6CCE56BEE473FC10C4617C679F6DA816B40B7E91A54A6",
+      "matchedOnImport": true
+    },
+    {
+      "path": "measure_tokens.mjs",
+      "sha256": "683B7887FAA9C49E8508F67D37F4BD8AD3E823427ABE3D9E34017A6CD53878A0",
+      "matchedOnImport": true
+    },
+    {
+      "path": "package.json",
+      "sha256": "7ACEC97BA522A596BC0DD6E4E82AE32DC868B027506086C650625E9E3F98A9E8",
+      "matchedOnImport": true
+    },
+    {
+      "path": "README.md",
+      "sha256": "F5A274F0D7081C95369B90A3F154B3A8EF1B275656B90EB33E98ECE96342D613",
+      "matchedOnImport": true
+    },
+    {
+      "path": "runchild.js",
+      "sha256": "0A751BD73FDF03950242B660E78D25F9291710A193300A8694D7808F27954BE7",
+      "matchedOnImport": true
+    },
+    {
+      "path": "sea-check-server.mjs",
+      "sha256": "3850FBD398F63141CEED844BC9B2B9E6CE1620CB6DF74753F215CFCDBB1D1D4E",
+      "matchedOnImport": true
+    },
+    {
+      "path": "sea-check.mjs",
+      "sha256": "6AF6BB20FD3DED7CB0A7997E31398CD574D6BD89C1D3283F02F57A7E36C77826",
+      "matchedOnImport": true
+    },
+    {
+      "path": "sea-config-test.json",
+      "sha256": "3F8ADFBE8BCAE8767C62B5B87E9946B5FBC61AAF0D1BD1AF9D4D8FD2A468E201",
+      "matchedOnImport": true
+    },
+    {
+      "path": "sea-config.json",
+      "sha256": "33CEB7170FD84F1A9328351F56478CFD8CDFA0E7AEFB94BE028BC60574BB3B4B",
+      "matchedOnImport": true
+    },
+    {
+      "path": "sea-flip.mjs",
+      "sha256": "F536994E7DA887CF9604E26AAEF10286F17D56C1307E9715CC68728A7611AB33",
+      "matchedOnImport": true
+    },
+    {
+      "path": "sea-run.mjs",
+      "sha256": "3A4D1F87C50654A90D464DCA6B7227254EE580749D44B4FFD97CABBD8132A3E5",
+      "matchedOnImport": true
+    },
+    {
+      "path": "server.cjs",
+      "sha256": "D7D24D916E51F1DBB10363696FEA355850AECB97D7D3FB6251D584CEEF55129A",
+      "matchedOnImport": true
+    },
+    {
+      "path": "server.mjs",
+      "sha256": "34734E27CCAB528E56AC9F516F7759BD1EB6F67AB58EC2FEDE8BFE6899E4BB72",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_affix.mjs",
+      "sha256": "50105168D9A4615D9EFD5E1955E70A25E60E6EEA45DEAF12B9BFFCCEFD4A2141",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_align.mjs",
+      "sha256": "B2AC6E9210E0D0BBC75FD0EA19C3CD7AF0F8CAFCBE087B2B4E2185AB04B35D58",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_ascend_ready.mjs",
+      "sha256": "17300C03DA6D0E810F5C3BBEE05C5826FF892C056B4933004BD29AC2715DC1E4",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_ascend_run.mjs",
+      "sha256": "796AFDB3B26A8D404183DD90FCC06C75F6493934B402D2323EB8BE7B4580F811",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_ascend.mjs",
+      "sha256": "88CE8665E691045EA2318692F710FA394FC3C81E5EAB440DAB8D97FFD816F3BB",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_break.mjs",
+      "sha256": "2F4D4063FA247354E8C09EB78DDE212FF7DF450AF8984C59EDAC50343AF56C73",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_death.mjs",
+      "sha256": "7A815518B850BAF7F4587BC012C101B8839DA84249FDC711F2877F21B925A6CD",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_difficulty.mjs",
+      "sha256": "3CAC41A166FB1F224BC01DA53C1683017AFAFB5FB3FB528DA46508DFDA15EA36",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_era_timeline.mjs",
+      "sha256": "8484B44BB9664D437CF230C6CB6C8E072EF8AEF802B44D958127538249C44BEB",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_era.mjs",
+      "sha256": "C380F96AC514134CFF94A5915B9E360DCFA5D45F714C13472484C80A0897EEA5",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_faction.mjs",
+      "sha256": "4CC9DBD22F25B16C9020FB23E198D7402C7A31B23A1AB54CDB635BC8EA9AEC32",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_farm.mjs",
+      "sha256": "4FE95988F107C62F93915D299E3EE2D1BCC571A7DDD4BEBC945ED4B4FB1A1F94",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_fast.mjs",
+      "sha256": "9F966FDE7CD7771AFC58582B883337212FC645EFA24822B004758E620D94D933",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_hallucination.mjs",
+      "sha256": "10136D28BECB6A27ED7B0428D234586793DBE783ED27DBAC8D4859F57137C2C0",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_hooks.mjs",
+      "sha256": "0678A04B70999352A7AD1A8FA355DB7E629C736CF5CE0E31D25CEB267278778C",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_live.mjs",
+      "sha256": "7A94A6052EF413873A9BAE73F94B61198396007CCF38942AF5873AE41EBF3FEC",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_memory.mjs",
+      "sha256": "9BDBBD343B2589AC7545E287B02A2BD3EDDD7649B0BC51249FA865D9C3F4434E",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_money.mjs",
+      "sha256": "9F7D8E52D66ADB10130CBC9E64CC72859770FFF08E08953D24B6E7CB7DE8D348",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_names.mjs",
+      "sha256": "0B40F218988DFE3E18E85A88B37EE0369F97A4477CE324956F5AEB62471F24C9",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_personality.mjs",
+      "sha256": "C67B455458A203614EFBDAA27D39C19EAF0DF3EA26E09DC279DE34D16C0B90E9",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_quest.mjs",
+      "sha256": "ABAA416F0965E629A75360D41FB7A460CC9375F898D6029660BA5BA16049F853",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_smoke.mjs",
+      "sha256": "3F75D2E71CEDDFA43A1797E9857A41DE1F5EEAC7865B619AA2A7E5CA568F3085",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_social.mjs",
+      "sha256": "6C27C418FC7BC510BEB8A03E6E337B22095BB4B332A593085A024F524C096449",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_stage.mjs",
+      "sha256": "D681285474643244DDDE7D39B9E4CFD5BB170A0B7110D0DD27BD97988AFF1085",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_stance.mjs",
+      "sha256": "39A49466BDD7C59749D42E21D2E8A77ACE641CEBC77A5739676A56597E0363D2",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_stream.mjs",
+      "sha256": "FB0C9239C1E6BA937C88FC1F48688A1995C97C71E200EB387FFABCA13CE6A403",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_time.mjs",
+      "sha256": "6A20DEA26F5D5C8AB2B90B401CEF32D74DE5DBE809700C913A55225032D79C7A",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_win.mjs",
+      "sha256": "93D9FCC6971256AA6F31FB7AB8560CB5557971392DA06040CE829C4966C03B0D",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test_yuanying.mjs",
+      "sha256": "B0E56073AC5B3F80588F820B75FA866BE5B29D8F91B3BE3B212AF252BB08568B",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test-exe.mjs",
+      "sha256": "06976E04F75DB9B8E61AA8C2DAADCA6706D22F60B09EDF98E437C6E0D43CD8CA",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test-sea-main.cjs",
+      "sha256": "4D20AFF22C13EDC03877BA1FCA20F17DA1C4A7927AE0A48D9DC0B2BCF4FD6EB9",
+      "matchedOnImport": true
+    },
+    {
+      "path": "test.mjs",
+      "sha256": "6F3602043DEEADE2BCBEBA67C1A6852A4BCDA9C5EA33B947DC9A6E98DEBDB4FC",
+      "matchedOnImport": true
+    },
+    {
+      "path": "public/app.js",
+      "sha256": "EAE7ED60A191C14412F4CDB50CE439407D8315AE6A02049A2805637E9EAA278E",
+      "matchedOnImport": true
+    },
+    {
+      "path": "public/game.js",
+      "sha256": "1AA06BF9D130C8AA134B4380F56BBC040498DCFA8537A2DD0E898C3A64B65BC1",
+      "matchedOnImport": true
+    },
+    {
+      "path": "public/icon.svg",
+      "sha256": "D1E2E6C792AD92A48D2B041F237EFBC505030F58A59CE7B62168952DBCFA6300",
+      "matchedOnImport": true
+    },
+    {
+      "path": "public/index.html",
+      "sha256": "0CFA4C9C324CB5F741280B3013815208542C432BFE9A1DC57723BE56C1E45C47",
+      "matchedOnImport": true
+    },
+    {
+      "path": "public/style.css",
+      "sha256": "18806BCBB81E13E4E920975E4BF407937E730E98C95B8181B1F6454DD655F11F",
+      "matchedOnImport": true
+    },
+    {
+      "path": "publish/publish.ps1",
+      "sha256": "2F7ECB01AEC04A73C1E9BE0C657FAEDD29C6FEF44E6965E0255C99BFFDD85A3A",
+      "matchedOnImport": true
+    }
+  ]
+}

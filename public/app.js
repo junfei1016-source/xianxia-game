@@ -28,6 +28,9 @@ import {
   buildExtractMessages,
   applyStateUpdates,
   advanceTime,
+  migrateQuestDeadlines,
+  expireQuestDeadlines,
+  questDeadlineInfo,
   enforceEraTimeline,
   addChronicleEvent,
   reputationMultiplier,
@@ -660,7 +663,19 @@ function questStatusLabel(s) {
   return { active: '进行中', completed: '已完成', failed: '已失败', cancelled: '已放弃' }[s] || s;
 }
 function renderQuest() {
-  const item = (q) => `
+  const item = (q) => {
+    const deadline = questDeadlineInfo(q, world);
+    let deadlineDescription = deadline.text;
+    if (q.status !== 'active') {
+      if (deadline.deadlineDate) {
+        const date = deadline.deadlineDate;
+        deadlineDescription = `${date.year}年${date.month}月${date.day}日`;
+      } else if (deadline.pending) {
+        deadlineDescription = `${deadline.text.replace('待确认', '未确认')}（任务已结束）`;
+      }
+    }
+    const deadlineText = [q.timeNode, deadlineDescription].filter(Boolean).filter((text, index, all) => all.indexOf(text) === index).join(' · ');
+    return `
     <div class="quest q-${q.status}">
       <div class="quest-head">
         <span class="quest-tag">${q.type === 'main' ? '主线' : '支线'}</span>
@@ -669,9 +684,11 @@ function renderQuest() {
         ${q.type === 'side' && q.status === 'active' ? `<button class="quest-cancel" data-cancel="${esc(q.title)}" type="button" title="放弃此任务">取消</button>` : ''}
       </div>
       ${q.objective ? `<div class="quest-line"><b>目标</b>：${esc(q.objective)}</div>` : ''}
-      ${q.timeNode ? `<div class="quest-line"><b>期限</b>：${esc(q.timeNode)}${q.deadlineTurn ? `（第${q.deadlineTurn}回合前）` : ''}</div>` : ''}
+      ${q.timeNode || deadline.deadlineDate || deadline.pending ? `<div class="quest-line"><b>期限</b>：${esc(deadlineText)}</div>` : ''}
+      ${q.failureReason ? `<div class="quest-line"><b>失败原因</b>：${esc(q.failureReason)}</div>` : ''}
       ${q.reward ? `<div class="quest-line"><b>奖励</b>：${esc(q.reward)}</div>` : ''}
     </div>`;
+  };
   const mains = world.quests.filter((q) => q.type === 'main' && q.status === 'active');
   const sides = world.quests.filter((q) => q.type === 'side' && q.status === 'active');
   const ended = world.quests.filter((q) => q.status !== 'active');
@@ -1114,6 +1131,7 @@ function loadGame(slot) {
   if (!s) { appendSystem('该存档位为空'); return; }
   player = { ...newPlayerState(), ...s.player };
   world = { ...newWorldState(), ...s.world };
+  migrateQuestDeadlines(world); // 兼容旧回合期限；读档只迁移，不执行超时判罚
   history = Array.isArray(s.history) ? s.history : [];
   log = Array.isArray(s.log) ? s.log : [];
   mode = s.mode || 'random';
@@ -1185,6 +1203,7 @@ async function startGame() {
 
     player = newPlayerState();
     world = newWorldState();
+    migrateQuestDeadlines(world);
     world.settings = { difficulty: gameOptions.difficulty, pace: gameOptions.pace, turnLimit: gameOptions.turnLimit, cultGain: gameOptions.cultGain, godMode: gameOptions.godMode, length: gameOptions.length };
     history = [];
 
@@ -1308,7 +1327,7 @@ async function sendTurn(forcedText) {
       }
     }
     world.turn += 1;
-    const months = (out && typeof out.timeMonths === 'number' && out.timeMonths > 0) ? out.timeMonths : 0;
+    const months = (out && Number.isFinite(out.timeMonths) && out.timeMonths > 0) ? out.timeMonths : 0;
     advanceTime(world, player, months);
     const eraNote = enforceEraTimeline(world, out); // 大势时间轴：期限到必演变
     if (eraNote) appendSystem(eraNote, 'quest');
@@ -1410,17 +1429,10 @@ function cancelQuest(title) {
   showNotice('已放弃任务', `你主动放弃了「${q.title}」。你的选择可能已改变故事的走向……`);
 }
 function checkQuestDeadlines() {
-  const expired = [];
-  for (const q of world.quests) {
-    if (q.status === 'active' && q.deadlineTurn && world.turn > q.deadlineTurn) {
-      q.status = 'failed';
-      expired.push(q.title);
-      addChronicleEvent(world, player, q.title, '已失败（超时）', q.objective || '', '');
-    }
-  }
+  const expired = expireQuestDeadlines(player, world);
   if (expired.length) {
-    expired.forEach((t) => appendSystem('⏰ 任务「' + t + '」已超时失败。'));
-    showNotice('任务超时', '以下任务因超过期限而失败：' + expired.join('、'));
+    expired.forEach((q) => appendSystem(`⏰ 任务「${q.title}」已超时失败。${q.failureReason || ''}`));
+    showNotice('任务超时', expired.map((q) => `「${q.title}」：${q.failureReason || questDeadlineInfo(q, world).text}`).join('\n'));
   }
 }
 
@@ -1465,6 +1477,7 @@ function rollbackOneTurn() {
   pendingEnding = null;
   player = s.player;
   world = s.world;
+  migrateQuestDeadlines(world);
   log = s.log;
   history = s.history;
   playing = true;
@@ -1498,6 +1511,7 @@ function buildLogText() {
   push('境界：' + player.realm + ' · 修为 ' + (player.cultivation || 0) + '%');
   push(`正邪 ${player.morality}（${moralityLabel(player.morality)}）· 声望 ${player.reputation} · 灵石 ${player.spiritStones} · 寿元 ${Math.round(player.lifespan)} · 气血 ${player.hp}/${player.maxHp}`);
   push(`回合 ${world.turn || 0} · 难度 ${s.difficulty || '普通'} · 节奏 ${s.pace || '慢'} · 修为增益 ${s.cultGain || '1x'} · 篇幅 ${s.length || '标准'}${s.turnLimit ? ' · 回合上限 ' + s.turnLimit : ''}${s.godMode ? ' · 言出法随' : ''}`);
+  push(`游戏日期：${world.date?.year || 1}年${world.date?.month || 1}月${world.date?.day || 1}日`);
   push('天下大势：' + (world.era || '未明') + (world.eraType ? '（' + world.eraType + '）' : ''));
   push('--------------------------------------------');
   push('【完整对话记录】');
@@ -1513,7 +1527,12 @@ function buildLogText() {
   push('地点：' + ((world.locations || []).map((l) => l.name).join('、') || '无'));
   push('功法：' + ((world.skills || []).map((x) => `${x.name}${x.grade ? '[' + x.grade + ']' : ''}`).join('、') || '无'));
   push('背包：' + ((world.inventory || []).map((it) => `${it.name}×${it.qty || 1}${it.rarity && it.rarity !== '凡品' ? '[' + it.rarity + ']' : ''}`).join('、') || '空'));
-  push('任务：' + ((world.quests || []).map((q) => `${q.title}(${questStatusLabel(q.status)})`).join('、') || '无'));
+  push('任务：');
+  if (!(world.quests || []).length) push('  无');
+  for (const q of world.quests || []) {
+    const deadline = questDeadlineInfo(q, world);
+    push(`  ${q.title}（${questStatusLabel(q.status)}） · 期限参考（相对导出时游戏日期）：${deadline.text || '无明确截止日期'}${q.timeNode ? ' · 原期限：' + q.timeNode : ''}${q.failureReason ? ' · 失败原因：' + q.failureReason : ''}`);
+  }
   push('成就：' + ((world.achievements || []).join('、') || '无'));
   push('誓愿/目标：' + JSON.stringify(world.goal || {}));
   push('玩家效果诉求：' + ((world.effectRequests || []).map((r) => `${r.name}（${r.desc}）`).join('、') || '无'));
