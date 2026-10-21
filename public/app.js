@@ -17,6 +17,7 @@ import {
   kindFromText,
   gradeMult,
   ERA_LEVELS,
+  ERA_TYPES,
   eraTypeFromText,
   ORIGINS,
   originTypeFromText,
@@ -27,6 +28,7 @@ import {
   buildExtractMessages,
   applyStateUpdates,
   advanceTime,
+  enforceEraTimeline,
   addChronicleEvent,
   reputationMultiplier,
   factionAlignment,
@@ -49,6 +51,8 @@ import {
   equipItem,
   isFunctionalTreasure,
   activeHas,
+  GAME_VERSION,
+  npcInsightStage,
 } from './game.js';
 
 const $ = (id) => document.getElementById(id);
@@ -67,7 +71,7 @@ let config = { ...DEFAULTS };
 // ---------- 存档 ----------
 const SAVE_KEY = 'xianxia_saves_v1';
 const AUTO_SLOT = 'auto';
-const MEMORY_LIMIT = 16; // 历史消息超过此数，就把更早的压缩进长期记忆
+const MEMORY_LIMIT = 20; // 历史消息超过此数，就把更早的压缩进长期记忆
 
 let mode = 'random'; // random | questionnaire
 const answers = { origin: '随机', personality: '随机', ambition: '随机' };
@@ -927,7 +931,14 @@ function renderCodex() {
   const itemLine = (x, withRelation) => {
     const rel = withRelation && x.relation ? `<span class="codex-rel">（${esc(x.relation)}）</span>` : '';
     const desc = x.desc ? '：' + esc(x.desc) : '';
-    const pers = withRelation && x.personalityRevealed && x.personality ? `<span class="npc-pers">${esc(x.personality)}</span>` : '';
+    const stage = withRelation ? npcInsightStage(x) : '';
+    const pers = withRelation
+      ? (stage === 'insight'
+          ? `<span class="npc-pers" data-tip="真实性格（深交后揭示）：${esc(x.personality)}">${esc(x.personality)}</span>`
+          : (stage === 'acquaintance'
+              ? `<span class="npc-pers temp" data-tip="初识气质（第一印象，未必是真性情）：${esc(x.temperament)}">${esc(x.temperament)}</span>`
+              : `<span class="npc-pers unknown" data-tip="尚未深交，真性情未明——多多往来，方能看清此人">性格未明</span>`))
+      : '';
     const gradeTag = !withRelation && x.grade ? `<span class="skill-grade">${esc(x.grade)}</span>` : '';
     const nameEl = withRelation
       ? `<b class="codex-name codex-link" data-subject="${esc(x.name)}" title="点击查看事迹">${esc(x.name)}</b>`
@@ -990,6 +1001,48 @@ function renderAll() {
   renderChronicle();
   renderCodex();
   renderAchievements();
+  syncHotControls();
+}
+// ---------- 热切换：言出法随 / 大势（随时生效，引擎每回合实时读取）----------
+function syncHotControls() {
+  const g = $('godToggleBtn');
+  if (g) {
+    const on = playing ? !!(world.settings && world.settings.godMode) : !!gameOptions.godMode;
+    g.textContent = on ? '开' : '关';
+    g.classList.toggle('on', on);
+  }
+  const e = $('eraSelect');
+  if (e) {
+    const cur = playing ? (world.eraType || '乱世') : gameOptions.eraType;
+    if (ERA_LEVELS.includes(cur)) e.value = cur;
+  }
+}
+function toggleGodMode() {
+  const target = playing ? world.settings : gameOptions;
+  target.godMode = !target.godMode;
+  if (playing) {
+    saveGame(AUTO_SLOT);
+    renderAll();
+    appendSystem(target.godMode ? '✨ 言出法随已开启：心想事成，天地随你心意而动。' : '⚖ 言出法随已关闭：天道重归其常，因果自会流转。');
+  } else {
+    renderGameOptions();
+  }
+  syncHotControls();
+}
+function switchEraManually(v) {
+  if (!ERA_TYPES[v]) return;
+  if (playing) {
+    world.eraType = v;
+    world.era = ERA_TYPES[v].label;
+    world.eraDeadline = undefined; // 切走旧期限；若切到秘境将启，下回合自动按默认设期
+    saveGame(AUTO_SLOT);
+    renderAll();
+    appendSystem(`🌌 大势已改：${ERA_TYPES[v].label}。天地随之而变，且看下一回合如何演绎。`, 'quest');
+  } else {
+    gameOptions.eraType = v;
+    renderGameOptions();
+  }
+  syncHotControls();
 }
 function renderAchievements() {
   const el = $('achievementList');
@@ -1257,6 +1310,8 @@ async function sendTurn(forcedText) {
     world.turn += 1;
     const months = (out && typeof out.timeMonths === 'number' && out.timeMonths > 0) ? out.timeMonths : 0;
     advanceTime(world, player, months);
+    const eraNote = enforceEraTimeline(world, out); // 大势时间轴：期限到必演变
+    if (eraNote) appendSystem(eraNote, 'quest');
     checkQuestDeadlines();
     renderAll();
     checkAchievements();
@@ -1437,6 +1492,7 @@ function buildLogText() {
   push('法言天地 · 本局游戏日志（玩家反馈用）');
   push('============================================');
   push('导出时间：' + new Date().toLocaleString());
+  push('游戏版本：v' + GAME_VERSION);
   push('结局：' + (pendingEnding ? pendingEnding.title + (pendingEnding.win ? '（通关）' : '（本局终章）') : '进行中'));
   push('玩家：' + player.name + (player.origin ? ' · ' + player.origin : ''));
   push('境界：' + player.realm + ' · 修为 ' + (player.cultivation || 0) + '%');
@@ -1681,6 +1737,8 @@ function bindEvents() {
     if (!playing) { appendSystem('当前没有进行中的游戏，无法导出'); return; }
     exportGameLog(null);
   };
+  $('godToggleBtn').onclick = toggleGodMode;
+  $('eraSelect').onchange = () => switchEraManually($('eraSelect').value);
 }
 
 // ---------- 标题页星点 ----------
@@ -1759,6 +1817,8 @@ function init() {
   setBusy(false);
   renderAll();
   spawnStars();
+  const gv = $('gameVersion');
+  if (gv) gv.textContent = 'v' + GAME_VERSION;
 }
 
 init();

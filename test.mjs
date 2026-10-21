@@ -209,7 +209,7 @@ const ctx = buildWorldContext(cwWorld);
 assert('快照不含图鉴全集', !('items' in ctx));
 assert('快照事迹截断到最近10条', ctx.events.length === 10);
 assert('快照只含活跃任务', ctx.quests.length === 1 && ctx.quests[0].title === '活跃任务');
-assert('快照记忆截断到300字', ctx.memory.length === 300);
+assert('快照记忆截断到1000字', ctx.memory.length === 1000);
 assert('快照保留背包与功法', ctx.inventory.length === 1 && ctx.skills.length === 1);
 
 // 叙事篇幅档位
@@ -241,6 +241,20 @@ applyStateUpdates(newPlayerState(), iWorld, { itemChanges: [
 const iPill = iWorld.inventory.find((t) => t.name === '疗伤丹');
 const iTreasure = iWorld.inventory.find((t) => t.name === '紫金葫芦');
 assert('物品自动标注品类', iPill.kind === '丹药' && iTreasure.kind === '法宝' && iTreasure.grade === '天阶');
+
+// 物品数量规范化：丹药/装备整数，天材地宝/材料允许半份
+const qtWorld = newWorldState();
+applyStateUpdates(newPlayerState(), qtWorld, { itemChanges: [
+  { name: '疗伤丹', desc: 'x', delta: 1.7 },
+  { name: '茯苓草', desc: 'x', delta: 1.5, kind: '天材地宝' },
+  { name: '碎骨粉', desc: 'x', delta: 1, kind: '材料' },
+] });
+applyStateUpdates(newPlayerState(), qtWorld, { itemChanges: [
+  { name: '碎骨粉', desc: 'x', delta: -0.3, kind: '材料' },
+] });
+assert('丹药数量取整（1.7→2）', qtWorld.inventory.find((t) => t.name === '疗伤丹').qty === 2);
+assert('天材地宝允许半份（1.5 保留）', qtWorld.inventory.find((t) => t.name === '茯苓草').qty === 1.5);
+assert('材料半份步进（1 - 0.3 → 0.5）', qtWorld.inventory.find((t) => t.name === '碎骨粉').qty === 0.5);
 iTreasure.equipped = true;
 const tPlayer = newPlayerState();
 applyStateUpdates(tPlayer, iWorld, { stateUpdates: { cultivation: { delta: 10 } } });

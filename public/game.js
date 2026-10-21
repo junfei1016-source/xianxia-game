@@ -24,6 +24,9 @@ export function realmIndex(name) {
   return i === -1 ? 0 : i;
 }
 
+// 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
+export const GAME_VERSION = '1.1.1';
+
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
 // ---------- 可被 AI 修改的玩家数值属性（唯一清单）----------
@@ -429,12 +432,14 @@ const RULES_CORE = `你是一个沉浸式"武侠·修仙"开放世界文字游�
 11. 大势类型：天下大势有类型之分（盛世/乱世/末法时代/秘境将启/正魔大战），各有得失——盛世交易好且最安全；乱世战利品多但危险；末法时代灵气枯竭、修炼慢、资源少，但高阶妖邪罕见、最为安全；秘境将启奇遇机缘最多；正魔大战战利品最高但极危险。大势可因重大剧情演变，叙事要与当前大势相符。同一大势下的机缘要多样，从各自的花样池里轮换取材：盛世——商机、拍卖会、朝廷征召、祥瑞、江湖聚会、达官显贵的委托；乱世——流民、溃兵、山寨、割据势力、军功、趁乱而起的黑市；末法时代——古修遗府、灵气枯竭之谜、凡俗势力崛起、寿元交易、伪仙诈骗；秘境将启——夺宝者、守境人、秘境争夺、假秘境、预兆；正魔大战——两派拉拢、征召、逃兵、战场遗宝、屠城救援、细作。不要连续取同一池子的同类。
 12. 主动造事：你不应被动等玩家提问。(a) 玩家连续闭关多回合时，进境渐缓，要提醒并抛出机缘钩子（任务/奇遇/人物上门/秘境异动）；(b) 同一天内的剧情推进中，偶尔（约每 3~4 回合）可有小事件发生，但绝不打断玩家正在做的事，且给玩家"接或不接"的选择权；(c) 立场相关遭遇：若剧情平静，可安排一次与玩家正邪/声望立场相符的遭遇——正道者遇求救、拜帖、正派前辈垂青；魔道者遇黑市来客、魔修邀请、正道追杀者；高声望者慕名求见者众，低声望者遭冷眼刁难。同样给玩家"接或不接"的选择权。(d) 机缘多样：同一大势下机缘必须多样——「秘境将启」不只是秘境（还有夺宝者、守境人、秘境争夺、假秘境、预兆等），其余大势同理；任何主题的机缘连续抛出不超过一次。玩家明确拒绝的钩子必须尊重——不纠缠、不立刻再抛同类，换新主题（拒绝可带来自然后果如错过机缘、他人捷足先登，但不可报复性惩罚）。
 13. 死亡叙事：玩家的死亡必须由你在叙事中**明确写出**（殒命、气绝、身死道消、形神俱灭等），不得含糊带过——只有叙事写死，系统才会判定身死道消。只写"重伤""濒死""命悬一线"时，玩家不会死，而是进入濒死状态，等待下一回合的生死抉择。
+14. 剧情真实（防幻觉）：玩家的经历以世界快照中的事迹、关系档案与对话历史为准。**绝对禁止编造玩家未曾经历的事件、人物、关系或功绩**——需要背景信息时，只能以"传闻""据说""镇上都说"引入，并明确标注为传闻，不得写成玩家亲历。若玩家质疑剧情真实性，立即承认并收回；被收回的内容，后续剧情一律不得再引用。
+15. 物品使用（防认错）：玩家点名使用某物品（如"使用【培元丹】"）时，必须消耗**玩家点名的那个物品**，名称逐字一致，绝不替换成相似名称的其他物品（如"百转培元丹""培元散"）。若此前误耗了别物，须在叙事中明说"此前误耗之物已补回"，系统会据此归还。
 
 【你的职责】
 - 全程用中文，以第二人称"你"的视角叙事，文笔要有武侠仙侠韵味，重点突出，并给玩家留下行动/选择的余地；叙事篇幅遵循本回合提示里的【叙事篇幅】。
 - 玩家可以做出任何行动（拜师、杀人、寻宝、修炼、经商、谈情、隐居、复仇、索要……）。你要即时、合理地演绎后果，并现场生成新的 NPC、地点、事件、功法、物品；名字要有仙侠韵味、不落俗套。
 - 【NPC 命名与一致】凡与玩家有实际互动、或之后可能再次出场的 NPC（引路人、同门、掌柜、老者、少年、仇敌、商贩等），都必须给一个有仙侠韵味的姓名（如"苏瑶""王铁山""沈青梧""顾长歌"），不要只用"老樵夫""灰衣少年""青衫道人"这类身份代称；只有真正一闪而过、再无戏份的背景路人，才可用身份代称。同一个 NPC 再次出场时，必须沿用世界快照里已登记的名字，不得改名、不得换成别的称呼。快照里的 aliasMap 是"身份→已分配姓名"的对照表：一旦某个身份已对应了姓名，后续必须改用该姓名。
-- 【复杂人性】NPC 的出身/阵营 ≠ 其行事：魔道里可以有良善之人（哪怕傲娇、面冷心热），正道里也可以有道貌岸然的伪君子。给每个有戏份的 NPC 一个【隐藏的真实性格】（如"傲娇""伪君子""面冷心热""豪爽""阴狠"），但不要初见就点破——要通过行为、对话、事件逐步展现，玩家与其交往越深、经历越多，越能看清其真实秉性。
+- 【复杂人性】NPC 的出身/阵营 ≠ 其行事：魔道里可以有良善之人（哪怕傲娇、面冷心热），正道里也可以有道貌岸然的伪君子。给每个有戏份的 NPC 一个【隐藏的真实性格】（如"傲娇""伪君子""面冷心热""豪爽""阴狠"）和一个【外显气质】（第一印象，如"清冷""豪爽""怯懦"，可与真实性格一致、也可完全相反——正因如此才有"看走眼"的余地）。真实性格一经设定便不再改变：NPC 的一切言行必须始终与其一致，不得漂移或前后矛盾；逐步揭示给玩家的是同一个性格，不是新性格。玩家与 NPC 互动越多、交往越深，越能看清其真实秉性。
 - 【长期关系】玩家可主动与某个 NPC 结下长期关系（结义、拜师、道侣、结仇等）；被选中的 NPC 会成为次要人物，其故事线应被持续追踪，性格随时间展现。亲密关系要带来实际好处：道侣双修、师徒指点、挚友相助会让修炼更顺（系统会据此给修炼加成），并应在叙事里自然体现——师父授法、道侣护法、挚友引荐机缘等。
 - 【势力结盟】与势力结盟后，该势力会提供庇护、资源、功法与专属任务（系统会据此给修炼加成）；结仇/敌对则会招来追杀与阻挠。要在叙事里体现结盟的价值，而不是只挂个标签。
 - 【势力生态】人间江湖、仙门魔宗林立：宗门、帮派、魔门、世家、商会、朝廷、散修联盟等势力活跃。当玩家打听、游历、遇见或剧情自然引出**新的势力**时，给势力起一个有仙侠韵味的名字，并稍作着墨（宗旨、风格、立场、所在），让它有血有肉；但不要凭空堆砌——只在剧情自然需要时引入，一句话带过的路人组织不必命名立传。已有势力再次出现时，必须沿用快照里已登记的名字与设定。
@@ -460,7 +465,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "combat": null,
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
-  "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [],
+  "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [],
   "flags": {}, "goal": null, "timeMonths": 1, "gainType": "neutral", "eraChange": null
 }
 字段说明：
@@ -470,7 +475,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - risk：玩家处于危险/濒死/作死处境时填 "high" 或 "lethal"，否则 null。
 - combat：玩家与敌人交手时填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，不明则填 "未知"。无战斗时省略。
 - died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 true；只写"重伤""濒死""命悬一线""生死一线"不填。系统据此触发身死道消结局。
-- newNpcs/newLocations/newSkills：新登场的人/地/功法，每项 {name, desc}（NPC 可带 relation、personality 性格；功法带 grade 品阶）。
+- newNpcs/newLocations/newSkills：新登场的人/地/功法，每项 {name, desc}（NPC 可带 relation、temperament 外显气质（第一印象，如"清冷""豪爽"）、personality 真实性格（隐藏真相，如"傲娇""伪君子"，可与气质相反）；功法带 grade 品阶）。
 - npcRelations：与 NPC 的长期关系变化，每项 {name, relation}（结义/拜师/道侣/结仇等）。
 - newEvents：本回合重要事件，每项 {subject, title, desc, relation}（subject 为人物/地点/势力/目标名，relation 为关系状态）。
 - itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}（获得正、消耗负）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
@@ -480,9 +485,11 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - newFactions：叙事中新出现/新遇见的江湖势力（宗门/帮派/魔门/世家/商会/朝廷/散修联盟等），有名有实（有名字且叙事有所着墨）时登记，每项 {name, desc, type, alignment}；type 取类型（宗门/帮派/魔门/世家/商会/朝廷/散修联盟/其他），alignment 取「正道」「魔道」「中立」（可省略，系统会自动判定）。仅被一句话带过、毫无着墨的势力不要登记（避免图鉴冗杂）。
 - 机缘钩子 hooks：本回合叙事中你抛给玩家的机缘/邀请（奇遇、秘境、委托、悬赏、人物上门、势力招揽、追杀、黑市来客等），每项 {theme, title, declined}；theme 取类型（秘境/奇遇/委托/悬赏/人物/势力/追杀/黑市/其他），declined 在玩家明确拒绝该钩子时填 true。系统据此记忆"最近抛过什么、哪些被拒"，防止同类机缘反复出现。没有抛出钩子则留空数组。
 - 效果诉求 effectRequests：玩家明确表达"希望某种法宝/丹药/功法有某种效果"时登记，每项 {name, desc}；name 为物品或效果名，desc 为玩家想要的效果。只记录诉求，绝不虚构实现——注册表之外的诉求，GM 应按规则发最接近的注册表词条或标注叙事词条。没有诉求则留空数组。
+- 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
+- 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - flags：重要剧情标记（闭关修炼/苦修时标记 closedDoor:true，用于连续闭关收益递减；玩家从「生死一线」脱险时标记 deathImminent:false 解除濒死）；goal：目标变化；timeMonths：本回合经过的月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。
 
-【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。`;
+【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。`;
 
 const WORLD_GEN_RULES = `你是"武侠·修仙"开放世界的创世者。现在要为一位新玩家生成一个独一无二的开局世界种子。
 
@@ -562,7 +569,8 @@ export function buildWorldContext(world) {
     events: (world.events || []).slice(-10),       // 只带最近 10 条事迹，旧的已进 memory
     quests: (world.quests || []).filter((q) => q && q.status === 'active'), // 只带活跃任务
     hooks: (world.hookLog || []).slice(-8),        // 最近抛出的机缘钩子（含是否被拒）→ 防止同类反复
-    memory: mem.slice(-300),                        // 记忆只带最近 300 字
+    memory: mem.slice(-1000),                       // 记忆只带最近 1000 字
+    relationDossier: compactDossier(world),         // 关系档案（人物感情线/脉络，防 GM 遗忘）
     aliasMap: world.aliasMap,
   };
 }
@@ -594,7 +602,7 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
     guide += `${fast ? ' ' : '\n'}【重复刷取】玩家已连续 ${world.farmStreak} 次重复类似行动，收益正在递减（系统已自动折算）。你在叙事中要中立地演绎边际递减——灵草采尽、猎物警觉、商路被占、人心厌倦、同行抢先等；不要嘲讽玩家，也不必一刀切归零，让世界自然回应。`;
   }
   if (world.flags && world.flags.deathImminent && s.godMode !== true) {
-    guide += `${fast ? ' ' : '\n'}【生死一线】玩家已命悬一线（濒死）。本回合必须是生死关头：给出真实的死亡威胁，也给出明确的脱险机会（逃命、服丹、呼救、破财免灾等）。玩家应对得当则脱险（并在 flags 里写 deathImminent:false 解除濒死）；若应对鲁莽、无动于衷或再次作死，则在叙事中明确写下其死亡（系统只在叙事写死时判定身死道消）。`;
+    guide += `${fast ? ' ' : '\n'}【生死一线】玩家已命悬一线（濒死）。本回合必须是生死关头：给出真实的死亡威胁，也给出明确的脱险机会（逃命、服丹、呼救、破财免灾等）。玩家应对得当则脱险（并在 flags 里写 deathImminent:false 解除濒死；若玩家本回合未涉险且气血恢复到上限四分之一以上，系统也会自动解除）；若应对鲁莽、无动于衷或再次作死，则在叙事中明确写下其死亡（系统只在叙事写死时判定身死道消）。`;
   }
   // 机缘变化：最近抛过的钩子（含被拒记录）→ 换花样、尊重拒绝，避免同一大势下同类奇遇反复
   const recentHooks = (world.hookLog || []).slice(-6);
@@ -608,6 +616,15 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
   }
   if (activeHas(world.inventory, 'insight') && s.godMode !== true) {
     guide += `${fast ? ' ' : '\n'}【慧眼】玩家身怀鉴宝慧眼：其探索/任务所得的物品稀有度可上浮一档（如灵品→玄品），但须合理，不得无中生有。`;
+  }
+  // 关系档案：把重要人物的感情线/脉络点名给 GM，防止遗忘、跳戏
+  const dossier = compactDossier(world);
+  if (dossier && dossier.length && s.godMode !== true) {
+    const names = dossier.map((d) => `${d.name}（${d.rel || '有旧'}）`).join('、');
+    guide += `${fast ? ' ' : '\n'}【关系档案】世界快照里记录了你与这些人物的关系脉络：${names}。必须延续既有的情感进度与人物性格，记住并履行与他们的约定/承诺/未了之事，不得遗忘、跳戏或前后矛盾。`;
+  }
+  if (world.flags && world.flags.eraExpired && s.godMode !== true) {
+    guide += `${fast ? ' ' : '\n'}【大势到期】大势的期限已至。你必须在叙事中让大势如期演变（如秘境开启、天下易势），并在输出中用 eraChange 登记新大势——若本回合仍不推动，系统将强制改变大势。`;
   }
   if (s.godMode === true) {
     guide += `${fast ? ' ' : '\n'}【言出法随（外挂模式）】玩家心想事成：任何要求都无条件立即满足——索要灵石/法宝/境界/寿元等逆天之物都如实兑现，强敌不堪一击、机缘唾手可得。你完全依附于玩家意志，不拒绝、不打折、不设障碍、不评估合理性，只负责把玩家想要的结果华丽地演绎出来，并在叙事里给出对应数值。`;
@@ -627,7 +644,7 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
   return [
     { role: 'system', content: rulesPrompt },
     { role: 'system', content: guide },
-    ...history.slice(fast ? -8 : -12),
+    ...history.slice(fast ? -10 : -16),
     { role: 'system', content: '当前世界状态快照（这是唯一事实，必须与其保持一致）：\n' + snapshot },
     { role: 'user', content: userInput },
   ];
@@ -644,7 +661,7 @@ export function buildGMCombinedMessages(player, world, history, userInput) {
 }
 
 // ---------- 记忆压缩（把久远回合压缩成剧情记忆）----------
-const SUMMARY_SYSTEM = `你是这个修仙游戏剧情的"记忆整理师"。请把下面这段最近的剧情对话，压缩成一段简洁的剧情记忆，只保留：关键人物与关系、发生的重要事件与因果、玩家当前的目标与未了之事。用中文、第三人称，控制在 150 字以内。只输出记忆文本本身，不要任何解释或前缀。`;
+const SUMMARY_SYSTEM = `你是这个修仙游戏剧情的"记忆整理师"。请把下面这段最近的剧情对话，压缩成一段简洁的剧情记忆。必须保留：1) 关键人物与关系的**进度**（尤其是与玩家的感情线——道侣/暧昧/师徒/结义等关系到了哪一步、双方许下过什么承诺/约定/誓言）；2) 发生的重要事件与因果；3) 玩家当前的目标与未了之事。压缩必须**忠实于输入内容**——禁止虚构或推断输入中不存在的人物、事件、关系与对话；宁可简略，不可杜撰。用中文、第三人称，控制在 200 字以内。只输出记忆文本本身，不要任何解释或前缀。`;
 
 export function buildSummaryMessages(turns) {
   const transcript = turns
@@ -685,6 +702,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "newFactions": [],
   "hooks": [],
   "effectRequests": [],
+  "retract": [],
+  "personalityReveals": [],
   "flags": {},
   "goal": null,
   "timeMonths": 1,
@@ -701,7 +720,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 危险判定 risk：当叙事中玩家处于危险/濒死/作死处境（如被强敌重创、身中剧毒、跳入绝地、硬闯必死之地、自不量力挑战远超自己的存在）时，填 "high"（危险）或 "lethal"（致命/作死）；否则填 null。
 - 死亡 died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 died:true；只写"重伤""濒死""命悬一线""生死一线"时不要填。系统据此触发身死道消结局。
 - 战斗 combat：当叙事描写玩家与敌人交手/战斗时，填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，若叙事没明说敌人境界则填 "未知"。无战斗时省略。
-- 新登场的 NPC/地点/功法分别放 newNpcs/newLocations/newSkills，每项 {name, desc}（NPC 可带 relation 和 personality 性格，如"傲娇""伪君子""面冷心热"）。功法 newSkills 要带 grade 品阶（基础/玄阶/地阶/天阶/仙阶，越高修炼越快）。若该 NPC 与其他人物有血缘关系，附 family: {of: "对方姓名或称呼", relation: "父子/兄弟/姐妹/母子等"}。
+- 新登场的 NPC/地点/功法分别放 newNpcs/newLocations/newSkills，每项 {name, desc}（NPC 可带 relation、temperament 外显气质（第一印象，如"清冷""豪爽"）和 personality 真实性格（隐藏真相，如"傲娇""伪君子""面冷心热"），两者可一致也可相反）。功法 newSkills 要带 grade 品阶（基础/玄阶/地阶/天阶/仙阶，越高修炼越快）。若该 NPC 与其他人物有血缘关系，附 family: {of: "对方姓名或称呼", relation: "父子/兄弟/姐妹/母子等"}。
 - NPC 关系 npcRelations：当玩家与某个 NPC 结下/改变长期关系时登记，每项 {name, relation}（如"结义""拜师""道侣""结仇"）。
 - 事迹 newEvents：本回合发生的重要事件，每项 {subject, title, desc, relation}。subject 为事件主体（人物/地点/势力/目标名），title 为短标题（如"初遇""结仇"），desc 为描述，relation 为该事件后你与该主体的关系状态（如"挚友""仇敌""师徒""结盟""敌对"，可省略）。同一主体的相关小事件会归成一条脉络，务必给准 subject。
 - 物品 itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}；获得填正 delta（如获得 3 枚疗伤丹 → delta:3），消耗填负 delta（如用掉 1 枚 → delta:-1）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
@@ -713,11 +732,13 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 新势力 newFactions：叙事中新出现、玩家打听或遇见的江湖势力（宗门/帮派/魔门/世家/商会/朝廷/散修联盟等），有名有实（有名字且叙事有所着墨，如行事风格、宗旨、所在、立场）就登记 {name, desc, type, alignment}；type 取类型（宗门/帮派/魔门/世家/商会/朝廷/散修联盟/其他），alignment 取「正道」「魔道」「中立」（可省略，系统会自动判定）。仅被一句话提及、毫无着墨的势力不要登记（避免图鉴冗杂）。
 - 机缘钩子 hooks：本回合叙事中 GM 抛给玩家的机缘/邀请（奇遇、秘境、委托、悬赏、人物上门、势力招揽、追杀、黑市来客等），每项 {theme, title, declined}；theme 取类型（秘境/奇遇/委托/悬赏/人物/势力/追杀/黑市/其他），declined 在玩家明确拒绝该钩子时填 true。系统据此记忆"最近抛过什么、哪些被拒"，防止同类机缘反复出现。没有抛出钩子则留空数组。
 - 效果诉求 effectRequests：玩家明确表达"希望某种法宝/丹药/功法有某种效果"时登记，每项 {name, desc}；name 为物品或效果名，desc 为玩家想要的效果。只记录诉求，绝不虚构实现——注册表之外的诉求，GM 应按规则发最接近的注册表词条或标注叙事词条。没有诉求则留空数组。
+- 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
+- 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - 重要剧情标记放 flags；目标变化放 goal。
 - 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。
 - 收益来源 gainType：当本回合玩家获得灵石等收益时，标注来源——"righteous"（正道途径：任务、交易、赠礼、帮人所得）或 "plunder"（掠夺途径：抢劫、偷窃、杀人越货、勒索）；无收益或无法判断填 "neutral"。
-- 大势演变 eraChange：若本回合发生改变天下大势的重大事件（如正魔大战结束、乱世平定），填 {type: "盛世/乱世/末法时代/秘境将启/正魔大战", text: "新大势一句话"}；否则填 null。
-- 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。本回合无任何变化时输出 {}。`;
+- 大势演变 eraChange：若本回合发生改变天下大势的重大事件（如正魔大战结束、乱世平定），填 {type: "盛世/乱世/末法时代/秘境将启/正魔大战", text: "新大势一句话"}；否则填 null。若叙事中给出了新大势的期限（如"秘境将于三月后开启"），附带 months: 3（期限月数）；无期限则省略 months。
+- 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。本回合无任何变化时输出 {}。`;
 
 export function buildExtractMessages(narrative, player, world) {
   const god = world && world.settings && world.settings.godMode === true;
@@ -887,6 +908,110 @@ export function farmMult(streak) {
   return 0.6;
 }
 
+// 物品数量变更（共享：itemChanges 与 retract 补回都用它）
+// 数量规范化：丹药/法宝/武器/衣物必须为整数；天材地宝/材料允许半份（0.5 步进）
+function applyItemChange(world, ch, rawDelta) {
+  const desc = ch.desc || '';
+  const kind = ch.kind || kindFromText(ch.name, desc);
+  let delta = typeof rawDelta === 'number' && Number.isFinite(rawDelta) ? rawDelta : 1;
+  if (delta !== 0) {
+    const step = (kind === '天材地宝' || kind === '材料') ? 0.5 : 1;
+    delta = delta > 0 ? Math.max(step, Math.round(delta / step) * step) : Math.min(-step, Math.round(delta / step) * step);
+  }
+  const grade = ch.grade || '';
+  const rarity = ch.rarity || '凡品';
+  const affix = ch.affix || '';
+  if (delta > 0 && !world.items.some((t) => t.name === ch.name)) {
+    world.items.push({ name: ch.name, desc, kind, rarity, affix }); // 图鉴永久记录
+  }
+  let inv = world.inventory.find((t) => t.name === ch.name);
+  if (delta > 0) {
+    if (!inv) { inv = { name: ch.name, desc, qty: 0, kind, grade, rarity, affix }; world.inventory.push(inv); }
+    else { inv.desc = inv.desc || desc; inv.kind = inv.kind || kind; inv.grade = inv.grade || grade; inv.rarity = inv.rarity || rarity; inv.affix = inv.affix || affix; }
+    inv.qty += delta;
+  } else if (inv) {
+    inv.qty += delta;
+    if (inv.qty <= 0) world.inventory = world.inventory.filter((t) => t.name !== ch.name);
+  }
+}
+
+// NPC 性格揭示阶段：陌生（未明）→ 初识（气质）→ 深交（真实性格）
+export function npcInsightStage(npc) {
+  if (!npc) return 'unknown';
+  if (npc.personalityRevealed && npc.personality) return 'insight';
+  if ((npc.interactionCount || 0) >= 1 && npc.temperament) return 'acquaintance';
+  return 'unknown';
+}
+
+// ---------- 关系档案（防 GM 遗忘长期感情线/人物脉络）----------
+// 与人物/势力的关系里程碑作为一等公民存储：关系变化 + 带关系性质的事迹
+const RELATION_WORDS = /道侣|双修|夫妻|成婚|定情|暧昧|倾心|爱慕|求婚|表白|结义|拜师|师徒|挚友|知己|结仇|仇敌|和解|恩人|追随|投靠|效忠|提亲/;
+function maintainRelationDossier(world, out, eventTurn) {
+  if (!world.relationDossier) world.relationDossier = {};
+  const countedThisTurn = new Set(); // 同回合同一 NPC 互动只计一次
+  const countInteraction = (name) => {
+    if (!name || countedThisTurn.has(name)) return;
+    const npc = (world.npcs || []).find((n) => n.name === name);
+    if (npc) {
+      npc.interactionCount = (npc.interactionCount || 0) + 1;
+      countedThisTurn.add(name);
+    }
+  };
+  const push = (name, rel, title, note) => {
+    if (!name) return;
+    const entry = world.relationDossier[name] || (world.relationDossier[name] = { relation: '', milestones: [] });
+    if (rel) entry.relation = rel;
+    const ms = entry.milestones;
+    if (ms.length && ms[ms.length - 1].turn === eventTurn && ms[ms.length - 1].title === title) return; // 同回合去重
+    ms.push({ turn: eventTurn, title, note: (note || '').slice(0, 60) });
+    if (ms.length > 12) ms.splice(1, ms.length - 12); // 保留首个（初遇/初见）+ 最近 11 个
+  };
+  if (Array.isArray(out.npcRelations)) {
+    for (const nr of out.npcRelations) {
+      if (!nr || !nr.name || !nr.relation) continue;
+      const resolved = (world.aliasMap && world.aliasMap[nr.name]) || nr.name;
+      const entry = world.relationDossier[resolved] || (world.relationDossier[resolved] = { relation: '', milestones: [] });
+      if (entry.relation === nr.relation) continue; // 关系未变化，不重复记里程碑
+      push(resolved, nr.relation, '关系：' + nr.relation, '');
+      countInteraction(resolved);
+    }
+  }
+  if (Array.isArray(out.newEvents)) {
+    for (const ev of out.newEvents) {
+      if (!ev || !ev.title) continue;
+      const rawSubject = typeof ev.subject === 'string' ? ev.subject.trim() : '';
+      if (!rawSubject || rawSubject === 'undefined' || rawSubject === 'null') continue;
+      const subject = (world.aliasMap && world.aliasMap[rawSubject]) || rawSubject;
+      const isNpc = (world.npcs || []).some((n) => n.name === subject);
+      const relEvent = ev.relation && RELATION_WORDS.test(String(ev.relation));
+      if (isNpc) countInteraction(subject);
+      if (isNpc || relEvent) push(subject, ev.relation || '', ev.title, ev.desc || '');
+    }
+  }
+}
+// 快照用的精简关系档案（活跃关系优先；无档案时返回 undefined，省 token）
+export function compactDossier(world) {  const d = world && world.relationDossier;
+  if (!d) return undefined;
+  const entries = Object.entries(d)
+    .map(([name, e]) => ({ name, rel: e.relation || '', milestones: (e.milestones || []).slice(-6) }))
+    .filter((e) => e.milestones.length > 0);
+  if (!entries.length) return undefined;
+  const active = /道侣|双修|夫妻|暧昧|倾心|爱慕|师徒|结义|挚友/;
+  entries.sort((a, b) => {
+    const aa = active.test(a.rel) ? 0 : 1;
+    const bb = active.test(b.rel) ? 0 : 1;
+    if (aa !== bb) return aa - bb;
+    const ta = a.milestones[a.milestones.length - 1].turn || 0;
+    const tb = b.milestones[b.milestones.length - 1].turn || 0;
+    return tb - ta;
+  });
+  return entries.slice(0, 8).map((e) => ({
+    name: e.name,
+    rel: e.rel,
+    ms: e.milestones.map((m) => ({ t: m.turn, x: (m.title || '').slice(0, 16), n: (m.note || '').slice(0, 40) })),
+  }));
+}
+
 // 势力阵营立场：正道 / 魔道 / 中立（优先显式字段 → 名字关键字 → 描述自指措辞）
 export function factionAlignment(faction) {
   if (faction && faction.alignment && ['正道', '魔道', '中立'].includes(faction.alignment)) return faction.alignment;
@@ -983,7 +1108,7 @@ export function autoNameNpcs(world, newNpcs) {
     const raw = String(n.name).trim();
     const finalName = nameMap[raw] || raw;
     const kinNote = n.family && n.family.of ? `（${n.family.of}的${n.family.relation || '亲人'}）` : '';
-    return { name: finalName, desc: (n.desc || '') + kinNote, relation: n.relation || '', kin: n.family || null, personality: n.personality || '' };
+    return { name: finalName, desc: (n.desc || '') + kinNote, relation: n.relation || '', kin: n.family || null, temperament: n.temperament || '', personality: n.personality || '' };
   });
 }
 
@@ -1101,6 +1226,12 @@ export function applyStateUpdates(player, world, out) {
     }
   }
 
+  // 生死一线自动解除：脱险后（本回合无危险判定、未死、气血恢复至上限 25% 以上）自动清除，
+  // 防止 GM 忘记写 deathImminent:false 导致濒死标记永久残留（GM 显式设置仍优先，合并在后）。
+  if (world.flags.deathImminent && out.died !== true && out.risk !== 'high' && out.risk !== 'lethal' && player.hp > player.maxHp * 0.25) {
+    world.flags.deathImminent = false;
+  }
+
   // 境界突破：只允许提升，且需严格来自阶梯；同时按天道规则提升基础寿元/气血上限
   if (typeof out.realmChange === 'string' && out.realmChange) {
     const idx = realmIndex(out.realmChange);
@@ -1136,7 +1267,7 @@ export function applyStateUpdates(player, world, out) {
   if (Array.isArray(out.newNpcs)) {
     for (const n of autoNameNpcs(world, out.newNpcs)) {
       if (n && n.name && !world.npcs.some((t) => t.name === n.name)) {
-        world.npcs.push({ name: n.name, desc: n.desc || '', relation: n.relation || '', kin: n.kin || null, personality: n.personality || '' });
+        world.npcs.push({ name: n.name, desc: n.desc || '', relation: n.relation || '', kin: n.kin || null, temperament: n.temperament || '', personality: n.personality || '' });
       }
     }
   }
@@ -1165,6 +1296,7 @@ export function applyStateUpdates(player, world, out) {
       const f = world.factions.find((x) => x.name === fr.name);
       if (f) {
         if (rel) f.relation = rel;
+        f.notedTurn = eventTurn; // 再次被提及：刷新常驻期（耳闻势力可升回常驻区）
       } else {
         world.factions.push({
           name: fr.name,
@@ -1182,7 +1314,8 @@ export function applyStateUpdates(player, world, out) {
   if (Array.isArray(out.newFactions)) {
     for (const nf of out.newFactions) {
       if (!nf || !nf.name) continue;
-      if (world.factions.some((f) => f.name === nf.name)) continue; // 已存在则跳过
+      const existing = world.factions.find((f) => f.name === nf.name);
+      if (existing) { existing.notedTurn = eventTurn; continue; } // 已存在：刷新常驻期
       world.factions.push({
         name: nf.name,
         desc: nf.desc || '',
@@ -1215,6 +1348,11 @@ export function applyStateUpdates(player, world, out) {
     if (ec.type && ERA_TYPES[ec.type]) {
       world.eraType = ec.type;
       if (ec.text) world.era = ec.text;
+      // 期限：叙事给定期限（如"三月后开启"）→ 记下截止日；无期限 → 清除
+      world.eraDeadline = (typeof ec.months === 'number' && ec.months > 0)
+        ? addMonths(world.date, ec.months)
+        : undefined;
+      world.flags.eraExpired = false;
     }
   }
 
@@ -1231,29 +1369,25 @@ export function applyStateUpdates(player, world, out) {
     }
   }
 
+  // 识破真性：叙事中玩家看透某 NPC 的真实性格 → 图鉴揭示
+  if (Array.isArray(out.personalityReveals)) {
+    for (const pr of out.personalityReveals) {
+      if (!pr || !pr.name) continue;
+      const resolved = (world.aliasMap && world.aliasMap[pr.name]) || pr.name;
+      const npc = world.npcs.find((x) => x.name === resolved);
+      if (npc) npc.personalityRevealed = true;
+    }
+  }
+
+  // ---------- 关系档案：长期感情线/人物脉络的一等公民存储（防 GM 遗忘）----------
+  maintainRelationDossier(world, out, eventTurn);
+
   // 背包物品：获得/消耗（带数量），首次获得同时记入图鉴
   if (!Array.isArray(world.inventory)) world.inventory = [];
   if (Array.isArray(out.itemChanges)) {
     for (const ch of out.itemChanges) {
       if (!ch || !ch.name) continue;
-      const delta = typeof ch.delta === 'number' ? ch.delta : 1;
-      const desc = ch.desc || '';
-      const kind = ch.kind || kindFromText(ch.name, desc);
-      const grade = ch.grade || '';
-      const rarity = ch.rarity || '凡品';
-      const affix = ch.affix || '';
-      if (delta > 0 && !world.items.some((t) => t.name === ch.name)) {
-        world.items.push({ name: ch.name, desc, kind, rarity, affix }); // 图鉴永久记录（带品类/稀有度/词条）
-      }
-      let inv = world.inventory.find((t) => t.name === ch.name);
-      if (delta > 0) {
-        if (!inv) { inv = { name: ch.name, desc, qty: 0, kind, grade, rarity, affix }; world.inventory.push(inv); }
-        else { inv.desc = inv.desc || desc; inv.kind = inv.kind || kind; inv.grade = inv.grade || grade; inv.rarity = inv.rarity || rarity; inv.affix = inv.affix || affix; }
-        inv.qty += delta;
-      } else if (inv) {
-        inv.qty += delta;
-        if (inv.qty <= 0) world.inventory = world.inventory.filter((t) => t.name !== ch.name);
-      }
+      applyItemChange(world, ch, ch.delta);
     }
   }
 
@@ -1332,6 +1466,45 @@ export function applyStateUpdates(player, world, out) {
     if (world.effectRequests.length > 20) world.effectRequests = world.effectRequests.slice(-20);
   }
 
+  // 剧情撤回：删除幻觉产生的事迹/剧情标记/关系档案，防止污染后续剧情
+  if (Array.isArray(out.retract)) {
+    for (const r of out.retract) {
+      if (!r) continue;
+      const subjects = Array.isArray(r.subjects) ? r.subjects : [];
+      const titles = Array.isArray(r.titles) ? r.titles : [];
+      const flags = Array.isArray(r.flags) ? r.flags : [];
+      if (subjects.length || titles.length) {
+        world.events = (world.events || []).filter((e) => {
+          if (titles.length && titles.includes(e.title)) return false; // 标题命中即删
+          if (subjects.length && titles.length === 0 && subjects.includes(e.subject)) return false; // 只给主体时整条脉络删
+          return true;
+        });
+        // 关系档案同步清理
+        for (const name of subjects) {
+          const d = world.relationDossier && world.relationDossier[name];
+          if (!d) continue;
+          if (titles.length) {
+            d.milestones = (d.milestones || []).filter((m) => !titles.includes(m.title));
+            if (!d.milestones.length) delete world.relationDossier[name];
+          } else {
+            delete world.relationDossier[name];
+          }
+        }
+      }
+      for (const f of flags) {
+        delete world.flags[f];
+      }
+      // 补回此前误耗的物品（如 GM 把"培元丹"错扣成"百转培元丹"后纠正）
+      if (Array.isArray(r.items)) {
+        for (const it of r.items) {
+          if (!it || !it.name) continue;
+          const refund = Math.abs(typeof it.delta === 'number' ? it.delta : 1);
+          if (refund > 0) applyItemChange(world, { name: it.name, desc: it.desc || '', kind: it.kind }, refund);
+        }
+      }
+    }
+  }
+
   // 噬血：战斗吸血（返还所受伤势 30%）；回春：无战斗回合末自愈 5%（濒死时不生效，脱险由叙事决定）
   if (!god && player.hp > 0 && out.died !== true) {
     if (combat && hpLost > 0 && activeHas(world.inventory, 'lifesteal')) {
@@ -1370,6 +1543,57 @@ export function advanceTime(world, player, months = 0) {
   const god = world && world.settings && world.settings.godMode === true;
   const evergreen = activeHas(world.inventory, 'evergreen') ? 0.5 : 1; // 长青词条：寿元消耗减半
   if (!god) player.lifespan = Math.max(0, player.lifespan - ((months || 0) / 12) * evergreen); // 言出法随：寿元不流逝
+}
+
+// ---------- 大势时间轴（有期限的大势必须按时演变，不能无限拖延）----------
+export function addMonths(date, m) {
+  const y = date && date.year ? date.year : 1;
+  const mo = date && date.month ? date.month : 1;
+  const total = (y - 1) * 12 + (mo - 1) + Math.round(m);
+  return { year: Math.floor(total / 12) + 1, month: (total % 12) + 1, day: (date && date.day) || 1 };
+}
+export function dateAfter(a, b) {
+  const ya = a && a.year ? a.year : 0;
+  const yb = b && b.year ? b.year : 0;
+  if (ya !== yb) return ya > yb;
+  const ma = a && a.month ? a.month : 0;
+  const mb = b && b.month ? b.month : 0;
+  if (ma !== mb) return ma > mb;
+  return ((a && a.day) || 1) > ((b && b.day) || 1);
+}
+// 每回合调用：秘境类大势到期限后，先给 GM 一回合按剧情收束；仍未收束则引擎强制演变
+export function enforceEraTimeline(world, out) {
+  if (!world || !world.date) return null;
+  // 只有「秘境将启」是有期限的大势；其余大势的旧期限一律忽略
+  if (world.eraType !== '秘境将启') {
+    world.eraDeadline = undefined;
+    world.flags.eraExpired = false;
+    return null;
+  }
+  // 秘境将启：无期限时默认"三月之期"
+  if (!world.eraDeadline) {
+    world.eraDeadline = addMonths(world.date, 3);
+  }
+  const past = world.eraDeadline && dateAfter(world.date, world.eraDeadline);
+  if (!past) {
+    world.flags.eraExpired = false;
+    return null;
+  }
+  // 本回合 GM 已按剧情收束 → 无需强制
+  if (out && out.eraChange && typeof out.eraChange === 'object' && out.eraChange.type) {
+    world.flags.eraExpired = false;
+    return null;
+  }
+  if (!world.flags.eraExpired) {
+    world.flags.eraExpired = true; // 给 GM 一回合收束机会
+    return `⏳ 大势期限已至：${world.era} 的日子到了。天道即将推动大势演变。`;
+  }
+  // 连续两回合未收束 → 引擎强制演变（秘境现世，群雄争夺 → 乱世）
+  world.eraType = '乱世';
+  world.era = '秘境现世，机缘与杀机并起，天下重归纷争';
+  world.eraDeadline = undefined;
+  world.flags.eraExpired = false;
+  return '🌌 大势已变：秘境现世，天下重归纷争（乱世）。';
 }
 
 // ---------- 记一条事迹（供取消任务/超时失败等主动写入）----------

@@ -49,6 +49,26 @@ w4.flags = { deathImminent: true };
 applyStateUpdates(p4, w4, { flags: { deathImminent: false }, stateUpdates: { hp: { delta: 30 } } });
 assert('脱险解除濒死', w4.flags.deathImminent === false);
 
+// ---------- 4b. 自动解除：GM 忘记清标记时，无危险且气血恢复至 25% 以上自动解除 ----------
+const p4b = newPlayerState();
+p4b.hp = 10;
+const w4b = mk();
+w4b.flags = { deathImminent: true };
+applyStateUpdates(p4b, w4b, { stateUpdates: { hp: { delta: 20 } } }); // 10+20=30 > 25
+assert('无危险+气血恢复至25%以上自动解除', w4b.flags.deathImminent === false);
+const p4c = newPlayerState();
+p4c.hp = 10;
+const w4c = mk();
+w4c.flags = { deathImminent: true };
+applyStateUpdates(p4c, w4c, { stateUpdates: { hp: { delta: 5 } } }); // 15 ≤ 25
+assert('气血仍低不自动解除', w4c.flags.deathImminent === true);
+const p4d = newPlayerState();
+p4d.hp = 10;
+const w4d = mk();
+w4d.flags = { deathImminent: true };
+applyStateUpdates(p4d, w4d, { stateUpdates: { hp: { delta: 20 } }, risk: 'high' });
+assert('涉险回合不自动解除', w4d.flags.deathImminent === true);
+
 // ---------- 5. 言出法随豁免死亡与濒死 ----------
 const pg = newPlayerState();
 const wg = mk({ difficulty: '炼狱', pace: '慢', turnLimit: 0, godMode: true });
