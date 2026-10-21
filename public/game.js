@@ -25,7 +25,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.1.2';
+export const GAME_VERSION = '1.1.3';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -470,7 +470,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 }
 字段说明：
 - narrative：必填。
-- stateUpdates：玩家状态变化，用 delta 增减量；可用字段只有 hp、maxHp、lifespan、spiritStones、morality、reputation、cultivation；叙事中提到这些数值变化必须在此给出对应 delta。注意：寿元因岁月流逝（闭关/赶路/等待）的减少由系统按 timeMonths 自动扣除，不要写 lifespan 负 delta；只有延寿丹（正）、走火入魔/被抽寿元/燃烧寿元（负）等非时间流逝的寿元变化才写 lifespan delta。
+- stateUpdates：玩家状态变化，只允许有限、安全数字的 delta 增减量，禁止 set 直接赋值（言出法随模式也不例外）；可用字段只有 hp、maxHp、lifespan、spiritStones、morality、reputation、cultivation；叙事中提到这些数值变化必须在此给出对应 delta。注意：寿元因岁月流逝（闭关/赶路/等待）的减少由系统按 timeMonths 自动扣除，不要写 lifespan 负 delta；只有延寿丹（正）、走火入魔/被抽寿元/燃烧寿元（负）等非时间流逝的寿元变化才写 lifespan delta。
 - realmChange：只有境界突破时填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}），否则 null。
 - risk：玩家处于危险/濒死/作死处境时填 "high" 或 "lethal"，否则 null。
 - combat：玩家与敌人交手时填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，不明则填 "未知"。无战斗时省略。
@@ -487,7 +487,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 效果诉求 effectRequests：玩家明确表达"希望某种法宝/丹药/功法有某种效果"时登记，每项 {name, desc}；name 为物品或效果名，desc 为玩家想要的效果。只记录诉求，绝不虚构实现——注册表之外的诉求，GM 应按规则发最接近的注册表词条或标注叙事词条。没有诉求则留空数组。
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
-- flags：重要剧情标记（闭关修炼/苦修时标记 closedDoor:true，用于连续闭关收益递减；玩家从「生死一线」脱险时标记 deathImminent:false 解除濒死）；goal：目标变化；timeMonths：本回合经过的月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。
+- flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
 
 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。`;
 
@@ -711,7 +711,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "eraChange": null
 }
 规则：
-- stateUpdates 里只填有变化的字段，delta 为增减量；没有变化的字段省略。可用字段只有 hp、maxHp、lifespan、spiritStones、morality、reputation、cultivation。
+- stateUpdates 里只填有变化的字段，delta 必须是有限、安全数字；禁止 set 直接赋值，包括言出法随模式。没有变化的字段省略。可用字段只有 hp、maxHp、lifespan、spiritStones、morality、reputation、cultivation。
 - 正邪 morality 与声望 reputation 判定：行善（救人、助人、除暴安良、护佑弱小、仗义出手）→ morality 给正 delta；作恶（偷窃、杀人、强抢、欺凌、背信弃义）→ morality 给负 delta。声望 reputation：做出广为人知的义举/壮举（救人、除害、完成大事、扬名）→ 给正 delta；恶名（作恶被传开、失信违约）→ 给负 delta。叙事明确写到这些行为时，必须给出对应 delta，不要省略。
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
@@ -727,7 +727,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
 - 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
-- 任务进度 questUpdates：叙事中某任务完成或失败时，登记 {title, status, note}，status 取 "completed" 或 "failed"。仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且本回合叙事明确约定/澄清期限时，附 deadlineDays 或 deadlineDate，相对期限从本回合结束日起算；这种补录可省略 status。世界快照中 deadlinePending 为旧期限待确认，需根据本回合明确的新约定补录，不得从 legacyDeadlineTurn 猜日期。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期；本回合已完成的任务优先按完成结算。
+- 任务进度 questUpdates：叙事中进行中任务完成或失败时，登记 {title, status, note}，status 取 "completed" 或 "failed"。completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能把同一任务同时完成与失败。仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且本回合叙事明确约定/澄清期限时，附 deadlineDays 或 deadlineDate，相对期限从本回合结束日起算；这种补录可省略 status。世界快照中 deadlinePending 为旧期限待确认，需根据本回合明确的新约定补录，不得从 legacyDeadlineTurn 猜日期。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期；本回合已完成的任务优先按完成结算。
 - 势力关系 factionRelations：当玩家与某势力关系变化时登记，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
 - 新势力 newFactions：叙事中新出现、玩家打听或遇见的江湖势力（宗门/帮派/魔门/世家/商会/朝廷/散修联盟等），有名有实（有名字且叙事有所着墨，如行事风格、宗旨、所在、立场）就登记 {name, desc, type, alignment}；type 取类型（宗门/帮派/魔门/世家/商会/朝廷/散修联盟/其他），alignment 取「正道」「魔道」「中立」（可省略，系统会自动判定）。仅被一句话提及、毫无着墨的势力不要登记（避免图鉴冗杂）。
 - 机缘钩子 hooks：本回合叙事中 GM 抛给玩家的机缘/邀请（奇遇、秘境、委托、悬赏、人物上门、势力招揽、追杀、黑市来客等），每项 {theme, title, declined}；theme 取类型（秘境/奇遇/委托/悬赏/人物/势力/追杀/黑市/其他），declined 在玩家明确拒绝该钩子时填 true。系统据此记忆"最近抛过什么、哪些被拒"，防止同类机缘反复出现。没有抛出钩子则留空数组。
@@ -735,7 +735,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - 重要剧情标记放 flags；目标变化放 goal。
-- 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。
+- 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。物品与撤回退款的 delta 必须明确给出有限数字，缺失不默认增加一件。普通 flags 仅用布尔值；deathImminent/qiDeviation 只允许 false 清除，不允许 true 伪造；deathByRisk/eraExpired/goalCompleted 由代码管理，不可写入或撤回。
 - 收益来源 gainType：当本回合玩家获得灵石等收益时，标注来源——"righteous"（正道途径：任务、交易、赠礼、帮人所得）或 "plunder"（掠夺途径：抢劫、偷窃、杀人越货、勒索）；无收益或无法判断填 "neutral"。
 - 大势演变 eraChange：若本回合发生改变天下大势的重大事件（如正魔大战结束、乱世平定），填 {type: "盛世/乱世/末法时代/秘境将启/正魔大战", text: "新大势一句话"}；否则填 null。若叙事中给出了新大势的期限（如"秘境将于三月后开启"），附带 months: 3（期限月数）；无期限则省略 months。
 - 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。本回合无任何变化时输出 {}。`;
@@ -913,7 +913,8 @@ export function farmMult(streak) {
 function applyItemChange(world, ch, rawDelta) {
   const desc = ch.desc || '';
   const kind = ch.kind || kindFromText(ch.name, desc);
-  let delta = typeof rawDelta === 'number' && Number.isFinite(rawDelta) ? rawDelta : 1;
+  if (!isSafeNumber(rawDelta)) return false;
+  let delta = rawDelta;
   if (delta !== 0) {
     const step = (kind === '天材地宝' || kind === '材料') ? 0.5 : 1;
     delta = delta > 0 ? Math.max(step, Math.round(delta / step) * step) : Math.min(-step, Math.round(delta / step) * step);
@@ -921,10 +922,11 @@ function applyItemChange(world, ch, rawDelta) {
   const grade = ch.grade || '';
   const rarity = ch.rarity || '凡品';
   const affix = ch.affix || '';
+  let inv = world.inventory.find((t) => t.name === ch.name);
+  if (!isSafeNumber(delta) || !isSafeNumber((inv ? inv.qty : 0) + delta)) return false;
   if (delta > 0 && !world.items.some((t) => t.name === ch.name)) {
     world.items.push({ name: ch.name, desc, kind, rarity, affix }); // 图鉴永久记录
   }
-  let inv = world.inventory.find((t) => t.name === ch.name);
   if (delta > 0) {
     if (!inv) { inv = { name: ch.name, desc, qty: 0, kind, grade, rarity, affix }; world.inventory.push(inv); }
     else { inv.desc = inv.desc || desc; inv.kind = inv.kind || kind; inv.grade = inv.grade || grade; inv.rarity = inv.rarity || rarity; inv.affix = inv.affix || affix; }
@@ -933,6 +935,7 @@ function applyItemChange(world, ch, rawDelta) {
     inv.qty += delta;
     if (inv.qty <= 0) world.inventory = world.inventory.filter((t) => t.name !== ch.name);
   }
+  return true;
 }
 
 // NPC 性格揭示阶段：陌生（未明）→ 初识（气质）→ 深交（真实性格）
@@ -959,7 +962,8 @@ function maintainRelationDossier(world, out, eventTurn) {
   };
   const push = (name, rel, title, note) => {
     if (!name) return;
-    const entry = world.relationDossier[name] || (world.relationDossier[name] = { relation: '', milestones: [] });
+    const stored = hasOwn(world.relationDossier, name) ? world.relationDossier[name] : null;
+    const entry = isPlainRecord(stored) && Array.isArray(stored.milestones) ? stored : (world.relationDossier[name] = { relation: '', milestones: [] });
     if (rel) entry.relation = rel;
     const ms = entry.milestones;
     if (ms.length && ms[ms.length - 1].turn === eventTurn && ms[ms.length - 1].title === title) return; // 同回合去重
@@ -969,8 +973,9 @@ function maintainRelationDossier(world, out, eventTurn) {
   if (Array.isArray(out.npcRelations)) {
     for (const nr of out.npcRelations) {
       if (!nr || !nr.name || !nr.relation) continue;
-      const resolved = (world.aliasMap && world.aliasMap[nr.name]) || nr.name;
-      const entry = world.relationDossier[resolved] || (world.relationDossier[resolved] = { relation: '', milestones: [] });
+      const resolved = resolveStateAlias(world, nr.name);
+      const stored = hasOwn(world.relationDossier, resolved) ? world.relationDossier[resolved] : null;
+      const entry = isPlainRecord(stored) && Array.isArray(stored.milestones) ? stored : (world.relationDossier[resolved] = { relation: '', milestones: [] });
       if (entry.relation === nr.relation) continue; // 关系未变化，不重复记里程碑
       push(resolved, nr.relation, '关系：' + nr.relation, '');
       countInteraction(resolved);
@@ -981,7 +986,7 @@ function maintainRelationDossier(world, out, eventTurn) {
       if (!ev || !ev.title) continue;
       const rawSubject = typeof ev.subject === 'string' ? ev.subject.trim() : '';
       if (!rawSubject || rawSubject === 'undefined' || rawSubject === 'null') continue;
-      const subject = (world.aliasMap && world.aliasMap[rawSubject]) || rawSubject;
+      const subject = resolveStateAlias(world, rawSubject);
       const isNpc = (world.npcs || []).some((n) => n.name === subject);
       const relEvent = ev.relation && RELATION_WORDS.test(String(ev.relation));
       if (isNpc) countInteraction(subject);
@@ -1082,11 +1087,11 @@ export function generateName(surname) {
 // 给新 NPC 自动命名：身份代称→随机姓名；血缘关系保证同姓
 export function autoNameNpcs(world, newNpcs) {
   const aliasMap = world.aliasMap || (world.aliasMap = {});
-  const nameMap = {}; // 原始称呼 -> 最终姓名
+  const nameMap = Object.create(null); // 原始称呼 -> 最终姓名，不能误读继承属性
   for (const n of newNpcs) {
     if (!n || !n.name) continue;
     const raw = String(n.name).trim();
-    if (aliasMap[raw]) { nameMap[raw] = aliasMap[raw]; continue; }
+    if (hasOwn(aliasMap, raw) && typeof aliasMap[raw] === 'string') { nameMap[raw] = aliasMap[raw]; continue; }
     nameMap[raw] = isIdentityName(raw) ? generateName() : raw;
   }
   // 血缘同姓：family.of 指向的人已有姓名，则用其姓重新生成
@@ -1095,7 +1100,7 @@ export function autoNameNpcs(world, newNpcs) {
     const raw = String(n.name).trim();
     const of = n.family.of;
     if (!of) continue;
-    const kinFinal = nameMap[of] || aliasMap[of] || (world.npcs.find((x) => x.name === of) || {}).name || '';
+    const kinFinal = nameMap[of] || (hasOwn(aliasMap, of) && typeof aliasMap[of] === 'string' ? aliasMap[of] : '') || (world.npcs.find((x) => x.name === of) || {}).name || '';
     const s = surnameOf(kinFinal);
     if (s) nameMap[raw] = generateName(s);
   }
@@ -1112,8 +1117,190 @@ export function autoNameNpcs(world, newNpcs) {
   });
 }
 
+// ---------- 模型提案边界：只复制已知字段，不信任原型、类型或数值 ----------
+const UNSAFE_STATE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const ENGINE_FLAGS = new Set(['deathImminent', 'qiDeviation', 'deathByRisk', 'eraExpired', 'goalCompleted']);
+const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+const isPlainRecord = (value) => value !== null && typeof value === 'object' &&
+  (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+const isSafeNumber = (value) => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER;
+function resolveStateAlias(world, name) {
+  return world.aliasMap && hasOwn(world.aliasMap, name) && typeof world.aliasMap[name] === 'string' ? world.aliasMap[name] : name;
+}
+const ISSUE_MESSAGES = {
+  invalid_root: '状态提案必须是普通对象，整份提案未结算。',
+  invalid_type: '字段类型或必要内容无效，已忽略。',
+  invalid_number: '数值必须有限且在安全范围内，已忽略。',
+  forbidden_set: '模型不能直接设置玩家属性，只允许 delta。',
+  unsafe_key: '原型保留名称不允许用于状态输入。',
+  unknown_field: '未知字段已忽略。',
+  terminal_quest: '任务终态不能改写，结构化事迹必须与实际状态一致。',
+  conflicting_quest_updates: '同批任务完成与失败冲突，该任务更新全部忽略。',
+  numeric_overflow: '运算结果超出安全数值范围，已忽略。',
+  forbidden_flag: '代码管理的标记不允许由模型写入或撤回。',
+};
+function stateIssue(issues, code, path) {
+  issues.push({ code, path, message: ISSUE_MESSAGES[code] });
+}
+
+// out 只包含可消费的结构；无效独立条目不会连带丢弃合法剧情。
+export function validateStateOutput(input) {
+  const issues = [];
+  const issue = (code, path) => stateIssue(issues, code, path);
+  if (!isPlainRecord(input)) {
+    issue('invalid_root', '$');
+    return { out: null, issues };
+  }
+  const OMIT = Symbol('omit');
+  const stringFields = (...keys) => Object.fromEntries(keys.map((key) => [key, 'string']));
+  const record = (fields, required = []) => ({ fields, required });
+  const array = (item) => ({ array: item });
+  const enumeration = (...values) => ({ enum: values });
+  const item = record({ name: 'name', ...stringFields('desc', 'affix'), delta: 'number',
+    kind: enumeration(...Object.keys(ITEM_KINDS)), grade: enumeration(...Object.keys(SKILL_GRADES)), rarity: enumeration(...Object.keys(RARITIES)) }, ['name', 'delta']);
+  const deadlineFields = { deadlineDays: 'deadlineDays', deadlineDate: 'deadlineDate', deadlineTurns: 'deadlineDays' };
+  const factionFields = { name: 'name', ...stringFields('desc', 'type'), alignment: enumeration('正道', '魔道', '中立') };
+  const schema = {
+    ...stringFields('narrative'),
+    stateUpdates: 'attributes',
+    timeMonths: 'time', gainType: enumeration('righteous', 'plunder', 'neutral'),
+    risk: enumeration('none', 'low', 'high', 'lethal'), died: 'boolean',
+    realmChange: enumeration(...REALM_LADDER),
+    combat: record({ enemy: 'string', realm: enumeration(...REALM_LADDER, '未知') }),
+    flags: 'flags',
+    newNpcs: array(record({ name: 'name', ...stringFields('desc', 'relation', 'temperament', 'personality'), family: record({ of: 'name', relation: 'string' }, ['of']) }, ['name'])),
+    newLocations: array(record({ name: 'name', desc: 'string' }, ['name'])),
+    newSkills: array(record({ name: 'name', desc: 'string', grade: enumeration(...Object.keys(SKILL_GRADES)) }, ['name'])),
+    newEvents: array(record({ subject: 'name', title: 'name', desc: 'string', relation: 'string' }, ['subject', 'title'])),
+    factionRelations: array(record({ ...factionFields, relation: enumeration('结盟', '敌对', '中立') }, ['name'])),
+    newFactions: array(record(factionFields, ['name'])),
+    npcRelations: array(record({ name: 'name', relation: 'string' }, ['name', 'relation'])),
+    personalityReveals: array(record({ name: 'name' }, ['name'])),
+    hooks: array(record({ theme: 'string', title: 'string', declined: 'boolean' }, ['theme'])),
+    itemChanges: array(item), equipChanges: array(record({ name: 'name', equipped: 'boolean' }, ['name', 'equipped'])),
+    goal: record(stringFields('desc', 'type', 'target', 'status')),
+    eraChange: record({ type: enumeration(...ERA_LEVELS), text: 'string', months: 'time' }, ['type']),
+    newQuests: array(record({ title: 'name', ...stringFields('desc', 'objective', 'timeNode', 'reward'), ...deadlineFields }, ['title'])),
+    questUpdates: array(record({ title: 'name', status: enumeration('active', 'completed', 'failed', 'cancelled'), note: 'string', timeNode: 'string', ...deadlineFields }, ['title'])),
+    effectRequests: array(record({ name: 'name', desc: 'string' }, ['name'])),
+    retract: array(record({ subjects: array('name'), titles: array('name'), flags: array('retractFlag'), items: array(record({ ...item.fields, delta: 'positive' }, ['name', 'delta'])) })),
+    ...Object.fromEntries(PLAYER_ATTRS.map((key) => [key, 'attribute'])),
+  };
+  const normalizeRecord = (value, spec, path) => {
+    if (!isPlainRecord(value)) { issue('invalid_type', path); return OMIT; }
+    const result = {};
+    for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+      if (UNSAFE_STATE_KEYS.has(key)) { issue('unsafe_key', path); continue; }
+      if (!hasOwn(spec.fields, key)) { issue('unknown_field', path); continue; }
+      const fieldPath = path === '$' ? key : `${path}.${key}`;
+      if (!hasOwn(descriptor, 'value')) { issue('invalid_type', fieldPath); continue; }
+      if (path === '$' && descriptor.value === null && ['combat', 'realmChange', 'risk', 'goal', 'eraChange'].includes(key)) continue;
+      const normalized = normalize(descriptor.value, spec.fields[key], fieldPath);
+      if (normalized !== OMIT) result[key] = normalized;
+    }
+    for (const key of spec.required || []) {
+      if (!hasOwn(result, key) || result[key] === '') { issue('invalid_type', `${path}.${key}`); return OMIT; }
+    }
+    return result;
+  };
+  const normalize = (value, spec, path) => {
+    if (spec === 'string' || spec === 'name' || spec === 'retractFlag') {
+      if (typeof value !== 'string') { issue('invalid_type', path); return OMIT; }
+      const text = spec === 'string' ? value : value.trim();
+      if (spec !== 'string' && (!text || UNSAFE_STATE_KEYS.has(text))) { issue(UNSAFE_STATE_KEYS.has(text) ? 'unsafe_key' : 'invalid_type', path); return OMIT; }
+      if (spec === 'retractFlag' && ENGINE_FLAGS.has(text)) { issue('forbidden_flag', path); return OMIT; }
+      return text;
+    }
+    if (spec === 'boolean') {
+      if (typeof value !== 'boolean') { issue('invalid_type', path); return OMIT; }
+      return value;
+    }
+    if (spec === 'number' || spec === 'positive' || spec === 'time' || spec === 'deadlineDays') {
+      const valid = isSafeNumber(value) && (spec !== 'time' || (value >= 0 && elapsedGameDays(value) !== null)) &&
+        (spec !== 'positive' || value > 0) &&
+        (spec !== 'deadlineDays' || (Number.isSafeInteger(value) && value >= 0));
+      if (!valid) { issue('invalid_number', path); return spec === 'deadlineDays' ? null : OMIT; }
+      return value;
+    }
+    if (spec === 'deadlineDate') {
+      const date = normalizeRecord(value, record({ year: 'number', month: 'number', day: 'number' }, ['year', 'month', 'day']), path);
+      if (date === OMIT || gameDateOrdinal(date) === null) { issue('invalid_number', path); return null; }
+      return date;
+    }
+    if (spec === 'attribute') {
+      if (typeof value === 'number') return normalize(value, 'number', path);
+      if (!isPlainRecord(value)) { issue('invalid_type', path); return OMIT; }
+      const delta = normalizeRecord(value, record({ delta: 'number', set: 'forbiddenSet' }), path);
+      return delta !== OMIT && hasOwn(delta, 'delta') ? { delta: delta.delta } : OMIT;
+    }
+    if (spec === 'forbiddenSet') { issue('forbidden_set', path); return OMIT; }
+    if (spec === 'attributes') return normalizeRecord(value, record(Object.fromEntries(PLAYER_ATTRS.map((key) => [key, 'attribute']))), path);
+    if (spec === 'flags') {
+      if (!isPlainRecord(value)) { issue('invalid_type', path); return OMIT; }
+      const flags = {};
+      for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+        if (UNSAFE_STATE_KEYS.has(key)) { issue('unsafe_key', path); continue; }
+        if (!hasOwn(descriptor, 'value') || typeof descriptor.value !== 'boolean') { issue('invalid_type', path); continue; }
+        if (ENGINE_FLAGS.has(key) && !(['deathImminent', 'qiDeviation'].includes(key) && descriptor.value === false)) { issue('forbidden_flag', path); continue; }
+        flags[key] = descriptor.value;
+      }
+      return flags;
+    }
+    if (spec.array) {
+      if (!Array.isArray(value)) { issue('invalid_type', path); return OMIT; }
+      const items = [];
+      for (const entry of value) {
+        const normalized = normalize(entry, spec.array, `${path}[]`);
+        if (normalized !== OMIT) items.push(normalized);
+      }
+      return items;
+    }
+    if (spec.enum) {
+      if (!spec.enum.includes(value)) { issue('invalid_type', path); return OMIT; }
+      return value;
+    }
+    return normalizeRecord(value, spec, path);
+  };
+  const out = normalizeRecord(input, record(schema), '$');
+  // Canonicalize the legacy flat form once, retaining the old preference for stateUpdates.
+  if (!hasOwn(out, 'stateUpdates')) {
+    const flat = {};
+    for (const key of PLAYER_ATTRS) if (hasOwn(out, key)) flat[key] = out[key];
+    if (Object.keys(flat).length) out.stateUpdates = flat;
+  }
+  for (const key of PLAYER_ATTRS) delete out[key];
+  return { out, issues };
+}
+
+function recordValidation(world, out, issues) {
+  if (!issues.length) return;
+  if (!Array.isArray(world.validationLog)) world.validationLog = [];
+  world.validationLog.push({ turn: (world.turn || 0) + 1, result: out === null ? 'rejected' : 'partial', issues: issues.slice(0, 10).map(({ code, path, message }) => ({ code, path, message })) });
+  if (world.validationLog.length > 30) world.validationLog.splice(0, world.validationLog.length - 30);
+}
+
 // ---------- 状态合并 ----------
-export function applyStateUpdates(player, world, out) {
+export function applyStateUpdates(player, world, input, report = {}) {
+  const validated = validateStateOutput(input);
+  const out = validated.out;
+  const issues = validated.issues;
+  report.out = out;
+  report.issues = issues;
+  if (out === null) { recordValidation(world, out, issues); return null; }
+  const reject = (code, path) => stateIssue(issues, code, path);
+  const currentDate = worldGameDate(world);
+  if (out.timeMonths !== undefined && currentDate && !addGameDays(currentDate, elapsedGameDays(out.timeMonths))) {
+    reject('numeric_overflow', 'timeMonths');
+    delete out.timeMonths;
+  }
+  if (out.eraChange && out.eraChange.months > 0) {
+    const deadline = currentDate && addMonths(currentDate, out.eraChange.months);
+    if (gameDateOrdinal(deadline) === null) {
+      reject('numeric_overflow', 'eraChange.months');
+      delete out.eraChange.months;
+    }
+  }
+  if (out.combat && !out.combat.enemy && !out.combat.realm) delete out.combat;
   migrateQuestDeadlines(world);
   const s = world.settings || {};
   const god = s.godMode === true; // 言出法随（外挂模式）：不受伤害、不掷死亡骰
@@ -1130,7 +1317,7 @@ export function applyStateUpdates(player, world, out) {
       if (out[key] !== undefined) su[key] = out[key];
     }
   }
-  // AI 有权修改的数值属性：delta 为增减量，set 为直接赋值
+  // AI 只能提出 delta；直接赋值在统一入口已拒绝。
   const repMult = reputationMultiplier(player.reputation);
   const intensity = MORALITY_INTENSITY[s.difficulty] ?? 0.2;
   const gainMult = moralityGainMultiplier(player.morality, out.gainType, intensity);
@@ -1170,19 +1357,24 @@ export function applyStateUpdates(player, world, out) {
     let delta;
     if (typeof u === 'number') delta = u;
     else if (typeof u.delta === 'number') delta = u.delta;
-    else if (typeof u.set === 'number') { player[key] = u.set; continue; }
     else continue;
     if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1)); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条减伤
     if (key === 'cultivation' && delta > 0) delta = Math.round(delta * pace.cultivationMult * fortuneMult * era.cultMult * closeMonths * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm); // 节奏+气运+大势+时长+功法+法宝+稀有度+词条+关系+势力+增益+闭关递减+走火入魔+防刷
     if (key === 'spiritStones' && delta > 0) delta = Math.round(delta * repMult * gainMult * era.gainMult * diff.gainMult * farm * wealthMult);         // 声望 + 正邪 + 大势 + 难度 + 防刷 + 聚财
     if (key === 'reputation' && delta > 0) delta = Math.round(delta * prestigeMult); // 威仪词条：声望正增长加成
-    player[key] += delta;
+    const next = player[key] + delta;
+    if (!isSafeNumber(delta) || !isSafeNumber(next)) {
+      reject('numeric_overflow', `stateUpdates.${key}`);
+      delete su[key];
+      continue;
+    }
+    player[key] = next;
     if (key === 'hp' && delta < 0) hpLost += -delta;
   }
 
   // 数值夹取，防止越界
-  player.hp = Math.max(0, Math.min(player.maxHp, player.hp));
   player.maxHp = Math.max(1, player.maxHp);
+  player.hp = Math.max(0, Math.min(player.maxHp, player.hp));
   player.lifespan = Math.max(0, player.lifespan);
   player.spiritStones = Math.max(0, player.spiritStones);
   player.morality = Math.max(-100, Math.min(100, player.morality));
@@ -1277,11 +1469,25 @@ export function applyStateUpdates(player, world, out) {
   if (!Array.isArray(world.events)) world.events = [];
   if (Array.isArray(out.newEvents)) {
     const clean = (v) => (typeof v === 'string' && v !== 'undefined' && v !== 'null' ? v.trim() : '');
+    out.newEvents = out.newEvents.filter((ev) => {
+      const quest = (world.quests || []).find((q) => q.title === ev.subject) ||
+        (out.newQuests || []).find((q) => q.title === ev.subject && (q.objective || q.reward));
+      if (!quest || !['已完成', '已失败', '已放弃', '已失败（超时）'].includes(ev.title)) return true;
+      let status = quest.status || 'active';
+      if (status === 'active') {
+        const planned = new Set((out.questUpdates || []).filter((u) => u.title === quest.title && ['completed', 'failed'].includes(u.status)).map((u) => u.status));
+        if (planned.size > 1) return false; // 下方统一冲突裁决负责诊断；不能先记入任一结局。
+        status = planned.values().next().value || 'active';
+      }
+      const same = status === 'completed' && ev.title === '已完成' || status === 'failed' && ev.title.startsWith('已失败') || status === 'cancelled' && ev.title === '已放弃';
+      if (!same) reject('terminal_quest', 'newEvents[]');
+      return false; // 精确系统标签只由真实任务迁移写入，不信任模型直接补造。
+    });
     for (const ev of out.newEvents) {
       if (!ev) continue;
       const rawSubject = clean(ev.subject);
       if (!rawSubject) continue;
-      const subject = (world.aliasMap && world.aliasMap[rawSubject]) ? world.aliasMap[rawSubject] : rawSubject; // 身份代称统一成姓名
+      const subject = resolveStateAlias(world, rawSubject); // 身份代称统一成姓名
       const title = clean(ev.title);
       if (!world.events.some((e) => e.subject === subject && e.title === title)) {
         world.events.push({ subject, title, desc: clean(ev.desc), relation: clean(ev.relation), turn: eventTurn, date: eventDate, stage: player.realm });
@@ -1361,7 +1567,7 @@ export function applyStateUpdates(player, world, out) {
   if (Array.isArray(out.npcRelations)) {
     for (const nr of out.npcRelations) {
       if (!nr || !nr.name) continue;
-      const resolved = (world.aliasMap && world.aliasMap[nr.name]) || nr.name;
+      const resolved = resolveStateAlias(world, nr.name);
       const npc = world.npcs.find((x) => x.name === resolved);
       if (npc && nr.relation) {
         npc.relation = nr.relation;
@@ -1374,7 +1580,7 @@ export function applyStateUpdates(player, world, out) {
   if (Array.isArray(out.personalityReveals)) {
     for (const pr of out.personalityReveals) {
       if (!pr || !pr.name) continue;
-      const resolved = (world.aliasMap && world.aliasMap[pr.name]) || pr.name;
+      const resolved = resolveStateAlias(world, pr.name);
       const npc = world.npcs.find((x) => x.name === resolved);
       if (npc) npc.personalityRevealed = true;
     }
@@ -1386,10 +1592,11 @@ export function applyStateUpdates(player, world, out) {
   // 背包物品：获得/消耗（带数量），首次获得同时记入图鉴
   if (!Array.isArray(world.inventory)) world.inventory = [];
   if (Array.isArray(out.itemChanges)) {
-    for (const ch of out.itemChanges) {
-      if (!ch || !ch.name) continue;
-      applyItemChange(world, ch, ch.delta);
-    }
+    out.itemChanges = out.itemChanges.filter((ch) => {
+      if (applyItemChange(world, ch, ch.delta)) return true;
+      reject('numeric_overflow', 'itemChanges[].delta');
+      return false;
+    });
   }
 
   // 装备变更（文字"穿上/佩戴/装备/祭炼/卸下 XX" → 提取器 equipChanges）
@@ -1449,19 +1656,39 @@ export function applyStateUpdates(player, world, out) {
   }
   // 任务进度 / 完成 / 失败
   if (Array.isArray(out.questUpdates)) {
+    const finalStates = new Map();
+    for (const u of out.questUpdates) {
+      if (u.status !== 'completed' && u.status !== 'failed') continue;
+      if (!finalStates.has(u.title)) finalStates.set(u.title, new Set());
+      finalStates.get(u.title).add(u.status);
+    }
+    const conflicts = new Set([...finalStates].filter(([, states]) => states.size > 1).map(([title]) => title));
+    if (conflicts.size) reject('conflicting_quest_updates', 'questUpdates[]');
+    out.questUpdates = out.questUpdates.filter((u) => {
+      if (conflicts.has(u.title)) return false;
+      const quest = world.quests.find((q) => q.title === u.title);
+      if (!quest) return false;
+      if (quest.status !== 'active') {
+        const changesDeadline = ['deadlineDate', 'deadlineDays', 'deadlineTurns', 'timeNode'].some((key) => hasOwn(u, key));
+        if (changesDeadline || (u.status !== undefined && u.status !== quest.status)) reject('terminal_quest', 'questUpdates[]');
+        return false; // 同一终态也是安静的 no-op，不补造里程碑。
+      }
+      if (u.status === 'cancelled') { reject('terminal_quest', 'questUpdates[].status'); return false; }
+      return true;
+    });
     for (const u of out.questUpdates) {
       if (u && u.title) {
         const q = world.quests.find((t) => t.title === u.title);
         if (q) {
-          // 期限补录不能把已终结的旧任务重新打开。
-          if (q.status !== 'active' && u.status === 'active') continue;
-          if (['completed', 'failed', 'active'].includes(u.status)) q.status = u.status;
+          if (q.status !== 'active') continue;
+          const previousStatus = q.status;
+          if (['completed', 'failed'].includes(u.status)) q.status = u.status;
           if (q.status === 'active') {
             const awaitingDeadline = gameDateOrdinal(q.deadlineDate) === null;
             applyQuestDeadline(q, u, questAnchorDate);
             if (awaitingDeadline && typeof u.timeNode === 'string' && u.timeNode.trim()) q.timeNode = u.timeNode.trim();
           }
-          if (u.status === 'completed' || u.status === 'failed') {
+          if (q.status !== previousStatus && (u.status === 'completed' || u.status === 'failed')) {
             const et = u.status === 'completed' ? '已完成' : '已失败';
             if (!world.events.some((e) => e.subject === u.title && e.title === et)) {
               world.events.push({ subject: u.title, title: et, desc: u.note || '', relation: '', turn: eventTurn, date: eventDate, stage: player.realm });
@@ -1498,7 +1725,7 @@ export function applyStateUpdates(player, world, out) {
         });
         // 关系档案同步清理
         for (const name of subjects) {
-          const d = world.relationDossier && world.relationDossier[name];
+          const d = world.relationDossier && hasOwn(world.relationDossier, name) && world.relationDossier[name];
           if (!d) continue;
           if (titles.length) {
             d.milestones = (d.milestones || []).filter((m) => !titles.includes(m.title));
@@ -1515,8 +1742,8 @@ export function applyStateUpdates(player, world, out) {
       if (Array.isArray(r.items)) {
         for (const it of r.items) {
           if (!it || !it.name) continue;
-          const refund = Math.abs(typeof it.delta === 'number' ? it.delta : 1);
-          if (refund > 0) applyItemChange(world, { name: it.name, desc: it.desc || '', kind: it.kind }, refund);
+          const refund = it.delta;
+          if (refund > 0 && !applyItemChange(world, { name: it.name, desc: it.desc || '', kind: it.kind }, refund)) reject('numeric_overflow', 'retract[].items[].delta');
         }
       }
     }
@@ -1534,6 +1761,7 @@ export function applyStateUpdates(player, world, out) {
   }
 
   // 结算（半透明展示）：逆天改命 > 战斗结算
+  recordValidation(world, out, issues);
   if (reviveNote) return reviveNote;
   if (combat && hpLost > 0) {
     const enemyLabel = combat.enemy || '强敌';
@@ -1842,21 +2070,22 @@ export function parseLLMJSON(text) {
   let t = String(text).trim();
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1].trim();
+  const parse = (candidate) => {
+    try { return { parsed: true, value: JSON.parse(candidate) }; }
+    catch { return { parsed: false }; }
+  };
+  // 先解析完整文本；合法数组/标量明确拒绝，绝不截出其内部对象。
+  let result = parse(t);
+  if (result.parsed) return isPlainRecord(result.value) ? result.value : null;
+  const normalized = t.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'");
+  result = parse(normalized);
+  if (result.parsed) return isPlainRecord(result.value) ? result.value : null;
+  // 只有带额外说明的非 JSON 文本才容忍抽取对象。
+  if (/^[\[\]"0-9\-]/.test(t)) return null;
   const start = t.indexOf('{');
   const end = t.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) t = t.slice(start, end + 1);
-  try {
-    return JSON.parse(t);
-  } catch {
-    // 容错：非 json 模式下模型可能输出弯引号，规范为半角后再试一次
-    const normalized = t
-      .replace(/[\u201C\u201D]/g, '"')   // “ ” → "
-      .replace(/[\u2018\u2019]/g, "'");  // ‘ ’ → '
-    if (normalized !== t) {
-      try {
-        return JSON.parse(normalized);
-      } catch { /* 仍失败则返回 null */ }
-    }
-    return null;
-  }
+  if (start === -1 || end <= start) return null;
+  result = parse(t.slice(start, end + 1));
+  if (!result.parsed) result = parse(normalized.slice(normalized.indexOf('{'), normalized.lastIndexOf('}') + 1));
+  return result.parsed && isPlainRecord(result.value) ? result.value : null;
 }

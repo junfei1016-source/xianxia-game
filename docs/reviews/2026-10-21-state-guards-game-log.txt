@@ -1,0 +1,443 @@
+﻿============================================
+法言天地 · 本局游戏日志（玩家反馈用）
+============================================
+导出时间：2026/10/21 11:08:18
+游戏版本：v1.1.3
+结局：进行中
+玩家：规则校验测试角色
+境界：凡人 · 修为 0%
+正邪 0（中庸）· 声望 0 · 灵石 37 · 寿元 100 · 气血 80/100
+回合 16 · 难度 普通 · 节奏 快 · 修为增益 1x · 篇幅 简短
+游戏日期：1年1月1日
+天下大势：盛世，坊市安宁（盛世）
+--------------------------------------------
+【完整对话记录】
+(系统) 规则校验审阅：固定异常提案，不会访问真实模型或修改正式存档。
+[你] 混合校验
+[天道] 混合校验演示：叙事声称直接改写气血、目标与境界，同时也提出正常的灵石收入和地点登记。系统应逐项裁决。
+(系统) ⚠【状态校验】部分状态提案已拒绝或归一化，合法内容仍按规则结算。模型不能直接设置玩家属性，只允许 delta；数值必须有限且在安全范围内，已忽略；字段类型或必要内容无效，已忽略；未知字段已忽略；代码管理的标记不允许由模型写入或撤回。叙事可能与实际结算有出入，请以状态面板和存档为准。
+(系统) 🏆 达成成就：「开宗立派」
+[你] 终态改写
+[天道] 终态改写演示：模型错误声称旧日送信失败。实际已完成状态和事迹必须保持。
+(系统) ⚠【状态校验】部分状态提案已拒绝或归一化，合法内容仍按规则结算。任务终态不能改写，结构化事迹必须与实际状态一致。叙事可能与实际结算有出入，请以状态面板和存档为准。
+[你] 冲突更新
+[天道] 冲突更新演示：同一任务被同时提为完成和失败，两项都不应落地。
+(系统) ⚠【状态校验】部分状态提案已拒绝或归一化，合法内容仍按规则结算。同批任务完成与失败冲突，该任务更新全部忽略。叙事可能与实际结算有出入，请以状态面板和存档为准。
+[你] 根数组
+[天道] 根数组演示：返回了根数组而非状态对象，本次不应结算回合或推进日期。
+(系统) ⚠【状态校验】本回合状态提案被拒绝，未结算状态或推进日期。状态提案必须是普通对象，整份提案未结算。叙事可能与实际结算有出入，请以状态面板和存档为准。
+[你] 数值溢出
+[天道] 数值溢出演示：超出安全数值的收益应被拒绝，不得污染存档。
+(系统) ⚠【状态校验】部分状态提案已拒绝或归一化，合法内容仍按规则结算。运算结果超出安全数值范围，已忽略。叙事可能与实际结算有出入，请以状态面板和存档为准。
+[你] 正常增减
+[天道] 正常增减演示：你支付五枚灵石购买情报，并在原地商谈。
+[你] 特殊名称
+[天道] 特殊名称演示：记录名为 toString 的地点和名为 hasOwnProperty 的测试物品，检查显示与事迹分类不会误读继承属性。
+(系统) 获得「hasOwnProperty」×1
+--------------------------------------------
+【世界状态快照】
+势力：无
+相识之人：无
+地点：校验坊市、toString
+功法：无
+背包：hasOwnProperty×1
+任务：
+  飞升成仙（进行中） · 期限参考（相对导出时游戏日期）：无期限 · 原期限：无期限
+  护送商队（进行中） · 期限参考（相对导出时游戏日期）：1年1月4日（剩余3天） · 原期限：三日内
+  旧日送信（已完成） · 期限参考（相对导出时游戏日期）：无期限
+成就：开宗立派
+誓愿/目标：{"type":"飞升成仙","desc":"渡劫飞升，位列仙班","status":"进行中"}
+玩家效果诉求：无
+状态校验记录（最近30次问题回合，每次最多10项；不含模型原文或输入值）：
+  第11回合 · 部分拒绝或归一化
+    forbidden_set · stateUpdates.hp.set
+    invalid_number · timeMonths
+    invalid_type · realmChange
+    unknown_field · $
+    forbidden_flag · flags
+    unknown_field · $
+    invalid_type · newNpcs[].name
+    invalid_type · newNpcs[].name
+    invalid_type · itemChanges[].delta
+  第12回合 · 部分拒绝或归一化
+    terminal_quest · questUpdates[]
+  第13回合 · 部分拒绝或归一化
+    conflicting_quest_updates · questUpdates[]
+  第14回合 · 整份拒绝
+    invalid_root · $
+  第14回合 · 部分拒绝或归一化
+    numeric_overflow · stateUpdates.spiritStones
+事迹：
+  第9回合   旧日送信 - 已完成：此前已经交付。
+  第16回合 1年1月1日 凡人 toString - 到访：真实登记的测试地点。
+--------------------------------------------
+【JSON 快照（供开发者排查）】
+{
+  "player": {
+    "name": "规则校验测试角色",
+    "origin": "",
+    "backstory": "",
+    "realm": "凡人",
+    "hp": 80,
+    "maxHp": 100,
+    "lifespan": 100,
+    "spiritStones": 37,
+    "morality": 0,
+    "reputation": 0,
+    "cultivation": 0
+  },
+  "world": {
+    "era": "盛世，坊市安宁",
+    "startingLocation": null,
+    "factions": [],
+    "npcs": [],
+    "aliasMap": {},
+    "locations": [
+      {
+        "name": "校验坊市",
+        "desc": "合法地点应保留。"
+      },
+      {
+        "name": "toString",
+        "desc": "字典边界测试地点。"
+      }
+    ],
+    "items": [
+      {
+        "name": "hasOwnProperty",
+        "desc": "字典边界测试物品。",
+        "kind": "丹药",
+        "rarity": "凡品",
+        "affix": ""
+      }
+    ],
+    "inventory": [
+      {
+        "name": "hasOwnProperty",
+        "desc": "字典边界测试物品。",
+        "qty": 1,
+        "kind": "丹药",
+        "grade": "",
+        "rarity": "凡品",
+        "affix": ""
+      }
+    ],
+    "skills": [],
+    "events": [
+      {
+        "subject": "旧日送信",
+        "title": "已完成",
+        "desc": "此前已经交付。",
+        "turn": 9
+      },
+      {
+        "subject": "toString",
+        "title": "到访",
+        "desc": "真实登记的测试地点。",
+        "relation": "",
+        "turn": 16,
+        "date": "1年1月1日",
+        "stage": "凡人"
+      }
+    ],
+    "goal": {
+      "type": "飞升成仙",
+      "desc": "渡劫飞升，位列仙班",
+      "status": "进行中"
+    },
+    "flags": {
+      "hasSect": true,
+      "eraExpired": false
+    },
+    "closedStreak": 0,
+    "memory": "",
+    "achievements": [
+      "开宗立派"
+    ],
+    "turn": 16,
+    "date": {
+      "year": 1,
+      "month": 1,
+      "day": 1
+    },
+    "settings": {
+      "difficulty": "普通",
+      "pace": "快",
+      "turnLimit": 0,
+      "length": "简短"
+    },
+    "quests": [
+      {
+        "id": "main-ascend",
+        "type": "main",
+        "title": "飞升成仙",
+        "desc": "渡劫飞升，位列仙班",
+        "objective": "修炼至渡劫期并渡过天劫",
+        "timeNode": "无期限",
+        "reward": "位列仙班，与天地同寿",
+        "status": "active",
+        "deadlineDate": null,
+        "deadlinePending": false,
+        "deadlineVersion": 2
+      },
+      {
+        "id": "review-delivery",
+        "type": "side",
+        "title": "护送商队",
+        "objective": "将商队护送到青州",
+        "reward": "30 灵石",
+        "timeNode": "三日内",
+        "status": "active",
+        "deadlineDate": {
+          "year": 1,
+          "month": 1,
+          "day": 4
+        },
+        "deadlineVersion": 2,
+        "deadlinePending": false
+      },
+      {
+        "id": "review-completed",
+        "type": "side",
+        "title": "旧日送信",
+        "objective": "送信",
+        "reward": "已领取",
+        "status": "completed",
+        "deadlineVersion": 2,
+        "deadlineDate": null,
+        "deadlinePending": false
+      }
+    ],
+    "eraType": "盛世",
+    "recentActions": [
+      {
+        "a": "混合校验",
+        "turn": 10
+      },
+      {
+        "a": "终态改写",
+        "turn": 11
+      },
+      {
+        "a": "冲突更新",
+        "turn": 12
+      },
+      {
+        "a": "数值溢出",
+        "turn": 13
+      },
+      {
+        "a": "正常增减",
+        "turn": 14
+      },
+      {
+        "a": "特殊名称",
+        "turn": 15
+      }
+    ],
+    "farmStreak": 1,
+    "relationDossier": {},
+    "validationLog": [
+      {
+        "turn": 11,
+        "result": "partial",
+        "issues": [
+          {
+            "code": "forbidden_set",
+            "path": "stateUpdates.hp.set",
+            "message": "模型不能直接设置玩家属性，只允许 delta。"
+          },
+          {
+            "code": "invalid_number",
+            "path": "timeMonths",
+            "message": "数值必须有限且在安全范围内，已忽略。"
+          },
+          {
+            "code": "invalid_type",
+            "path": "realmChange",
+            "message": "字段类型或必要内容无效，已忽略。"
+          },
+          {
+            "code": "unknown_field",
+            "path": "$",
+            "message": "未知字段已忽略。"
+          },
+          {
+            "code": "forbidden_flag",
+            "path": "flags",
+            "message": "代码管理的标记不允许由模型写入或撤回。"
+          },
+          {
+            "code": "unknown_field",
+            "path": "$",
+            "message": "未知字段已忽略。"
+          },
+          {
+            "code": "invalid_type",
+            "path": "newNpcs[].name",
+            "message": "字段类型或必要内容无效，已忽略。"
+          },
+          {
+            "code": "invalid_type",
+            "path": "newNpcs[].name",
+            "message": "字段类型或必要内容无效，已忽略。"
+          },
+          {
+            "code": "invalid_type",
+            "path": "itemChanges[].delta",
+            "message": "字段类型或必要内容无效，已忽略。"
+          }
+        ]
+      },
+      {
+        "turn": 12,
+        "result": "partial",
+        "issues": [
+          {
+            "code": "terminal_quest",
+            "path": "questUpdates[]",
+            "message": "任务终态不能改写，结构化事迹必须与实际状态一致。"
+          }
+        ]
+      },
+      {
+        "turn": 13,
+        "result": "partial",
+        "issues": [
+          {
+            "code": "conflicting_quest_updates",
+            "path": "questUpdates[]",
+            "message": "同批任务完成与失败冲突，该任务更新全部忽略。"
+          }
+        ]
+      },
+      {
+        "turn": 14,
+        "result": "rejected",
+        "issues": [
+          {
+            "code": "invalid_root",
+            "path": "$",
+            "message": "状态提案必须是普通对象，整份提案未结算。"
+          }
+        ]
+      },
+      {
+        "turn": 14,
+        "result": "partial",
+        "issues": [
+          {
+            "code": "numeric_overflow",
+            "path": "stateUpdates.spiritStones",
+            "message": "运算结果超出安全数值范围，已忽略。"
+          }
+        ]
+      }
+    ]
+  },
+  "log": [
+    {
+      "kind": "sys",
+      "text": "规则校验审阅：固定异常提案，不会访问真实模型或修改正式存档。"
+    },
+    {
+      "kind": "player",
+      "text": "混合校验"
+    },
+    {
+      "kind": "gm",
+      "text": "混合校验演示：叙事声称直接改写气血、目标与境界，同时也提出正常的灵石收入和地点登记。系统应逐项裁决。"
+    },
+    {
+      "kind": "sys",
+      "text": "⚠【状态校验】部分状态提案已拒绝或归一化，合法内容仍按规则结算。模型不能直接设置玩家属性，只允许 delta；数值必须有限且在安全范围内，已忽略；字段类型或必要内容无效，已忽略；未知字段已忽略；代码管理的标记不允许由模型写入或撤回。叙事可能与实际结算有出入，请以状态面板和存档为准。",
+      "cls": "quest"
+    },
+    {
+      "kind": "sys",
+      "text": "🏆 达成成就：「开宗立派」",
+      "cls": ""
+    },
+    {
+      "kind": "player",
+      "text": "终态改写"
+    },
+    {
+      "kind": "gm",
+      "text": "终态改写演示：模型错误声称旧日送信失败。实际已完成状态和事迹必须保持。"
+    },
+    {
+      "kind": "sys",
+      "text": "⚠【状态校验】部分状态提案已拒绝或归一化，合法内容仍按规则结算。任务终态不能改写，结构化事迹必须与实际状态一致。叙事可能与实际结算有出入，请以状态面板和存档为准。",
+      "cls": "quest"
+    },
+    {
+      "kind": "player",
+      "text": "冲突更新"
+    },
+    {
+      "kind": "gm",
+      "text": "冲突更新演示：同一任务被同时提为完成和失败，两项都不应落地。"
+    },
+    {
+      "kind": "sys",
+      "text": "⚠【状态校验】部分状态提案已拒绝或归一化，合法内容仍按规则结算。同批任务完成与失败冲突，该任务更新全部忽略。叙事可能与实际结算有出入，请以状态面板和存档为准。",
+      "cls": "quest"
+    },
+    {
+      "kind": "player",
+      "text": "根数组"
+    },
+    {
+      "kind": "gm",
+      "text": "根数组演示：返回了根数组而非状态对象，本次不应结算回合或推进日期。"
+    },
+    {
+      "kind": "sys",
+      "text": "⚠【状态校验】本回合状态提案被拒绝，未结算状态或推进日期。状态提案必须是普通对象，整份提案未结算。叙事可能与实际结算有出入，请以状态面板和存档为准。",
+      "cls": "quest"
+    },
+    {
+      "kind": "player",
+      "text": "数值溢出"
+    },
+    {
+      "kind": "gm",
+      "text": "数值溢出演示：超出安全数值的收益应被拒绝，不得污染存档。"
+    },
+    {
+      "kind": "sys",
+      "text": "⚠【状态校验】部分状态提案已拒绝或归一化，合法内容仍按规则结算。运算结果超出安全数值范围，已忽略。叙事可能与实际结算有出入，请以状态面板和存档为准。",
+      "cls": "quest"
+    },
+    {
+      "kind": "player",
+      "text": "正常增减"
+    },
+    {
+      "kind": "gm",
+      "text": "正常增减演示：你支付五枚灵石购买情报，并在原地商谈。"
+    },
+    {
+      "kind": "player",
+      "text": "特殊名称"
+    },
+    {
+      "kind": "gm",
+      "text": "特殊名称演示：记录名为 toString 的地点和名为 hasOwnProperty 的测试物品，检查显示与事迹分类不会误读继承属性。"
+    },
+    {
+      "kind": "sys",
+      "text": "获得「hasOwnProperty」×1",
+      "cls": "gain"
+    }
+  ],
+  "settings": {
+    "difficulty": "普通",
+    "pace": "快",
+    "turnLimit": 0,
+    "length": "简短"
+  }
+}
+--------------------------------------------
+玩家反馈意见（请写在下方）：

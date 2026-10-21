@@ -13,6 +13,7 @@ const suites = [
   ['NPC 性格', ['test_personality.mjs']],
   ['死亡叙事背书', ['test_death.mjs']],
   ['游戏日期任务期限', ['--test', 'tests/quest-deadlines.test.mjs']],
+  ['状态输入与任务终态', ['--test', 'tests/state-input-guards.test.mjs']],
 ];
 
 let failed = 0;

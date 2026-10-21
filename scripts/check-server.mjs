@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import { GAME_VERSION } from '../public/game.js';
 
 const port = Number(process.env.SMOKE_PORT || 3110);
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -30,7 +31,7 @@ try {
   for (const [resource, type, marker] of [
     ['/', 'text/html', '法言天地'],
     ['/app.js', 'javascript', 'questDeadlineInfo'],
-    ['/game.js', 'javascript', "GAME_VERSION = '1.1.2'"],
+    ['/game.js', 'javascript', "GAME_VERSION = '" + GAME_VERSION + "'"],
     ['/style.css', 'text/css', '.quest'],
     ['/icon.svg', 'image/svg+xml', '<svg'],
   ]) {

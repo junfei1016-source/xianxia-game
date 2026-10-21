@@ -405,6 +405,9 @@ function captureTurnState() {
   const quests = (world.quests || []).map((q) => ({ title: q.title, status: q.status }));
   const codexLen = (world.items || []).length + (world.skills || []).length + (world.npcs || []).length + (world.locations || []).length + (world.factions || []).length;
   return {
+    realm: player.realm,
+    goal: JSON.stringify(world.goal || {}),
+    goalCompleted: world.flags.goalCompleted === true,
     morality: player.morality,
     reputation: player.reputation,
     maxHp: player.maxHp,
@@ -424,7 +427,7 @@ function applyTurnNotices(before) {
   const EQUIP_KINDS = ['法宝', '武器', '衣物'];
 
   // 物品增减 / 装备状态变化
-  const beforeInv = {};
+  const beforeInv = Object.create(null);
   for (const it of before.inv) beforeInv[it.name] = it;
   const seen = new Set();
   for (const it of world.inventory || []) {
@@ -459,6 +462,15 @@ function applyTurnNotices(before) {
       notices.push({ text: `任务「${q.title}」${questStatusLabel(q.status)}`, cls: q.status === 'failed' ? 'lose' : 'quest' });
       dots.quest = true;
     }
+  }
+
+  // 目标提示只依据引擎实际落地的状态，不使用模型自报的 goalNote。
+  if (JSON.stringify(world.goal || {}) !== before.goal || (world.flags.goalCompleted === true) !== before.goalCompleted) {
+    const goal = world.goal || {};
+    const completed = world.flags.goalCompleted === true && !before.goalCompleted;
+    const detail = [goal.desc || goal.type, goal.status].filter(Boolean).join(' · ');
+    notices.push({ text: `【目标${completed ? '达成' : '更新'}】${detail || '目标状态已更新'}`, cls: 'quest' });
+    dots.quest = true;
   }
 
   // 新势力（AI/玩家提到或遇见的江湖势力 → 已建档进图鉴）
@@ -835,12 +847,19 @@ function discardItem(name) {
 
 function subjectType(subject) {
   if (subject === player.name) return 'player';
-  const resolved = (world.aliasMap && world.aliasMap[subject]) || subject; // 身份→姓名对齐
+  const name = typeof subject === 'string' ? subject : '';
+  const unsafeNames = ['__proto__', 'constructor', 'prototype'];
+  const aliases = world.aliasMap;
+  const descriptor = aliases && typeof aliases === 'object' && !Array.isArray(aliases) && !unsafeNames.includes(name)
+    ? Object.getOwnPropertyDescriptor(aliases, name)
+    : null;
+  const alias = descriptor && descriptor.value;
+  const resolved = typeof alias === 'string' && alias.trim() && !unsafeNames.includes(alias.trim()) ? alias : name;
   if (world.npcs.some((n) => n.name === resolved)) return 'person';
   if (world.locations.some((l) => l.name === resolved)) return 'place';
   if (world.factions.some((f) => f.name === resolved)) return 'faction';
   if (world.quests && world.quests.some((q) => q.title === resolved)) return 'goal';
-  if (world.goal && (resolved === world.goal.type || resolved.includes(world.goal.type))) return 'goal';
+  if (world.goal && typeof world.goal.type === 'string' && world.goal.type && (resolved === world.goal.type || resolved.includes(world.goal.type))) return 'goal';
   return 'other';
 }
 let chronicleView = 'stage'; // 'stage'=按阶段 | 'thread'=按脉络
@@ -868,7 +887,7 @@ function renderChronicle() {
   let html = toggle;
   if (chronicleView === 'stage') {
     // 按境界阶段分组（大折叠栏）
-    const stageGroups = {};
+    const stageGroups = Object.create(null);
     for (const e of events) {
       const stage = str(e.stage) || '早期';
       if (!stageGroups[stage]) stageGroups[stage] = [];
@@ -886,7 +905,7 @@ function renderChronicle() {
   } else {
     // 按主体脉络：人物/势力/地点/目标 → 各自时间线，读一个角色的完整故事
     const typeOrder = { player: 0, person: 1, faction: 2, place: 3, goal: 4, other: 5 };
-    const threads = {};
+    const threads = Object.create(null);
     for (const e of events) {
       const s = str(e.subject) || str(e.name) || '未名';
       if (!threads[s]) threads[s] = { subject: s, type: subjectType(s), list: [] };
@@ -1284,12 +1303,23 @@ async function generateTurn(text, onDelta) {
   return { narrative, out };
 }
 
+function showStateValidation(report) {
+  const issues = Array.isArray(report.issues) ? report.issues.slice(0, 10) : [];
+  if (report.out !== null && !issues.length) return;
+  const details = [...new Set(issues.map((issue) => issue.message).filter((message) => typeof message === 'string').map((message) => message.trim().replace(/[。；;]+$/u, '')).filter(Boolean))].join('；');
+  const result = report.out === null
+    ? '本回合状态提案被拒绝，未结算状态或推进日期'
+    : '部分状态提案已拒绝或归一化，合法内容仍按规则结算';
+  appendSystem(`⚠【状态校验】${result}。${details ? details + '。' : ''}叙事可能与实际结算有出入，请以状态面板和存档为准。`, 'quest');
+}
+
 async function sendTurn(forcedText) {
   const input = $('input');
   const text = (typeof forcedText === 'string' && forcedText.trim()) ? forcedText.trim() : input.value.trim();
   if (!text || busy || !playing) return;
   input.value = '';
   lastTurnState = snapshotState();      // 死亡回退存档点（回退到本回合行动之前）
+  const farmBefore = lastTurnState.world;
   const turnBefore = captureTurnState(); // 本回合变化提示用
   const farmStreak = updateFarmLog(world, text); // 记录本回合行动（重复刷取软墙）
   appendChat('player', text);
@@ -1300,47 +1330,55 @@ async function sendTurn(forcedText) {
   try {
     const fast = (world.settings && world.settings.pace) === '快';
     let live = null;
-    let narrative, out;
+    let narrative, rawOut;
     if (!fast) {
       // 慢节奏：流式打字机渲染叙事
       live = renderMsgStream('gm');
-      ({ narrative, out } = await generateTurn(text, (d) => live.update(d)));
+      ({ narrative, out: rawOut } = await generateTurn(text, (d) => live.update(d)));
       live.finish();
     } else {
-      ({ narrative, out } = await generateTurn(text));
+      ({ narrative, out: rawOut } = await generateTurn(text));
       appendChat('gm', narrative);
     }
     history.push({ role: 'user', content: text });
     history.push({ role: 'assistant', content: narrative });
 
-    if (out) {
-      const combatNote = applyStateUpdates(player, world, out);
-      if (combatNote) appendSystem(combatNote); // 半透明战斗结算
-      if (out.goalNote) appendSystem('【目标】' + out.goalNote);
-      if (out.realmChange) {
+    const validation = {};
+    const combatNote = applyStateUpdates(player, world, rawOut, validation);
+    const out = validation.out;
+    if (combatNote) appendSystem(combatNote); // 半透明战斗结算
+    showStateValidation(validation);
+    if (out !== null) {
+      if (player.realm !== turnBefore.realm) {
         // 境界突破：全屏金光一闪 + 阶梯高亮 + 提示
         const flash = $('breakFlash');
         if (flash) { flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on'); }
         const ladder = document.querySelector('#statusPanel .realm-ladder');
         if (ladder) { ladder.classList.remove('flash-gold'); void ladder.offsetWidth; ladder.classList.add('flash-gold'); }
-        appendSystem(`✦ 境界突破：${out.realmChange} ✦`);
+        appendSystem(`✦ 境界突破：${player.realm} ✦`);
+      }
+      world.turn += 1;
+      const months = (out && Number.isFinite(out.timeMonths) && out.timeMonths > 0) ? out.timeMonths : 0;
+      advanceTime(world, player, months);
+      const eraNote = enforceEraTimeline(world, out); // 大势时间轴：期限到必演变
+      if (eraNote) appendSystem(eraNote, 'quest');
+      checkQuestDeadlines();
+      checkAchievements();
+    } else {
+      // 请求前的防刷记录也属于状态；拒绝整份提案时只恢复这两个字段，保留校验诊断。
+      for (const key of ['recentActions', 'farmStreak']) {
+        if (Object.prototype.hasOwnProperty.call(farmBefore, key)) world[key] = JSON.parse(JSON.stringify(farmBefore[key]));
+        else delete world[key];
       }
     }
-    world.turn += 1;
-    const months = (out && Number.isFinite(out.timeMonths) && out.timeMonths > 0) ? out.timeMonths : 0;
-    advanceTime(world, player, months);
-    const eraNote = enforceEraTimeline(world, out); // 大势时间轴：期限到必演变
-    if (eraNote) appendSystem(eraNote, 'quest');
-    checkQuestDeadlines();
     renderAll();
-    checkAchievements();
-    applyTurnNotices(turnBefore); // 小字提示：物品/任务/正邪/声望/新势力 + 右侧标签红点
-    if (farmStreak >= 2 && (world.settings && world.settings.godMode !== true)) {
+    if (out !== null) applyTurnNotices(turnBefore); // 仅依据已接受提案产生的真实差分提示
+    if (out !== null && farmStreak >= 2 && (world.settings && world.settings.godMode !== true)) {
       appendSystem(`⚠ 重复行动第 ${farmStreak} 次：本回合收益 ×${farmMult(farmStreak)}（换种玩法会恢复）`, 'lose');
     }
-    await maybeCompressMemory();
+    if (out !== null) await maybeCompressMemory();
 
-    const ending = evaluateEndings(player, world);
+    const ending = out === null ? null : evaluateEndings(player, world);
     if (ending) {
       showEnding(ending);
       return;
@@ -1536,6 +1574,16 @@ function buildLogText() {
   push('成就：' + ((world.achievements || []).join('、') || '无'));
   push('誓愿/目标：' + JSON.stringify(world.goal || {}));
   push('玩家效果诉求：' + ((world.effectRequests || []).map((r) => `${r.name}（${r.desc}）`).join('、') || '无'));
+  push('状态校验记录（最近30次问题回合，每次最多10项；不含模型原文或输入值）：');
+  const validationLog = Array.isArray(world.validationLog) ? world.validationLog.slice(-30) : [];
+  if (!validationLog.length) push('  无');
+  for (const entry of validationLog) {
+    const turn = Number.isSafeInteger(entry.turn) && entry.turn >= 0 ? entry.turn : '?';
+    const result = entry.result === 'rejected' ? '整份拒绝' : '部分拒绝或归一化';
+    const issues = Array.isArray(entry.issues) ? entry.issues.slice(0, 10) : [];
+    push(`  第${turn}回合 · ${result}`);
+    for (const issue of issues) push(`    ${issue.code} · ${issue.path}`);
+  }
   push('事迹：');
   for (const e of world.events || []) {
     push(`  第${e.turn || '?'}回合 ${e.date || ''} ${e.stage || ''} ${e.subject || ''} - ${e.title || ''}${e.desc ? '：' + e.desc : ''}${e.relation ? '（' + e.relation + '）' : ''}`);

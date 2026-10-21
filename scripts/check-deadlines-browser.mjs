@@ -85,7 +85,7 @@ try {
     record('跨过截止日后真实回合结算失败并解释日期原因');
     await page.locator('#noticeCloseBtn').click();
     await page.locator('.quest-ended summary').click();
-    await page.screenshot({ path: fileURLToPath(new URL('2026-10-21-deadline-expiry.png', screenshotDir)), fullPage: true });
+    if (process.env.REVIEW_SCREENSHOTS !== 'off') await page.screenshot({ path: fileURLToPath(new URL('2026-10-21-deadline-expiry.png', screenshotDir)), fullPage: true });
     await context.close();
   }
   {
@@ -109,7 +109,7 @@ try {
     await page.locator('[data-tab="quest"]').click();
     assert.match(await page.locator('#questPanel').innerText(), /1年1月4日/);
     record('旧档待确认、补录明确期限、自动存档再读入全流程通过');
-    await page.screenshot({ path: fileURLToPath(new URL('2026-10-21-deadline-calendar.png', screenshotDir)), fullPage: true });
+    if (process.env.REVIEW_SCREENSHOTS !== 'off') await page.screenshot({ path: fileURLToPath(new URL('2026-10-21-deadline-calendar.png', screenshotDir)), fullPage: true });
     await context.close();
   }
   {
