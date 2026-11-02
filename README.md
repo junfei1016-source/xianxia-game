@@ -6,17 +6,26 @@
 
 需要 Node.js 20.6 或以上；本轮实测 Node.js 26.3.0 / npm 11.16.0。应用使用 Node 内置模块，无需安装运行依赖。
 
+**最短路径**：双击桌面的「法言天地」快捷方式，它会调用本目录的 `启动游戏.cmd` 起服务并打开浏览器。
+
+手动启动：
+
 ```powershell
-npm.cmd start
+cd D:\发言天地工作区\xianxia-game
+启动游戏.cmd
+# 或直接用 Node
+& "C:\Users\fym10\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe" server.mjs
 ```
 
 打开 <http://localhost:3000/>，填写模型接口、自己的 API Key 并选择模型，再开始游戏。Windows 下使用 `npm.cmd`，可避开 PowerShell 对 `npm.ps1` 的执行策略限制。
+
+> 桌面旧图标 `法言天地.exe` 是 v1.1.x 的 EXE 构建，已移到 `publish\法言天地-v1.1.3.exe` 备份；不要再用它启动。
 
 - 后端调用 `Base URL + /chat/completions`。前端目前提供四个 DeepSeek 模型选项；其他兼容服务需要相应调整模型选项。
 - 慢节奏使用“叙事 → 状态提取”两段式；快节奏优先一次返回叙事和状态，失败时退回两段式。
 - 存档和模型配置保存在浏览器 localStorage。Key 未加密；后端转发时不写入磁盘。仅在可信本机环境使用。
 - “导出日志”调用 `/api/export-log`，默认写桌面；启动前设置 `EXPORT_DIR` 可改导出目录。
-- 原有 `法言天地.exe` 仍是旧构建，不能当作 1.1.3；本轮交付 Node.js 源码运行版。
+- 打包版 `法言天地.exe` 停留在 v1.1.x（已移到 `publish\法言天地-v1.1.3.exe`），不能当作 1.3.2；本轮交付的是 Node.js 源码运行版 + `启动游戏.cmd` 启动器。
 
 ## 1.3.2 底细要等玩家查出来
 
