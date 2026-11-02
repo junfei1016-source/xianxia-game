@@ -7,6 +7,7 @@
 
 import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
+import { pillByName, pillEffect } from './pills.js';
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
@@ -379,6 +380,8 @@ export function newPlayerState() {
     morality: 0,        // 正邪：-100(魔) ~ +100(仙)
     reputation: 0,      // 声望：0 ~ 100
     cultivation: 0,     // 当前境界修炼进度：0 ~ 100
+    pillUsage: {},      // 各丹药服过几次（抗药性）；每半年消退一次
+    pillUsageMonth: 0,  // 上次消退的月份
   };
 }
 
@@ -497,6 +500,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - 势力底细 reveals：玩家查到某势力隐情的**实证**（不是起疑、不是听说）时登记，每项 {faction: 势力名}；系统据此把该势力标为"表里不一"并记入事迹。没有则留空数组。
+- 以丹养伤 treatNpc：玩家用疗伤类丹药为受伤的 NPC（如负伤的护法）疗伤时登记，每项 {name: 人物名, pill: 丹名}；系统按丹方缩短其调养时间。**丹药的气血/修为/寿元效果一律由系统按丹方结算**，不要再在 stateUpdates 里重复给药效数值；丹名用清单里的名字（止血散/回春丹/生肌丹/大还丹/聚气丹/凝元丹/培元丹/清毒丹/化毒丹/延寿丹）。丹药有抗药性（服多了越来越弱）、高出适用境界一个大境界会失效，叙事要体现。没有则留空数组。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
@@ -842,6 +846,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - 势力底细 reveals：玩家查到某势力隐情的**实证**（不是起疑、不是听说）时登记，每项 {faction: 势力名}；系统据此把该势力标为"表里不一"并记入事迹。没有则留空数组。
+- 以丹养伤 treatNpc：玩家用疗伤类丹药为受伤的 NPC（如负伤的护法）疗伤时登记，每项 {name: 人物名, pill: 丹名}；系统按丹方缩短其调养时间。**丹药的气血/修为/寿元效果一律由系统按丹方结算**，不要再在 stateUpdates 里重复给药效数值；丹名用清单里的名字（止血散/回春丹/生肌丹/大还丹/聚气丹/凝元丹/培元丹/清毒丹/化毒丹/延寿丹）。丹药有抗药性（服多了越来越弱）、高出适用境界一个大境界会失效，叙事要体现。没有则留空数组。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 重要剧情标记放 flags；目标变化放 goal。
 - 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。物品与撤回退款的 delta 必须明确给出有限数字，缺失不默认增加一件。普通 flags 仅用布尔值；deathImminent/qiDeviation 只允许 false 清除，不允许 true 伪造；deathByRisk/eraExpired/goalCompleted 由代码管理，不可写入或撤回。
@@ -1445,6 +1450,7 @@ export function validateStateOutput(input) {
     personalityReveals: array(record({ name: 'name' }, ['name'])),
     reveals: array(record({ faction: 'name' }, ['faction'])),
     linkReveals: array(record({ a: 'name', b: 'name', type: 'string' }, ['a', 'b'])),
+    treatNpc: array(record({ name: 'name', pill: 'string' }, ['name'])),
     hooks: array(record({ theme: 'string', title: 'string', declined: 'boolean' }, ['theme'])),
     itemChanges: array(item), equipChanges: array(record({ name: 'name', equipped: 'boolean' }, ['name', 'equipped'])),
     goal: record(stringFields('desc', 'type', 'target', 'status')),
@@ -1573,6 +1579,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   let travelNote = '';
   let revealNote = '';
   let interruptNote = '';
+  let treatNote = '';
   // 闭关被打断：把时长压到"出岔子那一年"，收益随之减少
   if (world.pendingInterrupt && out.flags && out.flags.closedDoor) {
     const p = world.pendingInterrupt;
@@ -1658,6 +1665,14 @@ export function applyStateUpdates(player, world, input, report = {}) {
   else world.closedStreak = 0;
   const closedMult = closedDoorMult(world.closedStreak);
   const farm = god ? 1.0 : farmMult(world.farmStreak); // 重复刷取收益递减（言出法随豁免）
+  // 丹药：效果由系统按丹方结算（抗药性 / 跨境失效），模型不再自己给药效数值
+  const consumedPills = [];
+  for (const ch of Array.isArray(out.itemChanges) ? out.itemChanges : []) {
+    if (!ch || !ch.name || typeof ch.delta !== 'number' || ch.delta >= 0) continue;
+    const pill = pillByName(ch.name);
+    if (pill) consumedPills.push({ pill, name: ch.name, times: Math.max(1, Math.floor(-ch.delta)) });
+  }
+  const pillApplied = consumedPills.length > 0;
   let hpLost = 0;
   let reviveNote = '';
   for (const key of PLAYER_ATTRS) {
@@ -1667,6 +1682,8 @@ export function applyStateUpdates(player, world, input, report = {}) {
     if (typeof u === 'number') delta = u;
     else if (typeof u.delta === 'number') delta = u.delta;
     else continue;
+    // 本回合服了丹：气血/修为的正增量交给系统按丹方结算，避免模型重复加一遍
+    if (pillApplied && (key === 'hp' || key === 'cultivation') && delta > 0) continue;
     if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1)); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条减伤
     if (key === 'cultivation' && delta > 0) {
       const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm;
@@ -1687,6 +1704,42 @@ export function applyStateUpdates(player, world, input, report = {}) {
     }
     player[key] = next;
     if (key === 'hp' && delta < 0) hpLost += -delta;
+  }
+
+  // 服丹结算：品阶 × 适用境界 × 抗药性（原文第 243、598 章）
+  const pillNotes = [];
+  for (const { pill, name, times } of consumedPills) {
+    if (!player.pillUsage) player.pillUsage = {};
+    const used = Number(player.pillUsage[pill.id] || 0);
+    const eff = pillEffect(player.realm, pill, used);
+    if (!eff.works) {
+      pillNotes.push(`【丹药】${name}：丹力对你已无用处（高出适用境界一个大境界以上）。`);
+      continue;
+    }
+    const bits = [];
+    if (eff.hp > 0) { player.hp = Math.min(player.maxHp, player.hp + eff.hp); bits.push(`气血+${eff.hp}`); }
+    if (eff.cult > 0) { player.cultivation += eff.cult; bits.push(`修为+${eff.cult}`); }
+    if (eff.life > 0) { player.lifespan += eff.life; bits.push(`寿元+${eff.life}`); }
+    player.pillUsage[pill.id] = used + times;
+    player.pillUsageMonth = monthOrdinal(world.date);
+    const resist = eff.factor < 0.9 ? `（抗药性 ×${eff.factor}）` : '';
+    pillNotes.push(`【丹药】${name}：${bits.length ? bits.join('，') : '并无实效'}${resist}`);
+  }
+  // 以丹养伤：给受伤的护法疗伤，缩短调养时间
+  if (Array.isArray(out.treatNpc)) {
+    for (const t of out.treatNpc) {
+      if (!t || !t.name) continue;
+      const npc = (world.npcs || []).find((n) => n.name === t.name);
+      const pill = pillByName(t.pill || '');
+      if (!npc || !npc.condition || !pill || !pill.healMonths) continue;
+      const eff = pillEffect(player.realm, pill, 0);
+      if (!eff.works) continue;
+      const now = monthOrdinal(world.date);
+      const cut = Math.round(eff.healMonths * 30);
+      npc.condition.untilMonth = Math.max(now, npc.condition.untilMonth - cut);
+      if (npc.condition.untilMonth <= now) delete npc.condition;
+      treatNote = `【以丹养伤】你用${pill.name}为${npc.name}疗伤，调养时间缩短约 ${Math.max(1, Math.round(eff.healMonths))} 个月${npc.condition ? '，仍需静养' : '，已然痊愈'}。`;
+    }
   }
 
   // 数值夹取，防止越界
@@ -2222,7 +2275,8 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const drain = activeHas(world.inventory, 'lifesteal') && hpLost > 0 ? ` · 噬血返还 ${Math.round(hpLost * 0.3)}` : '';
     return `【战斗】${enemyLabel}${realmNote} · 你${wound}（气血-${hpLost}${drain}）`;
   }
-  if (interruptNote) return interruptNote;
+  if (interruptNote) return [interruptNote, treatNote, ...pillNotes].filter(Boolean).join('\n');
+  if (treatNote || pillNotes.length) return [treatNote, ...pillNotes].filter(Boolean).join('\n');
   if (revealNote) return revealNote;
   if (travelNote) return travelNote;
   return null;
@@ -2377,6 +2431,15 @@ export function advanceTime(world, player, months = 0) {
     if (npc && npc.condition && Number.isFinite(npc.condition.untilMonth) && npc.condition.untilMonth <= now) {
       delete npc.condition;
     }
+  }
+  // 抗药性消退：半年不服同一种丹，次数减一（原文第 243 章）
+  if (player.pillUsageMonth && now - player.pillUsageMonth >= 6) {
+    for (const id of Object.keys(player.pillUsage || {})) {
+      const left = (player.pillUsage[id] || 0) - 1;
+      if (left > 0) player.pillUsage[id] = left;
+      else delete player.pillUsage[id];
+    }
+    player.pillUsageMonth = now;
   }
 }
 

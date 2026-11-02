@@ -26,6 +26,7 @@ const suites = [
   ['闭关被打断', ['tests/seclusion-interrupt.test.mjs']],
   ['护法与闭关', ['tests/seclusion-guardians.test.mjs']],
   ['护法受伤与养伤', ['tests/guardian-injury.test.mjs']],
+  ['丹药（抗药性/跨境失效/以丹养伤）', ['tests/pills.test.mjs']],
 ];
 
 let failed = 0;
