@@ -28,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.8.0';
+export const GAME_VERSION = '1.9.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -681,6 +681,11 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
   if ((world.closedStreak || 0) >= 2 && s.godMode !== true) {
     guide += `${fast ? ' ' : '\n'}【闭关提醒】玩家已连续闭关 ${world.closedStreak} 回合，进境渐缓。你应在叙事里点醒这一点，并主动抛出机缘钩子（任务/奇遇/人物上门/秘境异动），引导其出游历练、寻访机缘、结交人物。`;
   }
+  // 闭关被打断：引擎已掷出结果，把"第几年、谁上门"交给 GM
+  if (world.pendingInterrupt && s.godMode !== true) {
+    const p = world.pendingInterrupt;
+    guide += `${fast ? ' ' : '\n'}【闭关将被打断】这次闭关不安稳：第 ${p.afterYears} 年，${p.by} 找上门（或心魔发作）。本回合叙事必须写"被迫提前出关"——先写闭关所得，再写打断那一刻的冲突与代价；timeMonths 只填这 ${p.afterYears} 年（约 ${p.afterYears * 12} 月），不得写完整闭关，也不得把修为写成圆满。`;
+  }
   if ((world.farmStreak || 0) >= 2 && s.godMode !== true) {
     guide += `${fast ? ' ' : '\n'}【重复刷取】玩家已连续 ${world.farmStreak} 次重复类似行动，收益正在递减（系统已自动折算）。你在叙事中要中立地演绎边际递减——灵草采尽、猎物警觉、商路被占、人心厌倦、同行抢先等；不要嘲讽玩家，也不必一刀切归零，让世界自然回应。`;
   }
@@ -1008,6 +1013,43 @@ export function seclusionGain(realm, months, qualityHint = 10) {
   const hint = Number(qualityHint);
   const quality = Math.max(0.5, Math.min(2, (Number.isFinite(hint) ? hint : 10) / 10));
   return Math.round(cultRatePerMonth(realm) * monthsN * quality * 100) / 100;
+}
+
+// ---------- 闭关被打断 ----------
+// 闭关不是安全屋：仇家、心魔、兽潮都挑这时候上门。由引擎先掷，掷中了就把
+// "第几年被谁打断"写进本回合指引，逼 GM 写"提前出关"，并把时长压短。
+const SECLUDE_RE = /闭关|坐关|闭死关|苦修|静修|入定/;
+export function seclusionIntent(text) {
+  return SECLUDE_RE.test(String(text || ''));
+}
+
+export function rollSeclusionInterrupt(world, player, text, rand = Math.random) {
+  if (!world || !seclusionIntent(text)) return null;
+  const s = world.settings || {};
+  if (s.godMode === true) return null;
+  const region = world.geo ? regionById(world.geo.regionId) : null;
+  const foes = (world.factions || []).filter((f) => f && f.relation === '敌对');
+  const angry = (world.npcs || []).filter((n) => bondOf(n).grudge >= 50);
+
+  let chance = 0.08;
+  if (region) chance += region.danger * 0.02;
+  if (world.eraType === '正魔大战' || world.eraType === '乱世') chance += 0.05;
+  chance += Math.min(0.15, foes.length * 0.05);
+  chance += Math.min(0.09, angry.length * 0.03);
+  if (world.flags && world.flags.qiDeviation) chance += 0.1;
+  chance = Math.min(0.6, chance);
+
+  if (rand() >= chance) {
+    world.pendingInterrupt = null;
+    return null;
+  }
+  const npc = angry[0] || null;
+  const faction = foes[0] || null;
+  const qiDev = !!(world.flags && world.flags.qiDeviation);
+  const by = npc ? `${npc.name}（旧怨）` : (faction ? faction.name : (qiDev ? '心魔' : '不速之客'));
+  const afterYears = 1 + Math.floor(rand() * 3); // 第 1~3 年出岔子
+  world.pendingInterrupt = { by, afterYears, turn: world.turn || 0 };
+  return world.pendingInterrupt;
 }
 
 // 亲密关系 → 修炼加成：按"信"和"需"算，不按标签。结仇的人不助你修行。
@@ -1495,6 +1537,15 @@ export function applyStateUpdates(player, world, input, report = {}) {
   // 行路：抵达另一区域时，耗时由路程表决定，覆盖模型自报的 timeMonths（防止虚构距离）
   let travelNote = '';
   let revealNote = '';
+  let interruptNote = '';
+  // 闭关被打断：把时长压到"出岔子那一年"，收益随之减少
+  if (world.pendingInterrupt && out.flags && out.flags.closedDoor) {
+    const p = world.pendingInterrupt;
+    const cap = p.afterYears * 12;
+    if (!Number.isFinite(out.timeMonths) || out.timeMonths > cap) out.timeMonths = cap;
+    interruptNote = `【闭关被打断】第 ${p.afterYears} 年，${p.by} 找上门，你被迫提前出关。`;
+    addChronicleEvent(world, player, p.by, '闭关受扰', `闭关第 ${p.afterYears} 年被打断`, '');
+  }
   if (typeof out.travelTo === 'string' && out.travelTo.trim()) {
     const target = regionByName(out.travelTo);
     const cur = world.geo ? regionById(world.geo.regionId) : null;
@@ -2112,8 +2163,9 @@ export function applyStateUpdates(player, world, input, report = {}) {
     }
   }
 
-  // 结算（半透明展示）：逆天改命 > 战斗结算
+  // 结算（半透明展示）：逆天改命 > 战斗 > 闭关被打断 > 关系浮出 > 行路
   recordValidation(world, out, issues);
+  world.pendingInterrupt = null; // 只用一回合，避免泄漏到下一回合
   if (reviveNote) return reviveNote;
   if (combat && hpLost > 0) {
     const enemyLabel = combat.enemy || '强敌';
@@ -2122,6 +2174,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const drain = activeHas(world.inventory, 'lifesteal') && hpLost > 0 ? ` · 噬血返还 ${Math.round(hpLost * 0.3)}` : '';
     return `【战斗】${enemyLabel}${realmNote} · 你${wound}（气血-${hpLost}${drain}）`;
   }
+  if (interruptNote) return interruptNote;
   if (revealNote) return revealNote;
   if (travelNote) return travelNote;
   return null;

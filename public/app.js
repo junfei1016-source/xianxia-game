@@ -52,6 +52,7 @@ import {
   parseLLMJSON,
   updateFarmLog,
   noteInvestigation,
+  rollSeclusionInterrupt,
   farmMult,
   affixLabels,
   equipItem,
@@ -1360,6 +1361,7 @@ async function sendTurn(forcedText) {
   const turnBefore = captureTurnState(); // 本回合变化提示用
   const farmStreak = updateFarmLog(world, text); // 记录本回合行动（重复刷取软墙）
   noteInvestigation(world, text); // 玩家开始查某家势力时，才把底细的线索交给 GM
+  rollSeclusionInterrupt(world, player, text); // 闭关先掷一次：仇家/心魔会不会上门
   appendChat('player', text);
 
   busy = true;
