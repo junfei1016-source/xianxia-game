@@ -17,6 +17,7 @@ const suites = [
   ['世界骨架（区域/路程/物价/切片）', ['tests/world-framework.test.mjs']],
   ['人物性格多元（特质库/反重复）', ['tests/personality-diversity.test.mjs']],
   ['势力底细（调查后揭露）', ['tests/hidden-secrets.test.mjs']],
+  ['审阅白名单与入口', ['tests/review-assets.test.mjs']],
 ];
 
 let failed = 0;
