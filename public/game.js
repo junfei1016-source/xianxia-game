@@ -7,7 +7,7 @@
 
 import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
-import { pillByName, pillEffect } from './pills.js';
+import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
@@ -394,6 +394,7 @@ export function newWorldState() {
     aliasMap: {},    // 身份代称 → 已分配姓名（自动命名对照表）
     traitLog: [],    // 最近登场人物的性格记录（供"性格要多元"的反重复统计）
     npcLinks: [],    // 人物之间的关系网：[{a,b,type,note,turn}]，NPC 彼此也有师承/亲眷/恩怨
+    recipes: [],     // 已知丹方：{name,pill,tier,pieces,have,chance,materials,price}
     knownSecrets: {}, // 势力底细的查明进度：{ 势力id: 'hinted' | 'revealed' }，没查过就没有键
     locations: [],   // [{name, desc}]
     items: [],       // 图鉴：获得过的物品（永久记录，[{name, desc}]）
@@ -501,6 +502,9 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - 势力底细 reveals：玩家查到某势力隐情的**实证**（不是起疑、不是听说）时登记，每项 {faction: 势力名}；系统据此把该势力标为"表里不一"并记入事迹。没有则留空数组。
 - 以丹养伤 treatNpc：玩家用疗伤类丹药为受伤的 NPC（如负伤的护法）疗伤时登记，每项 {name: 人物名, pill: 丹名}；系统按丹方缩短其调养时间。**丹药的气血/修为/寿元效果一律由系统按丹方结算**，不要再在 stateUpdates 里重复给药效数值；丹名用清单里的名字（止血散/回春丹/生肌丹/大还丹/聚气丹/凝元丹/培元丹/清毒丹/化毒丹/延寿丹）。丹药有抗药性（服多了越来越弱）、高出适用境界一个大境界会失效，叙事要体现。没有则留空数组。
+- 丹方 newRecipes：玩家得到一份丹方时登记，每项 {name: 丹方名, pill: 对应丹药名, source?: 来历}。丹方分四类：常见（坊市可买）、上古（遗府残卷，药力强、成丹难）、残缺（只有残页，要凑齐）、禁制（魔道禁丹，炼之损德）。**只登记玩家真正拿到手的丹方**，听说过的传闻不算。
+- 残页 recipePieces：捡到残缺丹方的残页时登记，每项 {name: 丹方名, delta: 张数}；凑齐后系统自动标记为可炼。没有则留空数组。
+- 开炉 brewPills：玩家实际开炉炼丹时登记，每项 {recipe: 丹方名, fire: "真火"/"地火"}。成丹与否由系统按丹方、火源与材料掷定；**材料由系统从背包扣除**，缺料会拒绝并说明，你不要自己扣材料或在 stateUpdates 里写丹药产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
@@ -847,6 +851,9 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - 势力底细 reveals：玩家查到某势力隐情的**实证**（不是起疑、不是听说）时登记，每项 {faction: 势力名}；系统据此把该势力标为"表里不一"并记入事迹。没有则留空数组。
 - 以丹养伤 treatNpc：玩家用疗伤类丹药为受伤的 NPC（如负伤的护法）疗伤时登记，每项 {name: 人物名, pill: 丹名}；系统按丹方缩短其调养时间。**丹药的气血/修为/寿元效果一律由系统按丹方结算**，不要再在 stateUpdates 里重复给药效数值；丹名用清单里的名字（止血散/回春丹/生肌丹/大还丹/聚气丹/凝元丹/培元丹/清毒丹/化毒丹/延寿丹）。丹药有抗药性（服多了越来越弱）、高出适用境界一个大境界会失效，叙事要体现。没有则留空数组。
+- 丹方 newRecipes：玩家得到一份丹方时登记，每项 {name: 丹方名, pill: 对应丹药名, source?: 来历}。丹方分四类：常见（坊市可买）、上古（遗府残卷，药力强、成丹难）、残缺（只有残页，要凑齐）、禁制（魔道禁丹，炼之损德）。**只登记玩家真正拿到手的丹方**，听说过的传闻不算。
+- 残页 recipePieces：捡到残缺丹方的残页时登记，每项 {name: 丹方名, delta: 张数}；凑齐后系统自动标记为可炼。没有则留空数组。
+- 开炉 brewPills：玩家实际开炉炼丹时登记，每项 {recipe: 丹方名, fire: "真火"/"地火"}。成丹与否由系统按丹方、火源与材料掷定；**材料由系统从背包扣除**，缺料会拒绝并说明，你不要自己扣材料或在 stateUpdates 里写丹药产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 重要剧情标记放 flags；目标变化放 goal。
 - 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。物品与撤回退款的 delta 必须明确给出有限数字，缺失不默认增加一件。普通 flags 仅用布尔值；deathImminent/qiDeviation 只允许 false 清除，不允许 true 伪造；deathByRisk/eraExpired/goalCompleted 由代码管理，不可写入或撤回。
@@ -1090,6 +1097,46 @@ export function rollSeclusionInterrupt(world, player, text, rand = Math.random) 
   const afterYears = 1 + Math.floor(rand() * 3); // 第 1~3 年出岔子
   world.pendingInterrupt = { by, afterYears, turn: world.turn || 0 };
   return world.pendingInterrupt;
+}
+
+// ---------- 炼丹 ----------
+// 丹方：常见/上古/残缺/禁制四类；残缺须集齐残页；地火加成；失败出废丹。
+export function findRecipe(world, key) {
+  const k = String(key || '').trim();
+  if (!k) return null;
+  return (world.recipes || []).find((r) => r.name === k || r.name.includes(k) || k.includes(r.name)) || null;
+}
+
+export function brewPill(world, player, input, rand = Math.random) {
+  if (!world || !input) return { ok: false, reason: '无效的炼丹请求' };
+  if (!Array.isArray(world.recipes)) world.recipes = [];
+  const key = input.recipe || input.pill || '';
+  const recipe = findRecipe(world, key);
+  if (!recipe) return { ok: false, reason: `未得「${key}」的丹方` };
+  const pill = PILLS.find((p) => p.id === recipe.pill);
+  if (!pill) return { ok: false, reason: '丹方有误' };
+  if (recipe.pieces && (recipe.have || 0) < recipe.pieces) {
+    return { ok: false, reason: `丹方残缺（${recipe.have || 0}/${recipe.pieces}），须集齐残页` };
+  }
+  // 材料校验：缺一味都不开炉
+  const missing = [];
+  for (const m of recipe.materials || []) {
+    const have = (world.inventory || []).filter((it) => it && it.name === m.name).reduce((s, it) => s + (it.qty || 0), 0);
+    if (have < m.qty) missing.push(`${m.name}（需${m.qty}，有${have}）`);
+  }
+  if (missing.length) return { ok: false, reason: `材料不足：${missing.join('、')}` };
+
+  for (const m of recipe.materials || []) applyItemChange(world, { name: m.name }, -m.qty);
+  const chance = brewChance(pill, { fire: input.fire });
+  const success = rand() < chance;
+  if (success) {
+    applyItemChange(world, { name: pill.name, desc: '自炼', kind: '丹药', rarity: pill.grade }, 1);
+    return { ok: true, success: true, pill: pill.name, chance,
+      note: `【炼丹】${recipe.name}开炉，地火正旺——一炉「${pill.name}」成了（成丹率 ${Math.round(chance * 100)}%）。` };
+  }
+  applyItemChange(world, { name: '废丹', desc: '炼废的药团', kind: '丹药' }, 1);
+  return { ok: true, success: false, pill: pill.name, chance,
+    note: `【炼丹】${recipe.name}火候差了三分，「${pill.name}」炼成了一炉废丹。` };
 }
 
 // 亲密关系 → 修炼加成：按"信"和"需"算，不按标签。结仇的人不助你修行。
@@ -1451,6 +1498,9 @@ export function validateStateOutput(input) {
     reveals: array(record({ faction: 'name' }, ['faction'])),
     linkReveals: array(record({ a: 'name', b: 'name', type: 'string' }, ['a', 'b'])),
     treatNpc: array(record({ name: 'name', pill: 'string' }, ['name'])),
+    newRecipes: array(record({ name: 'name', pill: 'string', source: 'string' }, ['name'])),
+    recipePieces: array(record({ name: 'name', delta: 'number' }, ['name'])),
+    brewPills: array(record({ recipe: 'string', pill: 'string', fire: enumeration('真火', '地火') }, ['recipe'])),
     hooks: array(record({ theme: 'string', title: 'string', declined: 'boolean' }, ['theme'])),
     itemChanges: array(item), equipChanges: array(record({ name: 'name', equipped: 'boolean' }, ['name', 'equipped'])),
     goal: record(stringFields('desc', 'type', 'target', 'status')),
@@ -1725,6 +1775,14 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const resist = eff.factor < 0.9 ? `（抗药性 ×${eff.factor}）` : '';
     pillNotes.push(`【丹药】${name}：${bits.length ? bits.join('，') : '并无实效'}${resist}`);
   }
+  // 开炉炼丹：丹方 + 材料 + 火源，成败由系统掷
+  if (Array.isArray(out.brewPills)) {
+    for (const b of out.brewPills) {
+      if (!b) continue;
+      const res = brewPill(world, player, b);
+      pillNotes.push(res.note || `【炼丹】${res.reason}`);
+    }
+  }
   // 以丹养伤：给受伤的护法疗伤，缩短调养时间
   if (Array.isArray(out.treatNpc)) {
     for (const t of out.treatNpc) {
@@ -1836,6 +1894,34 @@ export function applyStateUpdates(player, world, input, report = {}) {
   };
   pushList('newLocations', world.locations);
   pushList('newSkills', world.skills);
+  // 丹方：新得丹方（常见/上古/残缺/禁制），残缺的要以残页拼
+  if (Array.isArray(out.newRecipes)) {
+    if (!Array.isArray(world.recipes)) world.recipes = [];
+    for (const r of out.newRecipes) {
+      if (!r || !r.name) continue;
+      const pill = pillByName(r.pill || r.name) || null;
+      if (!pill) continue;
+      const base = recipeOf(pill);
+      if (world.recipes.some((x) => x.name === (r.name || base.name))) continue;
+      world.recipes.push({
+        ...base,
+        name: r.name || base.name,
+        have: pill.tier === '残缺' ? 0 : base.pieces,
+        source: r.source || '',
+      });
+    }
+  }
+  // 残页：拼齐才可开炉
+  if (Array.isArray(out.recipePieces)) {
+    if (!Array.isArray(world.recipes)) world.recipes = [];
+    for (const pc of out.recipePieces) {
+      if (!pc || !pc.name) continue;
+      const rec = findRecipe(world, pc.name);
+      if (!rec || !rec.pieces) continue;
+      const add = Math.max(1, Math.floor(Math.abs(Number(pc.delta) || 1)));
+      rec.have = Math.min(rec.pieces, (rec.have || 0) + add);
+    }
+  }
   if (out.flags && typeof out.flags === 'object') Object.assign(world.flags, out.flags);
 
   // 自动命名 NPC（身份代称→姓名，血缘同姓）
