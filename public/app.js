@@ -41,6 +41,7 @@ import {
   realmMajor,
   relationCultMult,
   bondOf,
+  linkIsKnown,
   factionCultMult,
   breakthroughRate,
   attemptBreakthrough,
@@ -988,7 +989,7 @@ function renderCodex() {
       .filter(Boolean).join('；');
     const linkText = withRelation
       ? (world.npcLinks || [])
-          .filter((l) => l && (l.a === x.name || l.b === x.name))
+          .filter((l) => l && linkIsKnown(l) && (l.a === x.name || l.b === x.name))
           .map((l) => `${l.a === x.name ? l.b : l.a}（${l.type}）`)
           .join('、')
       : '';

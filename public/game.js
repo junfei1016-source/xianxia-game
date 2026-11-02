@@ -28,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.5.0';
+export const GAME_VERSION = '1.6.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -473,7 +473,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "combat": null,
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
-  "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [], "reveals": [],
+  "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [], "reveals": [], "linkReveals": [],
   "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "gainType": "neutral", "eraChange": null
 }
 字段说明：
@@ -496,10 +496,11 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - 势力底细 reveals：玩家查到某势力隐情的**实证**（不是起疑、不是听说）时登记，每项 {faction: 势力名}；系统据此把该势力标为"表里不一"并记入事迹。没有则留空数组。
+- 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
 
-【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals/reveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。`;
+【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals/reveals/linkReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。`;
 
 const WORLD_GEN_RULES = `你是"武侠·修仙"开放世界的创世者。现在要为一位新玩家生成一个独一无二的开局世界种子。
 
@@ -599,7 +600,7 @@ export function buildWorldContext(world, player = null) {
     worldSlice: player ? buildSlice(player, world) : undefined,
     startingLocation: world.startingLocation,
     factions: pickFactions(world),
-    npcLinks: (world.npcLinks || []).slice(-12),
+    npcLinks: (world.npcLinks || []).filter(linkIsKnown).slice(-12),
     npcs: world.npcs,
     locations: world.locations,
     inventory: world.inventory,
@@ -650,12 +651,17 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
       guide += `${fast ? ' ' : '\n'}【人物差异化】本轮新人物从这些里挑一个作底子：${sug}；不要默认清冷寡言或傲娇。每人补一句欲望、一句忌讳、一个说话习惯。`;
     }
   }
-  // 人物关系网：NPC 彼此的关系要影响他们的立场，不是只围着玩家转
+  // 人物关系网：明面上的关系进档案，暗关系只给 GM 一份"不得点破"的清单
   if (s.godMode !== true) {
-    const links = (world.npcLinks || []).slice(-8);
-    if (links.length) {
-      const text = links.map((l) => `${l.a}—${l.b}（${l.type}${l.note ? '：' + l.note : ''}）`).join('；');
-      guide += `${fast ? ' ' : '\n'}【人物关系网】${text}。这些人之间的亲疏恩怨会影响他们的言行与站队（帮亲、护短、迁怒、通风报信），不得改写已登记的关系；新人物可以带 links 入网。`;
+    const allLinks = world.npcLinks || [];
+    const fmt = (l) => `${l.a}—${l.b}（${l.type}${l.note ? '：' + l.note : ''}）`;
+    const knownLinks = allLinks.filter(linkIsKnown).slice(-8);
+    const hiddenLinks = allLinks.filter((l) => !linkIsKnown(l)).slice(-6);
+    if (knownLinks.length) {
+      guide += `${fast ? ' ' : '\n'}【人物关系网】${knownLinks.map(fmt).join('；')}。这些人之间的亲疏恩怨会影响他们的言行与站队（帮亲、护短、迁怒、通风报信），不得改写已登记的关系；新人物可以带 links 入网。`;
+    }
+    if (hiddenLinks.length) {
+      guide += `${fast ? ' ' : '\n'}【暗中的关系·不得点破】${hiddenLinks.map(fmt).join('；')}。这些关系玩家尚不知道：你只能通过细节暗示（神色、避讳、同行、账目、口误），**不得直接说出，也不得让玩家凭空知道**；玩家查明实证后，用 linkReveals 登记 [{a:"甲",b:"乙",type:"仇怨"}]，系统才会把它写进档案。`;
     }
   }
   // 暗线：玩家起疑后才把真相与线索交给 GM；没查过的势力一个字都不提
@@ -781,6 +787,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "retract": [],
   "personalityReveals": [],
   "reveals": [],
+  "linkReveals": [],
   "flags": {},
   "goal": null,
   "timeMonths": 1,
@@ -814,11 +821,12 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
 - 势力底细 reveals：玩家查到某势力隐情的**实证**（不是起疑、不是听说）时登记，每项 {faction: 势力名}；系统据此把该势力标为"表里不一"并记入事迹。没有则留空数组。
+- 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 重要剧情标记放 flags；目标变化放 goal。
 - 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。物品与撤回退款的 delta 必须明确给出有限数字，缺失不默认增加一件。普通 flags 仅用布尔值；deathImminent/qiDeviation 只允许 false 清除，不允许 true 伪造；deathByRisk/eraExpired/goalCompleted 由代码管理，不可写入或撤回。
 - 收益来源 gainType：当本回合玩家获得灵石等收益时，标注来源——"righteous"（正道途径：任务、交易、赠礼、帮人所得）或 "plunder"（掠夺途径：抢劫、偷窃、杀人越货、勒索）；无收益或无法判断填 "neutral"。
 - 大势演变 eraChange：若本回合发生改变天下大势的重大事件（如正魔大战结束、乱世平定），填 {type: "盛世/乱世/末法时代/秘境将启/正魔大战", text: "新大势一句话"}；否则填 null。若叙事中给出了新大势的期限（如"秘境将于三月后开启"），附带 months: 3（期限月数）；无期限则省略 months。
-- 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals/reveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。本回合无任何变化时输出 {}。`;
+- 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals/reveals/linkReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。本回合无任何变化时输出 {}。`;
 
 export function buildExtractMessages(narrative, player, world) {
   const god = world && world.settings && world.settings.godMode === true;
@@ -946,6 +954,15 @@ export function monthOrdinal(date) {
   const y = date && Number.isFinite(date.year) ? date.year : 1;
   const m = date && Number.isFinite(date.month) ? date.month : 1;
   return y * 12 + m;
+}
+
+// 人物之间的关系分"明暗"：档案与提示词只公开主角知道的；暗关系只给 GM 一份"不得点破"的清单。
+// 默认：亲缘/师承/同门/道侣/结义是明面；仇怨/交易/主仆多是私下的事。
+const SECRET_LINK_TYPES = new Set(['仇怨', '交易', '主仆']);
+export function linkIsKnown(link) {
+  if (!link) return false;
+  if (typeof link.known === 'boolean') return link.known;
+  return true; // 旧数据没有明暗标记，按公开处理，避免旧档突然丢关系
 }
 
 // 亲密关系 → 修炼加成：按"信"和"需"算，不按标签。结仇的人不助你修行。
@@ -1295,7 +1312,7 @@ export function validateStateOutput(input) {
     realmChange: enumeration(...REALM_LADDER),
     combat: record({ enemy: 'string', realm: enumeration(...REALM_LADDER, '未知') }),
     flags: 'flags',
-    newNpcs: array(record({ name: 'name', ...stringFields('desc', 'relation', 'temperament', 'personality', 'trait', 'desire', 'taboo', 'speech'), family: record({ of: 'name', relation: 'string' }, ['of']), links: array(record({ to: 'name', type: 'string', note: 'string' }, ['to'])) }, ['name'])),
+    newNpcs: array(record({ name: 'name', ...stringFields('desc', 'relation', 'temperament', 'personality', 'trait', 'desire', 'taboo', 'speech'), family: record({ of: 'name', relation: 'string' }, ['of']), links: array(record({ to: 'name', type: 'string', note: 'string', known: 'boolean' }, ['to'])) }, ['name'])),
     newLocations: array(record({ name: 'name', desc: 'string' }, ['name'])),
     newSkills: array(record({ name: 'name', desc: 'string', grade: enumeration(...Object.keys(SKILL_GRADES)) }, ['name'])),
     newEvents: array(record({ subject: 'name', title: 'name', desc: 'string', relation: 'string' }, ['subject', 'title'])),
@@ -1304,6 +1321,7 @@ export function validateStateOutput(input) {
     npcRelations: array(record({ name: 'name', relation: 'string', debt: 'number', grudge: 'number', trust: 'number', need: 'number' }, ['name'])),
     personalityReveals: array(record({ name: 'name' }, ['name'])),
     reveals: array(record({ faction: 'name' }, ['faction'])),
+    linkReveals: array(record({ a: 'name', b: 'name', type: 'string' }, ['a', 'b'])),
     hooks: array(record({ theme: 'string', title: 'string', declined: 'boolean' }, ['theme'])),
     itemChanges: array(item), equipChanges: array(record({ name: 'name', equipped: 'boolean' }, ['name', 'equipped'])),
     goal: record(stringFields('desc', 'type', 'target', 'status')),
@@ -1634,18 +1652,19 @@ export function applyStateUpdates(player, world, input, report = {}) {
       const hit = (world.npcs || []).find((n) => n.name === key);
       return hit ? hit.name : '';
     };
-    const addLink = (a, b, type, note) => {
+    const addLink = (a, b, type, note, known) => {
       if (!a || !b || a === b || !type) return;
       const pair = [a, b].sort().join('|');
       if (world.npcLinks.some((l) => [l.a, l.b].sort().join('|') === pair && l.type === type)) return;
-      world.npcLinks.push({ a, b, type, note: note || '', turn: eventTurn });
+      const isKnown = known === true || (known !== false && !SECRET_LINK_TYPES.has(type));
+      world.npcLinks.push({ a, b, type, note: note || '', turn: eventTurn, known: isKnown });
     };
     for (const npc of createdNpcs) {
       for (const l of npc.links || []) {
         if (!l || !l.to) continue;
-        addLink(npc.name, resolveName(l.to), l.type || '相识', l.note);
+        addLink(npc.name, resolveName(l.to), l.type || '相识', l.note, l.known);
       }
-      if (npc.kin && npc.kin.of) addLink(npc.name, resolveName(npc.kin.of), '亲属', npc.kin.relation || '');
+      if (npc.kin && npc.kin.of) addLink(npc.name, resolveName(npc.kin.of), '亲属', npc.kin.relation || '', true);
       if (world.npcLinks.length > 60) world.npcLinks = world.npcLinks.slice(-60);
     }
     // 牵一发动全身：新人的初始态度受其关系网中人的态度影响
@@ -1829,6 +1848,27 @@ export function applyStateUpdates(player, world, input, report = {}) {
           tier: f.tier, seat: f.seat, seeded: true, relation: '中立', notedTurn: eventTurn,
         });
       }
+    }
+  }
+
+  // 关系浮出：玩家查到某条暗关系的实证，才把这一条写进档案（其余暗关系不公开）
+  if (Array.isArray(out.linkReveals)) {
+    if (!Array.isArray(world.npcLinks)) world.npcLinks = [];
+    for (const rv of out.linkReveals) {
+      if (!rv || !rv.a || !rv.b) continue;
+      const a = resolveStateAlias(world, rv.a);
+      const b = resolveStateAlias(world, rv.b);
+      const pair = [a, b].sort().join('|');
+      const hit = world.npcLinks.find((l) => {
+        if ([l.a, l.b].sort().join('|') !== pair) return false;
+        return !rv.type || l.type === rv.type;
+      });
+      if (!hit || hit.known === true) continue;
+      hit.known = true; // 只公开这一条
+      hit.revealedTurn = eventTurn;
+      const note = `【关系浮出水面】${hit.a}—${hit.b}（${hit.type}${hit.note ? '：' + hit.note : ''}）`;
+      revealNote = revealNote || note;
+      addChronicleEvent(world, player, `${hit.a}与${hit.b}`, '查出关系', hit.note || hit.type, '');
     }
   }
 
