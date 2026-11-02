@@ -30,6 +30,7 @@ const suites = [
   ['丹方与炼丹（上古/残缺/交易）', ['tests/pills-recipes.test.mjs']],
   ['交易结算（丹药/丹方）', ['tests/trade.test.mjs']],
   ['黑市与拍卖', ['tests/market-auction.test.mjs']],
+  ['拍卖会期（每年三月/九月）', ['tests/auction-schedule.test.mjs']],
 ];
 
 let failed = 0;

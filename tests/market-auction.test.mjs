@@ -15,7 +15,7 @@ const setup = (regionId = 'chisha') => {
   const player = newPlayerState();
   const world = newWorldState();
   world.geo = { regionId, sinceTurn: 0, migrated: false };
-  world.date = { year: 1, month: 1, day: 1 };
+  world.date = { year: 1, month: 3, day: 1 }; // 三月为拍卖会期
   player.reputation = 50;
   player.spiritStones = 5000;
   return { player, world };

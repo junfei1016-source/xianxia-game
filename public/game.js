@@ -506,7 +506,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 残页 recipePieces：捡到残缺丹方的残页时登记，每项 {name: 丹方名, delta: 张数}；凑齐后系统自动标记为可炼。没有则留空数组。
 - 开炉 brewPills：玩家实际开炉炼丹时登记，每项 {recipe: 丹方名, fire: "真火"/"地火"}。成丹与否由系统按丹方、火源与材料掷定；**材料由系统从背包扣除**，缺料会拒绝并说明，你不要自己扣材料或在 stateUpdates 里写丹药产出。
 - 买卖 trades：玩家在坊市/黑市买卖**丹药或丹方**时登记，每项 {action: "buy"/"sell", item: 丹名或丹方名, qty: 数量}。价格由系统按区域物价系数与声望议价结算（黑市更贵、高声望让利），钱货由系统扣付；**你不要在 stateUpdates 里重复扣灵石**，灵石不够或货不够时系统会拒绝并给出理由。非丹药/丹方的杂物不要走这里，按叙事处理。注意：**禁制类丹药与丹方只有黑市（赤沙荒原这类无法之地）敢卖**，正经坊市会拒绝；在黑市买禁制之物会掉正邪。
-- 拍卖 auctionBids：玩家在**落霞坊的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
+- 拍卖 auctionBids：玩家在**落霞坊的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
@@ -703,6 +703,15 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
     const names = world.guardiansThisTurn.join('、');
     guide += `${fast ? ' ' : '\n'}【护法在侧】${names} 在洞府外为你护法，本回合闭关更稳。叙事里要写他们守候的样子（轮值、布阵、驱赶闲人），出关时也提一句他们的辛劳。`;
   }
+  // 拍卖排期：会期只有 3 月、9 月，错过要等下一场
+  if (s.godMode !== true && world.geo && world.geo.regionId === 'luoxia') {
+    const aw = auctionWindow(world);
+    if (aw.open) {
+      guide += `${fast ? ' ' : '\n'}【拍卖排期】本月正是落霞坊的拍卖会（每年 3 月、9 月各一场）。玩家若要出手，用 auctionBids 登记举牌价；拍品以丹药/丹方为主，各路人马云集，是结交与结怨的好场合。`;
+    } else {
+      guide += `${fast ? ' ' : '\n'}【拍卖排期】落霞坊下一场拍卖在 ${aw.next.year} 年 ${aw.next.month} 月（还有 ${aw.next.inMonths} 个月）。不在会期不能举牌，可写打听拍品、托人留位、攒灵石的铺垫。`;
+    }
+  }
   if ((world.farmStreak || 0) >= 2 && s.godMode !== true) {
     guide += `${fast ? ' ' : '\n'}【重复刷取】玩家已连续 ${world.farmStreak} 次重复类似行动，收益正在递减（系统已自动折算）。你在叙事中要中立地演绎边际递减——灵草采尽、猎物警觉、商路被占、人心厌倦、同行抢先等；不要嘲讽玩家，也不必一刀切归零，让世界自然回应。`;
   }
@@ -857,7 +866,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 残页 recipePieces：捡到残缺丹方的残页时登记，每项 {name: 丹方名, delta: 张数}；凑齐后系统自动标记为可炼。没有则留空数组。
 - 开炉 brewPills：玩家实际开炉炼丹时登记，每项 {recipe: 丹方名, fire: "真火"/"地火"}。成丹与否由系统按丹方、火源与材料掷定；**材料由系统从背包扣除**，缺料会拒绝并说明，你不要自己扣材料或在 stateUpdates 里写丹药产出。
 - 买卖 trades：玩家在坊市/黑市买卖**丹药或丹方**时登记，每项 {action: "buy"/"sell", item: 丹名或丹方名, qty: 数量}。价格由系统按区域物价系数与声望议价结算（黑市更贵、高声望让利），钱货由系统扣付；**你不要在 stateUpdates 里重复扣灵石**，灵石不够或货不够时系统会拒绝并给出理由。非丹药/丹方的杂物不要走这里，按叙事处理。注意：**禁制类丹药与丹方只有黑市（赤沙荒原这类无法之地）敢卖**，正经坊市会拒绝；在黑市买禁制之物会掉正邪。
-- 拍卖 auctionBids：玩家在**落霞坊的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
+- 拍卖 auctionBids：玩家在**落霞坊的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 重要剧情标记放 flags；目标变化放 goal。
 - 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。物品与撤回退款的 delta 必须明确给出有限数字，缺失不默认增加一件。普通 flags 仅用布尔值；deathImminent/qiDeviation 只允许 false 清除，不允许 true 伪造；deathByRisk/eraExpired/goalCompleted 由代码管理，不可写入或撤回。
@@ -1219,12 +1228,31 @@ export function tradeItem(world, player, input) {
 }
 
 // ---------- 拍卖会 ----------
-// 只在落霞坊有；起拍价 = 市价 ×1.5，对手出价在起拍价的 0.85~1.35 之间浮动。
-// 价高者得；没拍到不扣钱（这是"举牌"不是"付款"）。
+// 会期制：每年 3 月、9 月各一场，只有落霞坊开拍。不在会期，"举牌"要被拒并告知下一场。
+export const AUCTION_MONTHS = [3, 9];
+export function auctionWindow(world) {
+  const d = worldGameDate(world);
+  const month = d ? d.month : 1;
+  const year = d ? d.year : 1;
+  const open = AUCTION_MONTHS.includes(month);
+  let next = null;
+  for (const m of AUCTION_MONTHS) {
+    if (m > month) { next = { year, month: m, inMonths: m - month }; break; }
+  }
+  if (!next) {
+    next = { year: year + 1, month: AUCTION_MONTHS[0], inMonths: 12 - month + AUCTION_MONTHS[0] };
+  }
+  return { open, year, month, next };
+}
+
 export function auctionBid(world, player, input, rand = Math.random) {
   if (!world || !player || !input) return { ok: false, reason: '拍卖内容不明' };
   const region = world.geo ? regionById(world.geo.regionId) : null;
   if (!region || region.id !== 'luoxia') return { ok: false, reason: '此地没有拍卖会（落霞坊才有）' };
+  const win = auctionWindow(world);
+  if (!win.open) {
+    return { ok: false, reason: `不在会期——下一场在 ${win.next.year} 年 ${win.next.month} 月（${win.next.inMonths} 个月后）` };
+  }
   const name = String(input.item || '').trim();
   const bid = Math.floor(Number(input.bid));
   if (!name || !Number.isFinite(bid) || bid <= 0) return { ok: false, reason: '出价不明' };
