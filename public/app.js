@@ -58,7 +58,15 @@ import {
   npcInsightStage,
 } from './game.js';
 
+import { ensureWorldGeo, startingFactions, regionById } from './world.js';
+
 const $ = (id) => document.getElementById(id);
+
+// 状态栏：境界 + 当前区域（区域来自世界骨架，旧档没有坐标时自动省掉）
+function statusLine() {
+  const region = world && world.geo ? regionById(world.geo.regionId) : null;
+  return '进行中 · ' + player.realm + (region ? ' · ' + region.name : '');
+}
 
 // ---------- 配置 ----------
 const CONFIG_KEY = 'xianxia_config_v1';
@@ -1151,6 +1159,7 @@ function loadGame(slot) {
   player = { ...newPlayerState(), ...s.player };
   world = { ...newWorldState(), ...s.world };
   migrateQuestDeadlines(world); // 兼容旧回合期限；读档只迁移，不执行超时判罚
+  ensureWorldGeo(world); // 旧档补区域坐标（幂等，不改数值、不判罚）
   history = Array.isArray(s.history) ? s.history : [];
   log = Array.isArray(s.log) ? s.log : [];
   mode = s.mode || 'random';
@@ -1166,7 +1175,7 @@ function loadGame(slot) {
   log.forEach((m) => renderMsg(m.kind, m.text, false, m.cls || ''));
   setMode(mode);
   renderAll();
-  $('topStatus').textContent = '进行中 · ' + player.realm;
+  $('topStatus').textContent = statusLine();
   setBusy(false);
 }
 function renderSaveSlots() {
@@ -1243,6 +1252,13 @@ async function startGame() {
     world.eraType = (gameOptions.eraType !== '随机') ? gameOptions.eraType : (seed.eraType || eraTypeFromText(world.era));
     world.startingLocation = seed.startingLocation || null;
     world.factions = Array.isArray(seed.factions) ? seed.factions.map((f) => ({ ...f, alignment: f.alignment || factionAlignment(f), seeded: true, notedTurn: 0 })) : [];
+    // 世界骨架：开局落在固定世界的某个区域，势力取本地既有势力，距离与物价由规则表兜底
+    const geo = ensureWorldGeo(world, { preferredName: seed.startingLocation && seed.startingLocation.name });
+    const homeRegion = regionById(geo.regionId);
+    if (homeRegion) {
+      world.startingLocation = { name: homeRegion.name, desc: homeRegion.desc };
+      world.factions = startingFactions(homeRegion.id);
+    }
     const guide = seed.guideNpc;
     if (guide && guide.name) {
       world.npcs.push({ name: guide.name, desc: guide.desc || '', relation: guide.relation || '' });
@@ -1262,7 +1278,7 @@ async function startGame() {
     renderAll();
     saveGame(AUTO_SLOT);
     refreshContinue();
-    $('topStatus').textContent = '进行中 · ' + player.realm;
+    $('topStatus').textContent = statusLine();
   } catch (e) {
     appendSystem('创世失败：' + e.message);
     $('topStatus').textContent = '未开始';
@@ -1385,10 +1401,10 @@ async function sendTurn(forcedText) {
     }
 
     saveGame(AUTO_SLOT);
-    $('topStatus').textContent = '进行中 · ' + player.realm;
+    $('topStatus').textContent = statusLine();
   } catch (e) {
     appendSystem('出错了：' + e.message);
-    $('topStatus').textContent = '进行中 · ' + player.realm;
+    $('topStatus').textContent = statusLine();
   } finally {
     busy = false;
     setBusy(false);
@@ -1516,6 +1532,7 @@ function rollbackOneTurn() {
   player = s.player;
   world = s.world;
   migrateQuestDeadlines(world);
+  ensureWorldGeo(world); // 回退档同样补区域坐标，保持可玩
   log = s.log;
   history = s.history;
   playing = true;
@@ -1530,7 +1547,7 @@ function rollbackOneTurn() {
   setBusy(false);
   saveGame(AUTO_SLOT);
   refreshContinue();
-  $('topStatus').textContent = '进行中 · ' + player.realm;
+  $('topStatus').textContent = statusLine();
   appendSystem(`⏪ 已回退一个回合：若未回退，此身已「${deadTitle}」。仙途未绝，换个选择再试。`);
 }
 

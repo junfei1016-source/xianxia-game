@@ -12,8 +12,9 @@ const suites = [
   ['长期记忆', ['test_memory.mjs']],
   ['NPC 性格', ['test_personality.mjs']],
   ['死亡叙事背书', ['test_death.mjs']],
-  ['游戏日期任务期限', ['--test', 'tests/quest-deadlines.test.mjs']],
-  ['状态输入与任务终态', ['--test', 'tests/state-input-guards.test.mjs']],
+  ['游戏日期任务期限', ['tests/quest-deadlines.test.mjs']],
+  ['状态输入与任务终态', ['tests/state-input-guards.test.mjs']],
+  ['世界骨架（区域/路程/物价/切片）', ['tests/world-framework.test.mjs']],
 ];
 
 let failed = 0;

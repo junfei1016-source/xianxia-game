@@ -5,6 +5,8 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName } from './world.js';
+
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
   '凡人',
@@ -25,7 +27,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.1.3';
+export const GAME_VERSION = '1.2.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -466,7 +468,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
   "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [],
-  "flags": {}, "goal": null, "timeMonths": 1, "gainType": "neutral", "eraChange": null
+  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "gainType": "neutral", "eraChange": null
 }
 字段说明：
 - narrative：必填。
@@ -487,6 +489,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 效果诉求 effectRequests：玩家明确表达"希望某种法宝/丹药/功法有某种效果"时登记，每项 {name, desc}；name 为物品或效果名，desc 为玩家想要的效果。只记录诉求，绝不虚构实现——注册表之外的诉求，GM 应按规则发最接近的注册表词条或标注叙事词条。没有诉求则留空数组。
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
+- 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
 
 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。`;
@@ -552,12 +555,15 @@ function pickFactions(world) {
   };
   return fs.slice().sort((a, b) => score(b) - score(a)).slice(0, 12);
 }
-export function buildWorldContext(world) {
+export function buildWorldContext(world, player = null) {
   const mem = typeof world.memory === 'string' ? world.memory : '';
+  const geoRegion = world.geo ? regionById(world.geo.regionId) : null;
   return {
     era: world.era,
     eraType: world.eraType,
     date: world.date,
+    region: geoRegion ? { name: geoRegion.name, qi: geoRegion.qi, danger: geoRegion.danger } : undefined,
+    worldSlice: player ? buildSlice(player, world) : undefined,
     startingLocation: world.startingLocation,
     factions: pickFactions(world),
     npcs: world.npcs,
@@ -577,7 +583,7 @@ export function buildWorldContext(world) {
 
 // ---------- 组装每回合发给 LLM 的 messages ----------
 function buildGMBase(player, world, history, userInput, rulesPrompt) {
-  const snapshot = JSON.stringify({ player, context: buildWorldContext(world) });
+  const snapshot = JSON.stringify({ player, context: buildWorldContext(world, player) });
   const s = world.settings || {};
   const diff = DIFFICULTIES[s.difficulty] || DIFFICULTIES['普通'];
   const pace = PACES[s.pace] || PACES['慢'];
@@ -594,6 +600,11 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
   if (s.godMode !== true) {
     // 正邪/声望的立场处境：让每一次 NPC 互动、物价、遭遇都体现差异
     guide += `${fast ? ' ' : '\n'}${stanceGuide(player)}`;
+  }
+  // 世界切片：把"在哪、谁惹不起、多远、多贵"钉死，避免模型自编距离与物价
+  if (s.godMode !== true) {
+    const worldSlice = buildSlice(player, world);
+    if (worldSlice) guide += `${fast ? ' ' : '\n'}${worldSlice}`;
   }
   if ((world.closedStreak || 0) >= 2 && s.godMode !== true) {
     guide += `${fast ? ' ' : '\n'}【闭关提醒】玩家已连续闭关 ${world.closedStreak} 回合，进境渐缓。你应在叙事里点醒这一点，并主动抛出机缘钩子（任务/奇遇/人物上门/秘境异动），引导其出游历练、寻访机缘、结交人物。`;
@@ -707,6 +718,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "flags": {},
   "goal": null,
   "timeMonths": 1,
+  "travelTo": null,
   "gainType": "neutral",
   "eraChange": null
 }
@@ -716,6 +728,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
 - 闭关时长：闭关修炼的时间越长，修为增长越多。请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）；cultivation delta 写"每闭关一月的基础修为增量"（正常闭关一月约 +8~15，视功法/灵地/丹药而定）。系统会按 timeMonths 放大修为，所以 delta 不要自己再乘以时长。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（用于连续闭关收益递减）。
+- 行路 travelTo：叙事写玩家抵达另一个区域/城池/坊市时，填该区域名（须与【世界切片】"可达"中的名字一致，或叙事里明确确认的既有区域）；只在确实发生跨区域移动时填，原地活动不填。系统按路程表结算耗时，不要用 timeMonths 代替。
 - 寿元 lifespan：岁月流逝导致的寿元减少，系统会按 timeMonths 自动扣除，所以你**不要**为"闭关/赶路/等待"等正常时间流逝再写 lifespan 负 delta（否则会重复扣）。只有叙事发生**非时间流逝**的寿元变化时才写 lifespan delta——如服用延寿丹（正）、走火入魔/被抽取寿元/燃烧寿元（负）。
 - 危险判定 risk：当叙事中玩家处于危险/濒死/作死处境（如被强敌重创、身中剧毒、跳入绝地、硬闯必死之地、自不量力挑战远超自己的存在）时，填 "high"（危险）或 "lethal"（致命/作死）；否则填 null。
 - 死亡 died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 died:true；只写"重伤""濒死""命悬一线""生死一线"时不要填。系统据此触发身死道消结局。
@@ -1163,7 +1176,7 @@ export function validateStateOutput(input) {
   const schema = {
     ...stringFields('narrative'),
     stateUpdates: 'attributes',
-    timeMonths: 'time', gainType: enumeration('righteous', 'plunder', 'neutral'),
+    timeMonths: 'time', travelTo: 'string', gainType: enumeration('righteous', 'plunder', 'neutral'),
     risk: enumeration('none', 'low', 'high', 'lethal'), died: 'boolean',
     realmChange: enumeration(...REALM_LADDER),
     combat: record({ enemy: 'string', realm: enumeration(...REALM_LADDER, '未知') }),
@@ -1299,6 +1312,24 @@ export function applyStateUpdates(player, world, input, report = {}) {
       reject('numeric_overflow', 'eraChange.months');
       delete out.eraChange.months;
     }
+  }
+  // 行路：抵达另一区域时，耗时由路程表决定，覆盖模型自报的 timeMonths（防止虚构距离）
+  let travelNote = '';
+  if (typeof out.travelTo === 'string' && out.travelTo.trim()) {
+    const target = regionByName(out.travelTo);
+    const cur = world.geo ? regionById(world.geo.regionId) : null;
+    if (target && (!cur || target.id !== cur.id)) {
+      const moved = moveToRegion(world, target.id);
+      if (moved) {
+        const months = Math.round((moved.days / 30) * 1000) / 1000;
+        const anchor = worldGameDate(world);
+        if (!anchor || addGameDays(anchor, elapsedGameDays(months))) {
+          out.timeMonths = months;
+          travelNote = `【行路】${moved.from.name} → ${moved.to.name}（${moved.days} 日，约 ${months.toFixed(2)} 月）`;
+        }
+      }
+    }
+    delete out.travelTo; // 只用于结算，不落到前端状态
   }
   if (out.combat && !out.combat.enemy && !out.combat.realm) delete out.combat;
   migrateQuestDeadlines(world);
@@ -1770,6 +1801,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const drain = activeHas(world.inventory, 'lifesteal') && hpLost > 0 ? ` · 噬血返还 ${Math.round(hpLost * 0.3)}` : '';
     return `【战斗】${enemyLabel}${realmNote} · 你${wound}（气血-${hpLost}${drain}）`;
   }
+  if (travelNote) return travelNote;
   return null;
 }
 
