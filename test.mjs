@@ -345,10 +345,10 @@ assert('闭关递减曲线', closedDoorMult(1) === 1 && closedDoorMult(2) === 0.
 const cdWorld = newWorldState();
 const cdP1 = newPlayerState();
 applyStateUpdates(cdP1, cdWorld, { flags: { closedDoor: true }, timeMonths: 1, stateUpdates: { cultivation: { delta: 10 } } });
-assert('首次闭关满额', cdP1.cultivation === 10 && cdWorld.closedStreak === 1);
+assert('首次闭关按时长结算', Math.abs(cdP1.cultivation - 2.78) < 0.01 && cdWorld.closedStreak === 1);
 const cdP2 = newPlayerState();
 applyStateUpdates(cdP2, cdWorld, { flags: { closedDoor: true }, timeMonths: 1, stateUpdates: { cultivation: { delta: 10 } } });
-assert('连续闭关第二次递减(0.85x)', cdP2.cultivation === 9 && cdWorld.closedStreak === 2);
+assert('连续闭关第二次递减(0.85x)', Math.abs(cdP2.cultivation - 2.36) < 0.02 && cdWorld.closedStreak === 2);
 applyStateUpdates(newPlayerState(), cdWorld, { stateUpdates: { cultivation: { delta: 10 } } });
 assert('非闭关行动重置连续闭关计数', cdWorld.closedStreak === 0);
 

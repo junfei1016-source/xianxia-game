@@ -28,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.7.0';
+export const GAME_VERSION = '1.8.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -809,7 +809,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 正邪 morality 与声望 reputation 判定：行善（救人、助人、除暴安良、护佑弱小、仗义出手）→ morality 给正 delta；作恶（偷窃、杀人、强抢、欺凌、背信弃义）→ morality 给负 delta。声望 reputation：做出广为人知的义举/壮举（救人、除害、完成大事、扬名）→ 给正 delta；恶名（作恶被传开、失信违约）→ 给负 delta。叙事明确写到这些行为时，必须给出对应 delta，不要省略。
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。【境界岁月】大境界突破还须在本境积累足够年数（提示里会给出"还差约 N 年"），年数不足时一律填 null，改为描写继续闭关、游历或等机缘。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
-- 闭关时长：闭关修炼的时间越长，修为增长越多。请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）；cultivation delta 写"每闭关一月的基础修为增量"（正常闭关一月约 +8~15，视功法/灵地/丹药而定）。系统会按 timeMonths 放大修为，所以 delta 不要自己再乘以时长。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（用于连续闭关收益递减）。
+- 闭关时长：请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）。**闭关时的修为由系统按境界与时长结算**（一个境界大致要熬满其最少在境年限才圆满），你的 cultivation delta 只填"这次闭关的效率提示"：常速 8~15，灵地/丹药好给 18~20，环境差给 5~7；不要自己算出总收益写进去。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（系统据此按时长结算并计算连续闭关的递减）。
 - 行路 travelTo：叙事写玩家抵达另一个区域/城池/坊市时，填该区域名（须与【世界切片】"可达"中的名字一致，或叙事里明确确认的既有区域）；只在确实发生跨区域移动时填，原地活动不填。系统按路程表结算耗时，不要用 timeMonths 代替。
 - 寿元 lifespan：岁月流逝导致的寿元减少，系统会按 timeMonths 自动扣除，所以你**不要**为"闭关/赶路/等待"等正常时间流逝再写 lifespan 负 delta（否则会重复扣）。只有叙事发生**非时间流逝**的寿元变化时才写 lifespan delta——如服用延寿丹（正）、走火入魔/被抽取寿元/燃烧寿元（负）。
 - 危险判定 risk：当叙事中玩家处于危险/濒死/作死处境（如被强敌重创、身中剧毒、跳入绝地、硬闯必死之地、自不量力挑战远超自己的存在）时，填 "high"（危险）或 "lethal"（致命/作死）；否则填 null。
@@ -993,6 +993,21 @@ export function yearsInRealm(world, player) {
   const b = gameDateOrdinal(date);
   if (a === null || b === null || b < a) return null;
   return (b - a) / 360; // 每月 30 天、每年 12 月 → 360 天/年
+}
+
+// 闭关时修为按时长结算：每月涨幅 ≈ 100 / (最少在境年限 × 12)。
+// 这样"熬满年限"与"修为圆满"大致同步，模型写一个大数字也灌不满一个境界。
+export function cultRatePerMonth(realm) {
+  const years = Math.max(1, minYearsFor(realm));
+  return 100 / (years * 12);
+}
+
+// 一次闭关的修为收益：时长决定总量，模型给的 delta 只当"效率提示"（8~15 为常速）
+export function seclusionGain(realm, months, qualityHint = 10) {
+  const monthsN = Math.max(0, Number(months) || 0);
+  const hint = Number(qualityHint);
+  const quality = Math.max(0.5, Math.min(2, (Number.isFinite(hint) ? hint : 10) / 10));
+  return Math.round(cultRatePerMonth(realm) * monthsN * quality * 100) / 100;
 }
 
 // 亲密关系 → 修炼加成：按"信"和"需"算，不按标签。结仇的人不助你修行。
@@ -1555,7 +1570,15 @@ export function applyStateUpdates(player, world, input, report = {}) {
     else if (typeof u.delta === 'number') delta = u.delta;
     else continue;
     if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1)); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条减伤
-    if (key === 'cultivation' && delta > 0) delta = Math.round(delta * pace.cultivationMult * fortuneMult * era.cultMult * closeMonths * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm); // 节奏+气运+大势+时长+功法+法宝+稀有度+词条+关系+势力+增益+闭关递减+走火入魔+防刷
+    if (key === 'cultivation' && delta > 0) {
+      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm;
+      if (closedDoor) {
+        // 闭关：修为按时长结算，模型给的 delta 只当效率提示（不再 ×closeMonths，避免一次闭关灌满）
+        delta = Math.round(seclusionGain(player.realm, out.timeMonths, delta) * mults * 100) / 100;
+      } else {
+        delta = Math.round(delta * mults * closeMonths); // 非闭关：顿悟/任务等一次性收益，仍按时长放大
+      }
+    }
     if (key === 'spiritStones' && delta > 0) delta = Math.round(delta * repMult * gainMult * era.gainMult * diff.gainMult * farm * wealthMult);         // 声望 + 正邪 + 大势 + 难度 + 防刷 + 聚财
     if (key === 'reputation' && delta > 0) delta = Math.round(delta * prestigeMult); // 威仪词条：声望正增长加成
     const next = player[key] + delta;

@@ -22,6 +22,7 @@ const suites = [
   ['人物关系网', ['tests/npc-network.test.mjs']],
   ['关系明暗（档案只写知道的）', ['tests/npc-link-secrecy.test.mjs']],
   ['境界节奏（最少在境年限）', ['tests/realm-pace.test.mjs']],
+  ['闭关结算（按时长涨修为）', ['tests/seclusion.test.mjs']],
 ];
 
 let failed = 0;
