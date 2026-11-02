@@ -6,6 +6,7 @@
 // ============================================================
 
 import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName } from './world.js';
+import { diversityBrief, normalizeTrait, rememberTrait, advanceTraitCursor } from './personality.js';
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
@@ -27,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.2.0';
+export const GAME_VERSION = '1.3.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -388,6 +389,8 @@ export function newWorldState() {
     factions: [],
     npcs: [],        // [{name, desc, relation?}]
     aliasMap: {},    // 身份代称 → 已分配姓名（自动命名对照表）
+    traitLog: [],    // 最近登场人物的性格记录（供"性格要多元"的反重复统计）
+    traitCursor: 0,  // 性格轮换游标（只读推进，保证长期轮完整个特质库）
     locations: [],   // [{name, desc}]
     items: [],       // 图鉴：获得过的物品（永久记录，[{name, desc}]）
     inventory: [],   // 背包：当前持有（带数量，[{name, desc, qty}]）
@@ -441,7 +444,9 @@ const RULES_CORE = `你是一个沉浸式"武侠·修仙"开放世界文字游�
 - 全程用中文，以第二人称"你"的视角叙事，文笔要有武侠仙侠韵味，重点突出，并给玩家留下行动/选择的余地；叙事篇幅遵循本回合提示里的【叙事篇幅】。
 - 玩家可以做出任何行动（拜师、杀人、寻宝、修炼、经商、谈情、隐居、复仇、索要……）。你要即时、合理地演绎后果，并现场生成新的 NPC、地点、事件、功法、物品；名字要有仙侠韵味、不落俗套。
 - 【NPC 命名与一致】凡与玩家有实际互动、或之后可能再次出场的 NPC（引路人、同门、掌柜、老者、少年、仇敌、商贩等），都必须给一个有仙侠韵味的姓名（如"苏瑶""王铁山""沈青梧""顾长歌"），不要只用"老樵夫""灰衣少年""青衫道人"这类身份代称；只有真正一闪而过、再无戏份的背景路人，才可用身份代称。同一个 NPC 再次出场时，必须沿用世界快照里已登记的名字，不得改名、不得换成别的称呼。快照里的 aliasMap 是"身份→已分配姓名"的对照表：一旦某个身份已对应了姓名，后续必须改用该姓名。
-- 【复杂人性】NPC 的出身/阵营 ≠ 其行事：魔道里可以有良善之人（哪怕傲娇、面冷心热），正道里也可以有道貌岸然的伪君子。给每个有戏份的 NPC 一个【隐藏的真实性格】（如"傲娇""伪君子""面冷心热""豪爽""阴狠"）和一个【外显气质】（第一印象，如"清冷""豪爽""怯懦"，可与真实性格一致、也可完全相反——正因如此才有"看走眼"的余地）。真实性格一经设定便不再改变：NPC 的一切言行必须始终与其一致，不得漂移或前后矛盾；逐步揭示给玩家的是同一个性格，不是新性格。玩家与 NPC 互动越多、交往越深，越能看清其真实秉性。
+- 【复杂人性·性格必须多元】NPC 的出身/阵营 ≠ 其行事：魔道里可以有良善之人，正道里也可以有道貌岸然的伪君子。给每个有戏份的 NPC 设定五样东西：①外显气质（第一印象，如"清冷""热络""怯懦"）；②隐藏的真实性格，用六条轴定位——温度（热络↔疏冷）、城府（深沉↔直白）、守序（守矩↔随性）、义利（重义↔重利）、胆气（勇决↔谨慎）、情绪（外烈↔内敛）；③一句"想要什么"（desire）；④一句"碰不得什么"（taboo）；⑤一个说话习惯（speech，如"句句带刺""爱引古书""说半句留半句"）。
+  【严禁偷懒】不要默认把人物写成"清冷寡言/傲娇/面冷心热"——这几种已经用滥，最多偶尔一用。相邻登场的 NPC 至少要有两条轴一正一反（例如一个疏冷深沉、一个热络直白），不能都落在同一个角。宁可反常却自洽（账房先生是笑面虎、名门长老满口仁义却见死不救、屠夫心细如发），也不要千人一面。
+  真实性格一经设定便不再改变：一切言行必须与之一致，不得漂移或前后矛盾；逐步揭示给玩家的是同一个性格，不是新性格。desire 与 taboo 是玩家可以借力的软肋与逆鳞，决定此人为何帮你、又为何翻脸；玩家交往越深，越能看清其真实秉性。
 - 【长期关系】玩家可主动与某个 NPC 结下长期关系（结义、拜师、道侣、结仇等）；被选中的 NPC 会成为次要人物，其故事线应被持续追踪，性格随时间展现。亲密关系要带来实际好处：道侣双修、师徒指点、挚友相助会让修炼更顺（系统会据此给修炼加成），并应在叙事里自然体现——师父授法、道侣护法、挚友引荐机缘等。
 - 【势力结盟】与势力结盟后，该势力会提供庇护、资源、功法与专属任务（系统会据此给修炼加成）；结仇/敌对则会招来追杀与阻挠。要在叙事里体现结盟的价值，而不是只挂个标签。
 - 【势力生态】人间江湖、仙门魔宗林立：宗门、帮派、魔门、世家、商会、朝廷、散修联盟等势力活跃。当玩家打听、游历、遇见或剧情自然引出**新的势力**时，给势力起一个有仙侠韵味的名字，并稍作着墨（宗旨、风格、立场、所在），让它有血有肉；但不要凭空堆砌——只在剧情自然需要时引入，一句话带过的路人组织不必命名立传。已有势力再次出现时，必须沿用快照里已登记的名字与设定。
@@ -477,7 +482,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - risk：玩家处于危险/濒死/作死处境时填 "high" 或 "lethal"，否则 null。
 - combat：玩家与敌人交手时填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，不明则填 "未知"。无战斗时省略。
 - died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 true；只写"重伤""濒死""命悬一线""生死一线"不填。系统据此触发身死道消结局。
-- newNpcs/newLocations/newSkills：新登场的人/地/功法，每项 {name, desc}（NPC 可带 relation、temperament 外显气质（第一印象，如"清冷""豪爽"）、personality 真实性格（隐藏真相，如"傲娇""伪君子"，可与气质相反）；功法带 grade 品阶）。
+- newNpcs/newLocations/newSkills：新登场的人/地/功法，每项 {name, desc}（NPC 要带 temperament 外显气质、personality 真实性格（隐藏真相，可与气质相反）、trait 性格特质（从系统给的特质库里选一个标签，如"笑面虎""闷葫芦"）、desire 想要什么、taboo 碰不得什么、speech 说话习惯；功法带 grade 品阶）。
 - npcRelations：与 NPC 的长期关系变化，每项 {name, relation}（结义/拜师/道侣/结仇等）。
 - newEvents：本回合重要事件，每项 {subject, title, desc, relation}（subject 为人物/地点/势力/目标名，relation 为关系状态）。
 - itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}（获得正、消耗负）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
@@ -606,6 +611,16 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
     const worldSlice = buildSlice(player, world);
     if (worldSlice) guide += `${fast ? ' ' : '\n'}${worldSlice}`;
   }
+  // 人物差异化：把最近登场者的性格摆出来，防止千人一面
+  if (s.godMode !== true) {
+    const brief = diversityBrief(world);
+    const sug = brief.suggestions.join('、');
+    if (brief.recent.length) {
+      guide += `${fast ? ' ' : '\n'}【人物差异化】最近登场：${brief.text}。${brief.skewText}本轮若再引入新人物，别与这几位同轴同调，优先选：${sug}；每人补一句欲望、一句忌讳、一个说话习惯。`;
+    } else {
+      guide += `${fast ? ' ' : '\n'}【人物差异化】本轮新人物从这些里挑一个作底子：${sug}；不要默认清冷寡言或傲娇。每人补一句欲望、一句忌讳、一个说话习惯。`;
+    }
+  }
   if ((world.closedStreak || 0) >= 2 && s.godMode !== true) {
     guide += `${fast ? ' ' : '\n'}【闭关提醒】玩家已连续闭关 ${world.closedStreak} 回合，进境渐缓。你应在叙事里点醒这一点，并主动抛出机缘钩子（任务/奇遇/人物上门/秘境异动），引导其出游历练、寻访机缘、结交人物。`;
   }
@@ -733,7 +748,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 危险判定 risk：当叙事中玩家处于危险/濒死/作死处境（如被强敌重创、身中剧毒、跳入绝地、硬闯必死之地、自不量力挑战远超自己的存在）时，填 "high"（危险）或 "lethal"（致命/作死）；否则填 null。
 - 死亡 died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 died:true；只写"重伤""濒死""命悬一线""生死一线"时不要填。系统据此触发身死道消结局。
 - 战斗 combat：当叙事描写玩家与敌人交手/战斗时，填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，若叙事没明说敌人境界则填 "未知"。无战斗时省略。
-- 新登场的 NPC/地点/功法分别放 newNpcs/newLocations/newSkills，每项 {name, desc}（NPC 可带 relation、temperament 外显气质（第一印象，如"清冷""豪爽"）和 personality 真实性格（隐藏真相，如"傲娇""伪君子""面冷心热"），两者可一致也可相反）。功法 newSkills 要带 grade 品阶（基础/玄阶/地阶/天阶/仙阶，越高修炼越快）。若该 NPC 与其他人物有血缘关系，附 family: {of: "对方姓名或称呼", relation: "父子/兄弟/姐妹/母子等"}。
+- 新登场的 NPC/地点/功法分别放 newNpcs/newLocations/newSkills，每项 {name, desc}（NPC 要带 relation、temperament 外显气质、personality 真实性格（隐藏真相，可与气质相反）、trait 性格特质（从【人物差异化】的建议里挑一个标签）、desire 想要什么、taboo 碰不得什么、speech 说话习惯）。功法 newSkills 要带 grade 品阶（基础/玄阶/地阶/天阶/仙阶，越高修炼越快）。若该 NPC 与其他人物有血缘关系，附 family: {of: "对方姓名或称呼", relation: "父子/兄弟/姐妹/母子等"}。
 - NPC 关系 npcRelations：当玩家与某个 NPC 结下/改变长期关系时登记，每项 {name, relation}（如"结义""拜师""道侣""结仇"）。
 - 事迹 newEvents：本回合发生的重要事件，每项 {subject, title, desc, relation}。subject 为事件主体（人物/地点/势力/目标名），title 为短标题（如"初遇""结仇"），desc 为描述，relation 为该事件后你与该主体的关系状态（如"挚友""仇敌""师徒""结盟""敌对"，可省略）。同一主体的相关小事件会归成一条脉络，务必给准 subject。
 - 物品 itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}；获得填正 delta（如获得 3 枚疗伤丹 → delta:3），消耗填负 delta（如用掉 1 枚 → delta:-1）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
@@ -1126,7 +1141,7 @@ export function autoNameNpcs(world, newNpcs) {
     const raw = String(n.name).trim();
     const finalName = nameMap[raw] || raw;
     const kinNote = n.family && n.family.of ? `（${n.family.of}的${n.family.relation || '亲人'}）` : '';
-    return { name: finalName, desc: (n.desc || '') + kinNote, relation: n.relation || '', kin: n.family || null, temperament: n.temperament || '', personality: n.personality || '' };
+    return { name: finalName, desc: (n.desc || '') + kinNote, relation: n.relation || '', kin: n.family || null, temperament: n.temperament || '', personality: n.personality || '', trait: n.trait || '', desire: n.desire || '', taboo: n.taboo || '', speech: n.speech || '' };
   });
 }
 
@@ -1181,7 +1196,7 @@ export function validateStateOutput(input) {
     realmChange: enumeration(...REALM_LADDER),
     combat: record({ enemy: 'string', realm: enumeration(...REALM_LADDER, '未知') }),
     flags: 'flags',
-    newNpcs: array(record({ name: 'name', ...stringFields('desc', 'relation', 'temperament', 'personality'), family: record({ of: 'name', relation: 'string' }, ['of']) }, ['name'])),
+    newNpcs: array(record({ name: 'name', ...stringFields('desc', 'relation', 'temperament', 'personality', 'trait', 'desire', 'taboo', 'speech'), family: record({ of: 'name', relation: 'string' }, ['of']) }, ['name'])),
     newLocations: array(record({ name: 'name', desc: 'string' }, ['name'])),
     newSkills: array(record({ name: 'name', desc: 'string', grade: enumeration(...Object.keys(SKILL_GRADES)) }, ['name'])),
     newEvents: array(record({ subject: 'name', title: 'name', desc: 'string', relation: 'string' }, ['subject', 'title'])),
@@ -1491,9 +1506,17 @@ export function applyStateUpdates(player, world, input, report = {}) {
   if (Array.isArray(out.newNpcs)) {
     for (const n of autoNameNpcs(world, out.newNpcs)) {
       if (n && n.name && !world.npcs.some((t) => t.name === n.name)) {
-        world.npcs.push({ name: n.name, desc: n.desc || '', relation: n.relation || '', kin: n.kin || null, temperament: n.temperament || '', personality: n.personality || '' });
+        const npc = {
+          name: n.name, desc: n.desc || '', relation: n.relation || '', kin: n.kin || null,
+          temperament: n.temperament || '', personality: n.personality || '',
+          trait: normalizeTrait(n.trait || n.personality)?.label || '',
+          desire: n.desire || '', taboo: n.taboo || '', speech: n.speech || '',
+        };
+        world.npcs.push(npc);
+        rememberTrait(world, npc, eventTurn);
       }
     }
+    if (out.newNpcs.length) advanceTraitCursor(world, 1);
   }
 
   // 事迹：按主体记录事件（含关系标签、回合、年月）
