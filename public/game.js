@@ -28,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.6.0';
+export const GAME_VERSION = '1.7.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -404,6 +404,7 @@ export function newWorldState() {
     achievements: [],  // 已解锁成就标题列表
     turn: 0,           // 回合计数
     date: { year: 1, month: 1, day: 1 },   // 游戏内时间（年 / 月 / 日）
+    realmSince: { year: 1, month: 1, day: 1 }, // 进入当前大境界的日期（算"本境已历多少年"）
     settings: { difficulty: '普通', pace: '慢', turnLimit: 0 },  // 难度 / 节奏 / 通关回合上限(0=无限制)
     quests: [
       { id: 'main-ascend', type: 'main', title: '飞升成仙', desc: '渡劫飞升，位列仙班', objective: '修炼至渡劫期并渡过天劫', timeNode: '无期限', reward: '位列仙班，与天地同寿', status: 'active' },
@@ -719,6 +720,14 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
     } else if ((player.cultivation || 0) >= need) {
       guide += `${fast ? ' ' : '\n'}【破境参考】修为 ${player.cultivation || 0}%（本阶参考门槛 ${need}%）。${(player.cultivation || 0) >= 100 ? '已圆满，可直接破境，无需再等机缘。' : '达到门槛后理由充分即可破，圆满即可直接破。'}`;
     }
+    // 境界岁月：大境界有"最少在境年限"，不够就只能继续积累
+    const stayed = yearsInRealm(world, player);
+    if (stayed !== null) {
+      const minYears = minYearsFor(player.realm);
+      const left = Math.max(0, minYears - stayed);
+      const state = left > 0 ? `还差约 ${left.toFixed(1)} 年` : '已足';
+      guide += `${fast ? ' ' : '\n'}【境界岁月】你在${player.realm}已历约 ${stayed.toFixed(1)} 年；大境界突破最少须在境 ${minYears} 年（${state}）。不足时只能继续积累或等机缘，不得提前破境；叙事里可以用"又是数十年过去"自然推进时间。`;
+    }
   }
 
   // 消息顺序：系统规则 → 指引 → 历史 → 快照 → 输入。
@@ -798,7 +807,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 规则：
 - stateUpdates 里只填有变化的字段，delta 必须是有限、安全数字；禁止 set 直接赋值，包括言出法随模式。没有变化的字段省略。可用字段只有 hp、maxHp、lifespan、spiritStones、morality、reputation、cultivation。
 - 正邪 morality 与声望 reputation 判定：行善（救人、助人、除暴安良、护佑弱小、仗义出手）→ morality 给正 delta；作恶（偷窃、杀人、强抢、欺凌、背信弃义）→ morality 给负 delta。声望 reputation：做出广为人知的义举/壮举（救人、除害、完成大事、扬名）→ 给正 delta；恶名（作恶被传开、失信违约）→ 给负 delta。叙事明确写到这些行为时，必须给出对应 delta，不要省略。
-- 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。
+- 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。【境界岁月】大境界突破还须在本境积累足够年数（提示里会给出"还差约 N 年"），年数不足时一律填 null，改为描写继续闭关、游历或等机缘。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
 - 闭关时长：闭关修炼的时间越长，修为增长越多。请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）；cultivation delta 写"每闭关一月的基础修为增量"（正常闭关一月约 +8~15，视功法/灵地/丹药而定）。系统会按 timeMonths 放大修为，所以 delta 不要自己再乘以时长。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（用于连续闭关收益递减）。
 - 行路 travelTo：叙事写玩家抵达另一个区域/城池/坊市时，填该区域名（须与【世界切片】"可达"中的名字一致，或叙事里明确确认的既有区域）；只在确实发生跨区域移动时填，原地活动不填。系统按路程表结算耗时，不要用 timeMonths 代替。
@@ -963,6 +972,27 @@ export function linkIsKnown(link) {
   if (!link) return false;
   if (typeof link.known === 'boolean') return link.known;
   return true; // 旧数据没有明暗标记，按公开处理，避免旧档突然丢关系
+}
+
+// ---------- 境界下限年限（按原著节奏）----------
+// 原著依据：筑基→结丹"再苦修百余年"（第 176 章）；乱星海百余年才出一个有望元婴的结丹（第 459 章）；
+// 韩立到灵界"骨龄才刚二千余岁"已至合体/大乘（第 1862 章）。所以大境界推进以"年"计，
+// 下表是**最少在境年限**（下限，不是必然耗时；有机缘/丹药可贴着下限走）。
+export const REALM_MIN_YEARS = {
+  凡人: 3, 炼气: 8, 筑基: 60, 金丹: 100, 元婴: 200, 化神: 300, 炼虚: 400, 合体: 500, 大乘: 700,
+};
+export function minYearsFor(realm) {
+  return REALM_MIN_YEARS[realmMajor(realm)] ?? 0;
+}
+// 本境已历多少年；旧档没有记录时返回 null（不拦，按老节奏）
+export function yearsInRealm(world, player) {
+  const since = world && world.realmSince;
+  const date = worldGameDate(world);
+  if (!since || !date) return null;
+  const a = gameDateOrdinal(since);
+  const b = gameDateOrdinal(date);
+  if (a === null || b === null || b < a) return null;
+  return (b - a) / 360; // 每月 30 天、每年 12 月 → 360 天/年
 }
 
 // 亲密关系 → 修炼加成：按"信"和"需"算，不按标签。结仇的人不助你修行。
@@ -1282,6 +1312,7 @@ const ISSUE_MESSAGES = {
   conflicting_quest_updates: '同批任务完成与失败冲突，该任务更新全部忽略。',
   numeric_overflow: '运算结果超出安全数值范围，已忽略。',
   forbidden_flag: '代码管理的标记不允许由模型写入或撤回。',
+  breakthrough_too_soon: '大境界突破需在本境积累足够岁月，本次未生效（叙事保留，境界不变）。',
 };
 function stateIssue(issues, code, path) {
   issues.push({ code, path, message: ISSUE_MESSAGES[code] });
@@ -1590,12 +1621,24 @@ export function applyStateUpdates(player, world, input, report = {}) {
     world.flags.deathImminent = false;
   }
 
-  // 境界突破：只允许提升，且需严格来自阶梯；同时按天道规则提升基础寿元/气血上限
+  // 境界突破：只允许提升，且需严格来自阶梯；大境界还须在本境积累足够岁月
   if (typeof out.realmChange === 'string' && out.realmChange) {
     const idx = realmIndex(out.realmChange);
     if (idx > realmIndex(player.realm)) {
+      const majorStep = realmMajor(out.realmChange) !== realmMajor(player.realm);
+      const needYears = minYearsFor(player.realm);
+      const stayedYears = yearsInRealm(world, player);
+      if (majorStep && stayedYears !== null && stayedYears < needYears) {
+        reject('breakthrough_too_soon', 'realmChange');
+        delete out.realmChange; // 叙事保留，境界不动
+      }
+    } else {
+      delete out.realmChange; // 只升不降：同级或倒退一律忽略
+    }
+    if (out.realmChange) {
       player.realm = out.realmChange;
       player.cultivation = 0;
+      world.realmSince = { ...worldGameDate(world) };
       const base = REALM_BASE[realmMajor(player.realm)];
       if (base) {
         player.lifespan = Math.max(player.lifespan, base.lifespan);

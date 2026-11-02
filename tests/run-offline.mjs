@@ -21,6 +21,7 @@ const suites = [
   ['人物关系四维账本', ['tests/npc-bond.test.mjs']],
   ['人物关系网', ['tests/npc-network.test.mjs']],
   ['关系明暗（档案只写知道的）', ['tests/npc-link-secrecy.test.mjs']],
+  ['境界节奏（最少在境年限）', ['tests/realm-pace.test.mjs']],
 ];
 
 let failed = 0;

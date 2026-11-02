@@ -29,6 +29,7 @@ assert('合法 JSON 内弯引号不被破坏', validWithCurlyText && validWithCu
 // applyStateUpdates：数值夹取 + 突破 + 去重 + 目标 + 标记
 const player = newPlayerState();
 const world = newWorldState();
+world.date = { year: 5, month: 1, day: 1 }; // 跨过"凡人至少 3 年"的下限，专测突破结算
 applyStateUpdates(player, world, {
   stateUpdates: { hp: { delta: -200 }, morality: { delta: -150 }, spiritStones: { delta: 50 }, cultivation: { delta: 40 } },
   realmChange: '炼气初期',
@@ -51,12 +52,15 @@ assert('剧情标记已写入', world.flags.hasSect === true);
 // 满血突破：气血保持满血（100/100 → 200/200），不留"看似掉血"的空槽
 const fullP = newPlayerState();
 const fullW = newWorldState();
+fullW.date = { year: 5, month: 1, day: 1 };
 applyStateUpdates(fullP, fullW, { realmChange: '炼气初期' });
 assert('满血突破后仍满血（200/200）', fullP.hp === 200 && fullP.maxHp === 200);
 // 半血突破：同幅恢复（50/100 → 150/200），伤势差额保留
 const halfP = newPlayerState();
 halfP.hp = 50;
-applyStateUpdates(halfP, newWorldState(), { realmChange: '炼气初期' });
+const halfW = newWorldState();
+halfW.date = { year: 5, month: 1, day: 1 };
+applyStateUpdates(halfP, halfW, { realmChange: '炼气初期' });
 assert('半血突破同幅恢复（150/200）', halfP.hp === 150 && halfP.maxHp === 200);
 
 // 目标达成 → 标记
