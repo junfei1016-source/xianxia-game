@@ -986,8 +986,13 @@ function renderCodex() {
     const desc = x.desc ? '：' + esc(x.desc) : '';
     const stage = withRelation ? npcInsightStage(x) : '';
     const persLabel = x.trait || x.personality;
-    const detail = [x.desire ? '想要：' + x.desire : '', x.taboo ? '忌讳：' + x.taboo : '', x.speech ? '口吻：' + x.speech : '']
-      .filter(Boolean).join('；');
+    const condText = x.condition && x.condition.state ? '伤情：' + x.condition.state + '（调养中）' : '';
+    const detail = [
+      x.desire ? '想要：' + x.desire : '',
+      x.taboo ? '忌讳：' + x.taboo : '',
+      x.speech ? '口吻：' + x.speech : '',
+      condText,
+    ].filter(Boolean).join('；');
     const linkText = withRelation
       ? (world.npcLinks || [])
           .filter((l) => l && linkIsKnown(l) && (l.a === x.name || l.b === x.name))

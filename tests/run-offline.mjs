@@ -25,6 +25,7 @@ const suites = [
   ['闭关结算（按时长涨修为）', ['tests/seclusion.test.mjs']],
   ['闭关被打断', ['tests/seclusion-interrupt.test.mjs']],
   ['护法与闭关', ['tests/seclusion-guardians.test.mjs']],
+  ['护法受伤与养伤', ['tests/guardian-injury.test.mjs']],
 ];
 
 let failed = 0;

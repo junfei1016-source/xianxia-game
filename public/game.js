@@ -1032,11 +1032,18 @@ export function seclusionIntent(text) {
 
 // 护法：信得过的人（道侣/结义/师徒/挚友）会替你守着洞府；也可以点名去请。
 // 他们不改变闭关收益，只降低"被打断"的概率——关系在这里第一次直接影响玩法。
+// 挡过灾的人会负伤/心神受损，养好之前不能再护法。
 const GUARD_REL = /道侣|结义|师徒|拜师|挚友|知己|主仆/;
+export function guardianReady(npc, world) {
+  if (!npc) return false;
+  const until = npc.condition && Number.isFinite(npc.condition.untilMonth) ? npc.condition.untilMonth : 0;
+  return until <= monthOrdinal(world && world.date);
+}
 export function seclusionGuardians(world, text) {
   const t = String(text || '');
   const out = [];
   for (const npc of world.npcs || []) {
+    if (!guardianReady(npc, world)) continue; // 旧伤未愈，来不了
     const b = bondOf(npc);
     if (b.grudge >= 50) continue; // 有仇的人不会替你守门
     const intimate = b.trust >= 60 && GUARD_REL.test(String(npc.relation || ''));
@@ -1573,11 +1580,17 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const cap = p.afterYears * 12;
     if (!Number.isFinite(out.timeMonths) || out.timeMonths > cap) out.timeMonths = cap;
     const guardNote = guards.length ? `（${guards.join('、')} 替你挡下第一波）` : '';
-    interruptNote = `【闭关被打断】第 ${p.afterYears} 年，${p.by} 找上门${guardNote}，你被迫提前出关。`;
+    const injured = [];
     for (const name of guards) {
       const npc = (world.npcs || []).find((n) => n.name === name);
-      if (npc) npc.bond = { ...bondOf(npc), trust: clampBond(bondOf(npc).trust + 5) };
+      if (!npc) continue;
+      npc.bond = { ...bondOf(npc), trust: clampBond(bondOf(npc).trust + 5) };
+      // 挡灾要付代价：心魔伤神，人祸伤身；三个月内不能再来护法
+      const hurt = /心魔/.test(p.by) ? '心神受损' : '负伤';
+      npc.condition = { state: hurt, untilMonth: monthOrdinal(world.date) + 3 };
+      injured.push(`${name}${hurt}`);
     }
+    interruptNote = `【闭关被打断】第 ${p.afterYears} 年，${p.by} 找上门${guardNote}，你被迫提前出关${injured.length ? `；${injured.join('、')}，需调养三个月` : ''}。`;
     addChronicleEvent(world, player, p.by, '闭关受扰', `闭关第 ${p.afterYears} 年被打断`, '');
   }
   if (typeof out.travelTo === 'string' && out.travelTo.trim()) {
@@ -2358,6 +2371,12 @@ export function advanceTime(world, player, months = 0) {
     npc.bond.trust = clampBond((npc.bond.trust ?? 30) - 2);
     npc.bond.need = clampBond((npc.bond.need ?? 20) - 3);
     npc.lastTouchMonth = now;
+  }
+  // 护法的伤养好了：到期的"负伤/心神受损"自动清除，可以再来护法
+  for (const npc of world.npcs || []) {
+    if (npc && npc.condition && Number.isFinite(npc.condition.untilMonth) && npc.condition.untilMonth <= now) {
+      delete npc.condition;
+    }
   }
 }
 
