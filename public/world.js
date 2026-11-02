@@ -9,7 +9,7 @@
 //  规则层（game.js）只消费这里的纯函数，不在这里写剧情判定。
 // ============================================================
 
-export const WORLD_VERSION = '1.1.0';
+export const WORLD_VERSION = '1.2.0';
 
 const REGIONS = [
   {
@@ -140,14 +140,22 @@ function realmRank(realm) {
   return key === undefined ? 0 : REALM_RANK[key];
 }
 
-export function regionById(id) {
-  return REGIONS.find((r) => r.id === id) || null;
+// ---------- 动态区域（玩家在游戏里开辟/发现的新域） ----------
+// 静态九域不可改；玩家开出来的新域存在存档里（world.dynamicRegions），
+// 路程的正反向记在 world.dynamicTravel，避免污染模块级的世界表。
+function dynamicRegions(world) {
+  return world && Array.isArray(world.dynamicRegions) ? world.dynamicRegions : [];
 }
-export function regionByName(name) {
+
+export function regionById(id, world = null) {
+  return dynamicRegions(world).find((r) => r.id === id) || REGIONS.find((r) => r.id === id) || null;
+}
+export function regionByName(name, world = null) {
   if (!name) return null;
   const raw = String(name).trim();
-  return REGIONS.find((r) => r.name === raw) ||
-    REGIONS.find((r) => raw.includes(r.name) || r.name.includes(raw)) || null;
+  const all = [...dynamicRegions(world), ...REGIONS];
+  return all.find((r) => r.name === raw) ||
+    all.find((r) => raw.includes(r.name) || r.name.includes(raw)) || null;
 }
 export function factionById(id) {
   return FACTIONS.find((f) => f.id === id) || null;
@@ -158,27 +166,38 @@ export function factionsIn(regionId) {
 export function relationsOf(factionId) {
   return RELATIONS.filter((r) => r.a === factionId || r.b === factionId);
 }
-export function allRegions() { return REGIONS.slice(); }
+export function allRegions(world = null) { return [...REGIONS, ...dynamicRegions(world)]; }
 export function allFactions() { return FACTIONS.slice(); }
 export function allRelations() { return RELATIONS.slice(); }
 
 // 路程：表里有就直接用；没有就按相邻图做最短路（跨区域赶路必须中转）。
-export function travelDays(fromId, toId) {
+// world 用于查玩家开辟的动态区域与动态路程。
+export function travelDays(fromId, toId, world = null) {
   if (!fromId || !toId || fromId === toId) return 0;
-  const from = regionById(fromId);
-  const to = regionById(toId);
+  const from = regionById(fromId, world);
+  const to = regionById(toId, world);
   if (!from || !to) return null;
   const direct = from.travel_days && from.travel_days[toId];
   if (Number.isFinite(direct)) return direct;
+  const dyn = world && world.dynamicTravel && world.dynamicTravel[`${fromId}|${toId}`];
+  if (Number.isFinite(dyn)) return dyn;
+  const neighbors = (id) => {
+    const r = regionById(id, world);
+    if (!r) return [];
+    const list = Object.entries(r.travel_days || {});
+    for (const [k, d] of Object.entries((world && world.dynamicTravel) || {})) {
+      const [a, b] = k.split('|');
+      if (a === id) list.push([b, d]);
+    }
+    return list;
+  };
   // BFS 最短路
   const seen = new Set([fromId]);
   let frontier = [[fromId, 0]];
   while (frontier.length) {
     const next = [];
     for (const [id, dist] of frontier) {
-      const r = regionById(id);
-      if (!r) continue;
-      for (const [nid, d] of Object.entries(r.travel_days || {})) {
+      for (const [nid, d] of neighbors(id)) {
         if (seen.has(nid)) continue;
         if (nid === toId) return dist + d;
         seen.add(nid);
@@ -190,8 +209,9 @@ export function travelDays(fromId, toId) {
   return null; // 不连通（例如凡界到灵界）
 }
 
-export function priceMultiplier(regionId, eraType) {
-  const r = REGION_PRICE_MULT[regionId] ?? 1;
+export function priceMultiplier(regionId, eraType, world = null) {
+  const region = regionById(regionId, world);
+  const r = REGION_PRICE_MULT[regionId] ?? (region && region.price) ?? 1;
   const e = ERA_PRICE_MULT[eraType] ?? 1;
   return Math.round(r * e * 100) / 100;
 }
@@ -223,10 +243,10 @@ export function pickStarter(rand = Math.random) {
 // 幂等迁移：旧档没有 geo 时补一个，不改变任何已有数值，读档不判罚。
 export function ensureWorldGeo(world, opts = {}) {
   if (!world || typeof world !== 'object') return null;
-  const existing = world.geo && regionById(world.geo.regionId);
+  const existing = world.geo && regionById(world.geo.regionId, world);
   if (existing) return world.geo;
-  const fromName = regionByName(opts.preferredName) ||
-    regionByName(world.startingLocation && world.startingLocation.name);
+  const fromName = regionByName(opts.preferredName, world) ||
+    regionByName(world.startingLocation && world.startingLocation.name, world);
   const regionId = (fromName && fromName.id) || opts.fallbackId || pickStarter();
   world.geo = { regionId, sinceTurn: world.turn || 0, migrated: !!world.turn };
   return world.geo;
@@ -234,18 +254,18 @@ export function ensureWorldGeo(world, opts = {}) {
 
 export function currentRegion(world) {
   const geo = world && world.geo;
-  return (geo && regionById(geo.regionId)) || null;
+  return (geo && regionById(geo.regionId, world)) || null;
 }
 
 // 移动：返回 { from, to, days }；不连通或原地返回 null。
 export function moveToRegion(world, targetId) {
-  const to = regionById(targetId);
+  const to = regionById(targetId, world);
   if (!to) return null;
   const geo = ensureWorldGeo(world);
   if (!geo || geo.regionId === targetId) return null;
-  const days = travelDays(geo.regionId, targetId);
+  const days = travelDays(geo.regionId, targetId, world);
   if (days === null) return null; // 跨界面，只能飞升
-  const from = regionById(geo.regionId);
+  const from = regionById(geo.regionId, world);
   world.geo = { ...geo, regionId: targetId, sinceTurn: world.turn || 0 };
   return { from, to, days };
 }
@@ -286,7 +306,7 @@ const FACTION_TIER_LABEL = { 1: '一级', 2: '二级', 3: '三级', 4: '四级',
 export function buildSlice(player, world) {
   const geo = world && world.geo;
   if (!geo) return '';
-  const region = regionById(geo.regionId);
+  const region = regionById(geo.regionId, world);
   if (!region) return '';
   const allHere = factionsIn(region.id);
   const knownNames = new Set((world.factions || []).map((f) => f.name));
@@ -306,9 +326,9 @@ export function buildSlice(player, world) {
     .map((f) => `${f.name}：${SECRETS[f.id].truth}`)
     .join('');
   const roads = Object.entries(region.travel_days || {})
-    .map(([id, d]) => { const r = regionById(id); return r ? `${r.name}${d}日` : ''; })
+    .map(([id, d]) => { const r = regionById(id, world); return r ? `${r.name}${d}日` : ''; })
     .filter(Boolean).join('、');
-  const mult = priceMultiplier(region.id, world.eraType);
+  const mult = priceMultiplier(region.id, world.eraType, world);
   const topRarity = region.products[region.products.length - 1];
   const overLevel = realmRank(player && player.realm) - region.danger * 2 >= 2;
 
@@ -363,4 +383,115 @@ export function openingRelations(regionId) {
     type: r.type,
     note: r.note,
   }));
+}
+
+// ============================================================
+//  区域生成标准（玩家开辟新域时，模型只能"提议"，入图与否由这里判定）
+//
+//  标准来自九域的取值规律：灵气 1~6、危险 1~5、产出随灵气与危险抬升、
+//  每块地都要有路（1~60 日）、描述不超 90 字。九域的表本身不动，
+//  玩家开出来的地存进存档（world.dynamicRegions），可跨回合、可读档。
+// ============================================================
+export const REGION_STANDARD = {
+  nameLen: [2, 8],
+  terrainLen: [2, 8],
+  qi: [1, 6],
+  danger: [1, 5],
+  travel: [1, 60],
+  descLen: 90,
+  maxDynamic: 24,
+  rarities: ['凡品', '灵品', '玄品', '仙品', '神品'],
+};
+
+const RARITY_RANK = { 凡品: 0, 灵品: 1, 玄品: 2, 仙品: 3, 神品: 4 };
+
+export function validateRegionProposal(proposal, world = null) {
+  const issues = [];
+  const p = proposal && typeof proposal === 'object' ? proposal : {};
+  const name = String(p.name || '').trim();
+  const terrain = String(p.terrain || '').trim();
+  const qi = Number(p.qi);
+  const danger = Number(p.danger);
+  const products = Array.isArray(p.products)
+    ? p.products.filter((x) => REGION_STANDARD.rarities.includes(x))
+    : [];
+  const desc = String(p.desc || '').trim();
+  const links = Array.isArray(p.links)
+    ? p.links
+    : (p.travel_days && typeof p.travel_days === 'object'
+      ? Object.entries(p.travel_days).map(([to, days]) => ({ to, days }))
+      : []);
+
+  if (name.length < 2 || name.length > 8) issues.push('区域名须 2~8 字');
+  else if (regionByName(name, world)) issues.push(`「${name}」已存在`);
+  if (terrain.length < 2 || terrain.length > 8) issues.push('地形须 2~8 字');
+  if (!Number.isInteger(qi) || qi < 1 || qi > 6) issues.push('灵气须为 1~6 的整数');
+  if (!Number.isInteger(danger) || danger < 1 || danger > 5) issues.push('危险须为 1~5 的整数');
+  if (!products.length) issues.push('至少指定一种产出');
+  if (desc.length > REGION_STANDARD.descLen) issues.push(`描述不得超过 ${REGION_STANDARD.descLen} 字`);
+
+  // 产出与地气匹配：上限 = floor((灵气+危险)/2)；仙品要 4 级以上，神品要灵气 ≥5
+  if (products.length && Number.isInteger(qi) && Number.isInteger(danger)) {
+    const maxRank = Math.min(4, Math.floor((qi + danger) / 2));
+    const top = Math.max(...products.map((x) => RARITY_RANK[x]));
+    if (top > maxRank) {
+      issues.push(`灵气${qi}·危险${danger} 的地界出不了${REGION_STANDARD.rarities[top]}（上限${REGION_STANDARD.rarities[maxRank]}）`);
+    }
+    if (top >= 3 && qi < 4 && danger < 4) issues.push('仙品以上须灵气≥4 或危险≥4');
+    if (top >= 4 && qi < 5) issues.push('神品须灵气≥5');
+  }
+
+  const validLinks = [];
+  for (const l of links) {
+    const to = regionByName(String((l && l.to) || '').trim(), world);
+    const days = Number(l && l.days);
+    if (!to) { issues.push(`路通往未知区域「${(l && l.to) || ''}」`); continue; }
+    if (!Number.isInteger(days) || days < REGION_STANDARD.travel[0] || days > REGION_STANDARD.travel[1]) {
+      issues.push(`通往${to.name}的路程须为 1~60 的整数日`);
+      continue;
+    }
+    validLinks.push({ to: to.id, days });
+  }
+  if (!validLinks.length) issues.push('新区域至少要有一条通往外界的路');
+
+  const dynamicCount = world && Array.isArray(world.dynamicRegions) ? world.dynamicRegions.length : 0;
+  if (dynamicCount >= REGION_STANDARD.maxDynamic) issues.push(`一局最多开辟 ${REGION_STANDARD.maxDynamic} 个新区域`);
+
+  if (issues.length) return { ok: false, issues, region: null };
+
+  const rawId = String(p.id || `dyn_${name}`).toLowerCase().replace(/[^a-z0-9_]/g, '');
+  const id = rawId || `dyn_${dynamicCount + 1}`;
+  const price = Math.round((1 + (qi - 2) * 0.1 + (danger - 2) * 0.1) * 100) / 100;
+  const region = {
+    id,
+    name,
+    terrain,
+    qi,
+    danger,
+    products: products.slice().sort((a, b) => RARITY_RANK[a] - RARITY_RANK[b]),
+    travel_days: Object.fromEntries(validLinks.map((l) => [l.to, l.days])),
+    desc,
+    price: Math.max(0.7, Math.min(3, price)),
+    dynamic: true,
+  };
+  return { ok: true, region, links: validLinks, issues: [] };
+}
+
+// 入图：写进存档，并把来回两程都记上（路程必须对称）
+export function addRegion(world, proposal) {
+  if (!world) return { ok: false, issues: ['没有存档'], region: null };
+  const res = validateRegionProposal(proposal, world);
+  if (!res.ok) return res;
+  if (!Array.isArray(world.dynamicRegions)) world.dynamicRegions = [];
+  if (!world.dynamicTravel || typeof world.dynamicTravel !== 'object') world.dynamicTravel = {};
+  world.dynamicRegions.push(res.region);
+  for (const l of res.links) {
+    world.dynamicTravel[`${res.region.id}|${l.to}`] = l.days;
+    world.dynamicTravel[`${l.to}|${res.region.id}`] = l.days;
+  }
+  const roads = res.links.map((l) => {
+    const r = regionById(l.to, world);
+    return `${r ? r.name : l.to} ${l.days}日`;
+  }).join('、');
+  return { ...res, note: `【新域】「${res.region.name}」已入图：灵气${res.region.qi}·危险${res.region.danger}，往来 ${roads}。` };
 }

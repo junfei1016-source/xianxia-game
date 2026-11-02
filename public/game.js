@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn, priceMultiplier } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn, priceMultiplier, addRegion } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 
@@ -29,7 +29,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.17.0';
+export const GAME_VERSION = '1.18.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -507,6 +507,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 开炉 brewPills：玩家实际开炉炼丹时登记，每项 {recipe: 丹方名, fire: "真火"/"地火"}。成丹与否由系统按丹方、火源与材料掷定；**材料由系统从背包扣除**，缺料会拒绝并说明，你不要自己扣材料或在 stateUpdates 里写丹药产出。
 - 买卖 trades：玩家在坊市/黑市买卖**丹药或丹方**时登记，每项 {action: "buy"/"sell", item: 丹名或丹方名, qty: 数量}。价格由系统按区域物价系数与声望议价结算（黑市更贵、高声望让利），钱货由系统扣付；**你不要在 stateUpdates 里重复扣灵石**，灵石不够或货不够时系统会拒绝并给出理由。非丹药/丹方的杂物不要走这里，按叙事处理。注意：**禁制类丹药与丹方只有黑市（赤沙荒原这类无法之地）敢卖**，正经坊市会拒绝；在黑市买禁制之物会掉正邪。
 - 拍卖 auctionBids：玩家在**落霞坊的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
+- 新区域 newRegion：玩家**真正开辟/发现**一片新地界时才登记，每项 {name: 区域名（2~8字）, terrain: 地形（2~8字）, qi: 灵气 1~6, danger: 危险 1~5, products: 产出品阶数组, links: [{to: 已存在的区域名, days: 单程日数 1~60}], desc: 简述（≤90字）}。**新域必须至少有一条通往外界的路**，产出受地气限制：上限 = floor((灵气+危险)/2)，仙品要灵气或危险≥4，神品要灵气≥5。系统会按《区域生成标准》逐条校验，不合格的会被拒绝并说明原因——不要为了给玩家方便就报高灵气或高产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
@@ -867,6 +868,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 开炉 brewPills：玩家实际开炉炼丹时登记，每项 {recipe: 丹方名, fire: "真火"/"地火"}。成丹与否由系统按丹方、火源与材料掷定；**材料由系统从背包扣除**，缺料会拒绝并说明，你不要自己扣材料或在 stateUpdates 里写丹药产出。
 - 买卖 trades：玩家在坊市/黑市买卖**丹药或丹方**时登记，每项 {action: "buy"/"sell", item: 丹名或丹方名, qty: 数量}。价格由系统按区域物价系数与声望议价结算（黑市更贵、高声望让利），钱货由系统扣付；**你不要在 stateUpdates 里重复扣灵石**，灵石不够或货不够时系统会拒绝并给出理由。非丹药/丹方的杂物不要走这里，按叙事处理。注意：**禁制类丹药与丹方只有黑市（赤沙荒原这类无法之地）敢卖**，正经坊市会拒绝；在黑市买禁制之物会掉正邪。
 - 拍卖 auctionBids：玩家在**落霞坊的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
+- 新区域 newRegion：玩家**真正开辟/发现**一片新地界时才登记，每项 {name: 区域名（2~8字）, terrain: 地形（2~8字）, qi: 灵气 1~6, danger: 危险 1~5, products: 产出品阶数组, links: [{to: 已存在的区域名, days: 单程日数 1~60}], desc: 简述（≤90字）}。**新域必须至少有一条通往外界的路**，产出受地气限制：上限 = floor((灵气+危险)/2)，仙品要灵气或危险≥4，神品要灵气≥5。系统会按《区域生成标准》逐条校验，不合格的会被拒绝并说明原因——不要为了给玩家方便就报高灵气或高产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
 - 重要剧情标记放 flags；目标变化放 goal。
 - 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。物品与撤回退款的 delta 必须明确给出有限数字，缺失不默认增加一件。普通 flags 仅用布尔值；deathImminent/qiDeviation 只允许 false 清除，不允许 true 伪造；deathByRisk/eraExpired/goalCompleted 由代码管理，不可写入或撤回。
@@ -1646,6 +1648,11 @@ export function validateStateOutput(input) {
     brewPills: array(record({ recipe: 'string', pill: 'string', fire: enumeration('真火', '地火') }, ['recipe'])),
     trades: array(record({ action: enumeration('buy', 'sell'), item: 'name', qty: 'number' }, ['action', 'item'])),
     auctionBids: array(record({ item: 'name', bid: 'number' }, ['item', 'bid'])),
+    newRegion: record({
+      name: 'name', terrain: 'string', qi: 'number', danger: 'number', desc: 'string',
+      products: array(enumeration(...Object.keys(RARITIES))),
+      links: array(record({ to: 'name', days: 'number' }, ['to', 'days'])),
+    }, ['name', 'qi', 'danger']),
     hooks: array(record({ theme: 'string', title: 'string', declined: 'boolean' }, ['theme'])),
     itemChanges: array(item), equipChanges: array(record({ name: 'name', equipped: 'boolean' }, ['name', 'equipped'])),
     goal: record(stringFields('desc', 'type', 'target', 'status')),
@@ -1775,6 +1782,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   let revealNote = '';
   let interruptNote = '';
   let treatNote = '';
+  let regionNote = '';
   // 闭关被打断：把时长压到"出岔子那一年"，收益随之减少
   if (world.pendingInterrupt && out.flags && out.flags.closedDoor) {
     const p = world.pendingInterrupt;
@@ -1810,6 +1818,16 @@ export function applyStateUpdates(player, world, input, report = {}) {
       }
     }
     delete out.travelTo; // 只用于结算，不落到前端状态
+  }
+  // 新区域：模型只能提议，能否入图按《区域生成标准》判定（不合格按条拒绝，叙事保留）
+  if (out.newRegion && typeof out.newRegion === 'object') {
+    const res = addRegion(world, out.newRegion);
+    if (res.ok) {
+      regionNote = res.note;
+    } else {
+      issues.push({ code: 'region_invalid', path: 'newRegion', message: `新域不合标准：${(res.issues || []).join('；')}` });
+    }
+    delete out.newRegion;
   }
   if (out.combat && !out.combat.enemy && !out.combat.realm) delete out.combat;
   migrateQuestDeadlines(world);
@@ -2522,8 +2540,8 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const drain = activeHas(world.inventory, 'lifesteal') && hpLost > 0 ? ` · 噬血返还 ${Math.round(hpLost * 0.3)}` : '';
     return `【战斗】${enemyLabel}${realmNote} · 你${wound}（气血-${hpLost}${drain}）`;
   }
-  if (interruptNote) return [interruptNote, treatNote, ...pillNotes].filter(Boolean).join('\n');
-  if (treatNote || pillNotes.length) return [treatNote, ...pillNotes].filter(Boolean).join('\n');
+  if (interruptNote) return [interruptNote, treatNote, regionNote, ...pillNotes].filter(Boolean).join('\n');
+  if (treatNote || regionNote || pillNotes.length) return [treatNote, regionNote, ...pillNotes].filter(Boolean).join('\n');
   if (revealNote) return revealNote;
   if (travelNote) return travelNote;
   return null;
