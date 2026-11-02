@@ -684,7 +684,14 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
   // 闭关被打断：引擎已掷出结果，把"第几年、谁上门"交给 GM
   if (world.pendingInterrupt && s.godMode !== true) {
     const p = world.pendingInterrupt;
-    guide += `${fast ? ' ' : '\n'}【闭关将被打断】这次闭关不安稳：第 ${p.afterYears} 年，${p.by} 找上门（或心魔发作）。本回合叙事必须写"被迫提前出关"——先写闭关所得，再写打断那一刻的冲突与代价；timeMonths 只填这 ${p.afterYears} 年（约 ${p.afterYears * 12} 月），不得写完整闭关，也不得把修为写成圆满。`;
+    const guards = world.guardiansThisTurn || [];
+    const guardText = guards.length ? `；${guards.join('、')} 在外面替你挡下第一波` : '';
+    guide += `${fast ? ' ' : '\n'}【闭关将被打断】这次闭关不安稳：第 ${p.afterYears} 年，${p.by} 找上门（或心魔发作）${guardText}。本回合叙事必须写"被迫提前出关"——先写闭关所得，再写打断那一刻的冲突与代价；timeMonths 只填这 ${p.afterYears} 年（约 ${p.afterYears * 12} 月），不得写完整闭关，也不得把修为写成圆满。`;
+  }
+  // 护法在侧（没被打断时也要在叙事里露一面）
+  if (s.godMode !== true && !world.pendingInterrupt && (world.guardiansThisTurn || []).length) {
+    const names = world.guardiansThisTurn.join('、');
+    guide += `${fast ? ' ' : '\n'}【护法在侧】${names} 在洞府外为你护法，本回合闭关更稳。叙事里要写他们守候的样子（轮值、布阵、驱赶闲人），出关时也提一句他们的辛劳。`;
   }
   if ((world.farmStreak || 0) >= 2 && s.godMode !== true) {
     guide += `${fast ? ' ' : '\n'}【重复刷取】玩家已连续 ${world.farmStreak} 次重复类似行动，收益正在递减（系统已自动折算）。你在叙事中要中立地演绎边际递减——灵草采尽、猎物警觉、商路被占、人心厌倦、同行抢先等；不要嘲讽玩家，也不必一刀切归零，让世界自然回应。`;
@@ -1023,6 +1030,22 @@ export function seclusionIntent(text) {
   return SECLUDE_RE.test(String(text || ''));
 }
 
+// 护法：信得过的人（道侣/结义/师徒/挚友）会替你守着洞府；也可以点名去请。
+// 他们不改变闭关收益，只降低"被打断"的概率——关系在这里第一次直接影响玩法。
+const GUARD_REL = /道侣|结义|师徒|拜师|挚友|知己|主仆/;
+export function seclusionGuardians(world, text) {
+  const t = String(text || '');
+  const out = [];
+  for (const npc of world.npcs || []) {
+    const b = bondOf(npc);
+    if (b.grudge >= 50) continue; // 有仇的人不会替你守门
+    const intimate = b.trust >= 60 && GUARD_REL.test(String(npc.relation || ''));
+    const invited = t.includes(npc.name) && b.trust >= 50;
+    if (intimate || invited) out.push(npc);
+  }
+  return out.slice(0, 2); // 最多两位，再多也不叠加
+}
+
 export function rollSeclusionInterrupt(world, player, text, rand = Math.random) {
   if (!world || !seclusionIntent(text)) return null;
   const s = world.settings || {};
@@ -1037,7 +1060,12 @@ export function rollSeclusionInterrupt(world, player, text, rand = Math.random) 
   chance += Math.min(0.15, foes.length * 0.05);
   chance += Math.min(0.09, angry.length * 0.03);
   if (world.flags && world.flags.qiDeviation) chance += 0.1;
-  chance = Math.min(0.6, chance);
+
+  // 护法：每人把概率压到 55%，最多两位
+  const guardians = seclusionGuardians(world, text);
+  world.guardiansThisTurn = guardians.map((n) => n.name);
+  if (guardians.length) chance *= Math.pow(0.55, guardians.length);
+  chance = Math.max(0.02, Math.min(0.6, chance));
 
   if (rand() >= chance) {
     world.pendingInterrupt = null;
@@ -1541,9 +1569,15 @@ export function applyStateUpdates(player, world, input, report = {}) {
   // 闭关被打断：把时长压到"出岔子那一年"，收益随之减少
   if (world.pendingInterrupt && out.flags && out.flags.closedDoor) {
     const p = world.pendingInterrupt;
+    const guards = world.guardiansThisTurn || [];
     const cap = p.afterYears * 12;
     if (!Number.isFinite(out.timeMonths) || out.timeMonths > cap) out.timeMonths = cap;
-    interruptNote = `【闭关被打断】第 ${p.afterYears} 年，${p.by} 找上门，你被迫提前出关。`;
+    const guardNote = guards.length ? `（${guards.join('、')} 替你挡下第一波）` : '';
+    interruptNote = `【闭关被打断】第 ${p.afterYears} 年，${p.by} 找上门${guardNote}，你被迫提前出关。`;
+    for (const name of guards) {
+      const npc = (world.npcs || []).find((n) => n.name === name);
+      if (npc) npc.bond = { ...bondOf(npc), trust: clampBond(bondOf(npc).trust + 5) };
+    }
     addChronicleEvent(world, player, p.by, '闭关受扰', `闭关第 ${p.afterYears} 年被打断`, '');
   }
   if (typeof out.travelTo === 'string' && out.travelTo.trim()) {
@@ -2166,6 +2200,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   // 结算（半透明展示）：逆天改命 > 战斗 > 闭关被打断 > 关系浮出 > 行路
   recordValidation(world, out, issues);
   world.pendingInterrupt = null; // 只用一回合，避免泄漏到下一回合
+  world.guardiansThisTurn = null;
   if (reviveNote) return reviveNote;
   if (combat && hpLost > 0) {
     const enemyLabel = combat.enemy || '强敌';
