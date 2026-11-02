@@ -40,6 +40,7 @@ import {
   realmIndex,
   realmMajor,
   relationCultMult,
+  bondOf,
   factionCultMult,
   breakthroughRate,
   attemptBreakthrough,
@@ -974,7 +975,12 @@ function openCodexItem(itemName) {
 
 function renderCodex() {
   const itemLine = (x, withRelation) => {
-    const rel = withRelation && x.relation ? `<span class="codex-rel">（${esc(x.relation)}）</span>` : '';
+    const rel = withRelation && x.relation
+      ? (() => {
+          const b = bondOf(x);
+          return `<span class="codex-rel" data-tip="关系：${esc(x.relation)}；恩${b.debt} · 怨${b.grudge} · 信${b.trust} · 需${b.need}">（${esc(x.relation)}）</span>`;
+        })()
+      : '';
     const desc = x.desc ? '：' + esc(x.desc) : '';
     const stage = withRelation ? npcInsightStage(x) : '';
     const persLabel = x.trait || x.personality;

@@ -272,11 +272,11 @@ assert('文字装备生效', eqWorld.inventory.find((t) => t.name === '玄铁甲
 applyStateUpdates(newPlayerState(), eqWorld, { equipChanges: [{ name: '金丝软甲', equipped: true }] });
 assert('装备同类互斥(自动卸下旧装备)', eqWorld.inventory.find((t) => t.name === '玄铁甲').equipped === false && eqWorld.inventory.find((t) => t.name === '金丝软甲').equipped === true);
 
-// 关系/势力修炼加成
-assert('道侣关系加成(1.25x)', relationCultMult([{ relation: '结为道侣' }]) === 1.25);
-assert('师徒关系加成(1.2x)', relationCultMult([{ relation: '拜师' }]) === 1.2);
-assert('挚友关系加成(1.1x)', relationCultMult([{ relation: '结为挚友' }]) === 1.1);
-assert('关系取最高一档', relationCultMult([{ relation: '结为挚友' }, { relation: '结为道侣' }]) === 1.25);
+// 关系/势力修炼加成（v1.4.0 起按四维账本的"信/需"算，标签只决定种子）
+assert('道侣关系加成(约1.235x)', Math.abs(relationCultMult([{ relation: '结为道侣' }]) - 1.235) < 1e-9);
+assert('师徒关系加成(约1.175x)', Math.abs(relationCultMult([{ relation: '拜师' }]) - 1.16) < 1e-9);
+assert('挚友关系加成(约1.175x)', Math.abs(relationCultMult([{ relation: '结为挚友' }]) - 1.175) < 1e-9);
+assert('关系加成可叠加但有上限', relationCultMult([{ relation: '结为挚友' }, { relation: '结为道侣' }]) === 1.3);
 assert('无关系无加成', relationCultMult([]) === 1.0 && relationCultMult([{ relation: '结仇' }]) === 1.0);
 assert('势力结盟加成', factionCultMult([{ relation: '结盟' }]) === 1.05 && factionCultMult([{ relation: '结盟' }, { relation: '结盟' }, { relation: '结盟' }]) === 1.15);
 assert('势力结盟上限15%', factionCultMult([{ relation: '结盟' }, { relation: '结盟' }, { relation: '结盟' }, { relation: '结盟' }, { relation: '结盟' }]) === 1.15);
@@ -286,7 +286,7 @@ const relWorld = newWorldState();
 relWorld.npcs = [{ name: '苏瑶', relation: '结为道侣' }];
 const relPlayer = newPlayerState();
 applyStateUpdates(relPlayer, relWorld, { stateUpdates: { cultivation: { delta: 10 } } });
-assert('道侣让修炼+25%', relPlayer.cultivation === 13);
+assert('道侣让修炼+23.5%', relPlayer.cultivation === 12);
 
 // 战斗数值（轻量版）：境界差决定伤害/生还
 assert('境界差计算', combatDiff('炼气初期', '筑基初期') === 3 && combatDiff('金丹初期', '炼气初期') === -6 && combatDiff('炼气初期', '未知') === 0);

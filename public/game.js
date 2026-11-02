@@ -28,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.3.2';
+export const GAME_VERSION = '1.4.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -483,7 +483,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - combat：玩家与敌人交手时填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，不明则填 "未知"。无战斗时省略。
 - died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 true；只写"重伤""濒死""命悬一线""生死一线"不填。系统据此触发身死道消结局。
 - newNpcs/newLocations/newSkills：新登场的人/地/功法，每项 {name, desc}（NPC 要带 temperament 外显气质、personality 真实性格（隐藏真相，可与气质相反）、trait 性格特质（从系统给的特质库里选一个标签，如"笑面虎""闷葫芦"）、desire 想要什么、taboo 碰不得什么、speech 说话习惯；功法带 grade 品阶）。
-- npcRelations：与 NPC 的长期关系变化，每项 {name, relation}（结义/拜师/道侣/结仇等）。
+- npcRelations：与 NPC 的长期关系变化，每项 {name, relation?, debt?, grudge?, trust?, need?}。relation 是标签（结义/拜师/道侣/结仇等）；debt/grudge/trust/need 是四个 0~100 的**增减量**（恩/怨/信/需）：救命赠礼→debt 正，伤害背叛→grudge 正/trust 负，托付守诺→trust 正，长期需要→need 正。给了数值就按数值结算，只给标签则按标签给一份种子。标签只是快照，别只换标签不结账。
 - newEvents：本回合重要事件，每项 {subject, title, desc, relation}（subject 为人物/地点/势力/目标名，relation 为关系状态）。
 - itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}（获得正、消耗负）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
@@ -790,7 +790,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 死亡 died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 died:true；只写"重伤""濒死""命悬一线""生死一线"时不要填。系统据此触发身死道消结局。
 - 战斗 combat：当叙事描写玩家与敌人交手/战斗时，填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，若叙事没明说敌人境界则填 "未知"。无战斗时省略。
 - 新登场的 NPC/地点/功法分别放 newNpcs/newLocations/newSkills，每项 {name, desc}（NPC 要带 relation、temperament 外显气质、personality 真实性格（隐藏真相，可与气质相反）、trait 性格特质（从【人物差异化】的建议里挑一个标签）、desire 想要什么、taboo 碰不得什么、speech 说话习惯）。功法 newSkills 要带 grade 品阶（基础/玄阶/地阶/天阶/仙阶，越高修炼越快）。若该 NPC 与其他人物有血缘关系，附 family: {of: "对方姓名或称呼", relation: "父子/兄弟/姐妹/母子等"}。
-- NPC 关系 npcRelations：当玩家与某个 NPC 结下/改变长期关系时登记，每项 {name, relation}（如"结义""拜师""道侣""结仇"）。
+- NPC 关系 npcRelations：当玩家与某个 NPC 的长期关系结下或改变时登记，每项 {name, relation, debt?, grudge?, trust?, need?}。relation 是标签（如"结义""拜师""道侣""结仇"）；四个数值是 0~100 的**增减量**——救人赠礼记 debt 正（他欠你），受恩记 debt 负（你欠他），伤害/背信记 grudge 正、trust 负，守诺/共患难记 trust 正，长期彼此需要记 need 正。有数值按数值结算；只给标签时系统按标签给种子。结为道侣这类大事件应同时给 trust+need 的正量。
 - 事迹 newEvents：本回合发生的重要事件，每项 {subject, title, desc, relation}。subject 为事件主体（人物/地点/势力/目标名），title 为短标题（如"初遇""结仇"），desc 为描述，relation 为该事件后你与该主体的关系状态（如"挚友""仇敌""师徒""结盟""敌对"，可省略）。同一主体的相关小事件会归成一条脉络，务必给准 subject。
 - 物品 itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}；获得填正 delta（如获得 3 枚疗伤丹 → delta:3），消耗填负 delta（如用掉 1 枚 → delta:-1）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
@@ -890,16 +890,63 @@ export function fortuneMultiplier(morality, intensity) {
   return Math.max(0.7, Math.min(1.3, 1 + i * 0.5 * (m / 100)));
 }
 
-// 亲密关系 → 修炼加成（取最高一档：道侣/师徒/挚友）
-export function relationCultMult(npcs) {
-  let mult = 1.0;
-  for (const n of npcs || []) {
-    const r = String(n.relation || '');
-    if (/道侣|双修|结为夫妻/.test(r)) mult = Math.max(mult, 1.25);
-    else if (/师徒|拜师|师父|师傅|师尊/.test(r)) mult = Math.max(mult, 1.2);
-    else if (/挚友|结义|知己|至交|手足/.test(r)) mult = Math.max(mult, 1.1);
+// ---------- 人物关系：四维账本（恩 / 怨 / 信 / 需）+ 标签快照 ----------
+// 标签（道侣/师徒/结义/结仇）只是某一刻的快照；真正驱动判定的是四个 0~100 的存量。
+export const BOND_DIMS = ['debt', 'grudge', 'trust', 'need'];
+const BOND_BASE = { debt: 0, grudge: 0, trust: 30, need: 20 };
+// 旧档迁移与"只给标签没给数值"时的种子值
+const BOND_SEED = [
+  ['道侣', { trust: 80, need: 75, debt: 40 }],
+  ['夫妻', { trust: 80, need: 75, debt: 40 }],
+  ['双修', { trust: 70, need: 70, debt: 30 }],
+  ['师徒', { trust: 65, need: 45, debt: 65 }],
+  ['拜师', { trust: 60, need: 40, debt: 60 }],
+  ['结义', { trust: 75, need: 35, debt: 30 }],
+  ['挚友', { trust: 70, need: 35, debt: 0 }],
+  ['知己', { trust: 65, need: 30, debt: 0 }],
+  ['恩人', { trust: 50, need: 10, debt: 70 }],
+  ['主仆', { trust: 40, need: 60, debt: 0 }],
+  ['效忠', { trust: 50, need: 60, debt: 60 }],
+  ['结仇', { trust: 5, need: 0, grudge: 75 }],
+  ['仇敌', { trust: 0, need: 0, grudge: 85 }],
+  ['敌对', { trust: 5, need: 0, grudge: 70 }],
+];
+export function clampBond(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
+}
+export function bondSeedFor(label) {
+  const text = String(label || '');
+  for (const [key, seed] of BOND_SEED) {
+    if (text.includes(key)) return seed;
   }
-  return mult;
+  return null;
+}
+// 读账本：有就用；旧档没有就从标签推一个（纯读，不回写，读档不判罚）
+export function bondOf(npc) {
+  if (!npc) return { ...BOND_BASE };
+  if (npc.bond && typeof npc.bond === 'object') {
+    const b = {};
+    for (const k of BOND_DIMS) b[k] = clampBond(npc.bond[k]);
+    return b;
+  }
+  return { ...BOND_BASE, ...(bondSeedFor(npc.relation) || {}) };
+}
+export function monthOrdinal(date) {
+  const y = date && Number.isFinite(date.year) ? date.year : 1;
+  const m = date && Number.isFinite(date.month) ? date.month : 1;
+  return y * 12 + m;
+}
+
+// 亲密关系 → 修炼加成：按"信"和"需"算，不按标签。结仇的人不助你修行。
+export function relationCultMult(npcs) {
+  let bonus = 0;
+  for (const n of npcs || []) {
+    const b = bondOf(n);
+    if (b.grudge >= 60) continue; // 有仇的人，再亲的名分也不会助你修炼
+    bonus += b.trust * 0.002 + b.need * 0.001;
+  }
+  return 1 + Math.min(0.3, bonus);
 }
 
 // 结盟势力 → 修炼加成（每个 +5%，上限 +15%）
@@ -1244,7 +1291,7 @@ export function validateStateOutput(input) {
     newEvents: array(record({ subject: 'name', title: 'name', desc: 'string', relation: 'string' }, ['subject', 'title'])),
     factionRelations: array(record({ ...factionFields, relation: enumeration('结盟', '敌对', '中立') }, ['name'])),
     newFactions: array(record(factionFields, ['name'])),
-    npcRelations: array(record({ name: 'name', relation: 'string' }, ['name', 'relation'])),
+    npcRelations: array(record({ name: 'name', relation: 'string', debt: 'number', grudge: 'number', trust: 'number', need: 'number' }, ['name'])),
     personalityReveals: array(record({ name: 'name' }, ['name'])),
     reveals: array(record({ faction: 'name' }, ['faction'])),
     hooks: array(record({ theme: 'string', title: 'string', declined: 'boolean' }, ['theme'])),
@@ -1555,6 +1602,8 @@ export function applyStateUpdates(player, world, input, report = {}) {
           temperament: n.temperament || '', personality: n.personality || '',
           trait: normalizeTrait(n.trait || n.personality)?.label || '',
           desire: n.desire || '', taboo: n.taboo || '', speech: n.speech || '',
+          bond: { ...BOND_BASE, ...(bondSeedFor(n.relation) || {}) },
+          lastTouchMonth: monthOrdinal(world.date),
         };
         world.npcs.push(npc);
         rememberTrait(world, npc, eventTurn);
@@ -1660,16 +1709,31 @@ export function applyStateUpdates(player, world, input, report = {}) {
     }
   }
 
-  // NPC 长期关系（主动结交）
+  // NPC 长期关系（主动结交）：标签是快照，四维账本才是真的
   if (Array.isArray(out.npcRelations)) {
     for (const nr of out.npcRelations) {
       if (!nr || !nr.name) continue;
       const resolved = resolveStateAlias(world, nr.name);
       const npc = world.npcs.find((x) => x.name === resolved);
-      if (npc && nr.relation) {
+      if (!npc) continue;
+      if (nr.relation) {
         npc.relation = nr.relation;
         npc.personalityRevealed = true; // 深交后逐渐看清秉性
       }
+      const bond = bondOf(npc);
+      let touched = false;
+      for (const k of BOND_DIMS) {
+        if (typeof nr[k] === 'number' && Number.isFinite(nr[k])) {
+          bond[k] = clampBond(bond[k] + nr[k]);
+          touched = true;
+        }
+      }
+      if (!touched && nr.relation) {
+        // 只给了新标签、没给数值：按标签给一份种子，让"结为道侣"立刻有实质
+        Object.assign(bond, bondSeedFor(nr.relation) || {});
+      }
+      npc.bond = bond;
+      npc.lastTouchMonth = monthOrdinal(world.date);
     }
   }
 
@@ -2030,6 +2094,16 @@ export function advanceTime(world, player, months = 0) {
   const god = world && world.settings && world.settings.godMode === true;
   const evergreen = activeHas(world.inventory, 'evergreen') ? 0.5 : 1; // 长青词条：寿元消耗减半
   if (!god) player.lifespan = Math.max(0, player.lifespan - (months / 12) * evergreen); // 言出法随：寿元不流逝
+  // 关系折旧：三个月没往来，信与需都会淡一点（原著的"淡化"才是常态）
+  const now = monthOrdinal(world.date);
+  for (const npc of world.npcs || []) {
+    if (!npc || !npc.bond) continue;
+    const last = Number.isFinite(npc.lastTouchMonth) ? npc.lastTouchMonth : now;
+    if (now - last < 3) continue;
+    npc.bond.trust = clampBond((npc.bond.trust ?? 30) - 2);
+    npc.bond.need = clampBond((npc.bond.need ?? 20) - 3);
+    npc.lastTouchMonth = now;
+  }
 }
 
 // ---------- 大势时间轴（有期限的大势必须按时演变，不能无限拖延）----------
