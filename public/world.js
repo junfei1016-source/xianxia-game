@@ -208,13 +208,18 @@ export function moveToRegion(world, targetId) {
 
 const FACTION_TIER_LABEL = { 1: '一级', 2: '二级', 3: '三级', 4: '四级', 5: '五级' };
 
-// 每回合的切片：只给当前区域、当地势力、路口和物价系数。约 200~260 字。
+// 每回合的切片：只给当前区域、**已打过交道的**当地势力、路口和物价系数。约 200~260 字。
 export function buildSlice(player, world) {
   const geo = world && world.geo;
   if (!geo) return '';
   const region = regionById(geo.regionId);
   if (!region) return '';
-  const here = factionsIn(region.id);
+  const allHere = factionsIn(region.id);
+  const knownNames = new Set((world.factions || []).map((f) => f.name));
+  let here = allHere.filter((f) => knownNames.has(f.name));
+  // 旧档或空名单：只给当家人，别把整张名单摊开
+  if (!here.length) here = allHere.filter((f) => f.tier <= 2).slice(0, 2);
+  const unknownCount = Math.max(0, allHere.length - here.length);
   const facText = here.map((f) => `${f.name}(${FACTION_TIER_LABEL[f.tier]}·${f.alignment}${f.hidden ? '·表里不一' : ''})`).join('、');
   const roads = Object.entries(region.travel_days || {})
     .map(([id, d]) => { const r = regionById(id); return r ? `${r.name}${d}日` : ''; })
@@ -225,7 +230,8 @@ export function buildSlice(player, world) {
 
   const lines = [
     `【世界切片】区域：${region.name}（${region.desc}）灵气${region.qi}·危险${region.danger}。`,
-    facText ? `本地势力：${facText}。` : '',
+    facText ? `已知势力：${facText}。` : '',
+    unknownCount > 0 ? `此外还有 ${unknownCount} 家势力未与之打过交道。` : '',
     roads ? `可达：${roads}。` : '',
     `物价×${mult.toFixed(2)}；本地产出上限${topRarity}。`,
     overLevel ? '此地已压不住你，寻常收获寥寥；要机缘须往更险处。' : '',
@@ -234,9 +240,22 @@ export function buildSlice(player, world) {
   return lines.join('\n');
 }
 
-// 开局把本地势力写进 world.factions（沿用现有势力对象形状，避免界面另改）。
-export function startingFactions(regionId) {
-  return factionsIn(regionId).map((f) => ({
+// 开局只登场一部分本地势力：当家人必然在场（你落脚就绕不开），其余随机抽 1~2 家。
+// 没登场的势力仍然存在于世界表里，等剧情走到时再露面——不需要一次把名单摊开。
+export function startingFactions(regionId, rand = Math.random) {
+  const local = factionsIn(regionId);
+  if (!local.length) return [];
+  const home = local.filter((f) => f.tier <= 2).sort((a, b) => a.tier - b.tier)[0] || local[0];
+  const rest = local.filter((f) => f.id !== home.id);
+  // 洗牌后取 1~2 家：全上会把世界写成名录，全不上又显得空
+  const pool = rest.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const extra = 1 + Math.floor(rand() * Math.min(2, pool.length));
+  const picked = [home, ...pool.slice(0, Math.min(extra, pool.length))];
+  return picked.map((f) => ({
     name: f.name,
     desc: f.desc,
     type: f.type,

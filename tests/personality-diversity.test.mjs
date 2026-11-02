@@ -16,7 +16,6 @@ import {
   rememberTrait,
   recentTraitEntries,
   nextTraitSuggestions,
-  advanceTraitCursor,
   diversityBrief,
 } from '../public/personality.js';
 
@@ -76,25 +75,36 @@ test('六轴统计能识别"最近三个人都偏冷"', () => {
   assert.equal(warmth.label, '疏冷');
 });
 
-test('轮换建议：纯函数、跳过最近用过的、三个各不相同', () => {
+test('建议是随机抽的：不写存档、跳过最近用过的、三个各不相同', () => {
   const { world } = setup();
-  const first = nextTraitSuggestions(world, 3).map((t) => t.label);
+  const before = JSON.stringify(world);
+  const first = nextTraitSuggestions(world, 3, () => 0.3).map((t) => t.label);
   assert.equal(new Set(first).size, 3);
-  assert.equal(world.traitCursor, 0, '拼提示词不应推进游标');
+  assert.equal(JSON.stringify(world), before, '拼提示词不应改存档');
 
   world.traitLog = [{ name: '甲', label: first[0], axes: null }];
-  const second = nextTraitSuggestions(world, 3).map((t) => t.label);
+  const second = nextTraitSuggestions(world, 3, () => 0.7).map((t) => t.label);
   assert.ok(!second.includes(first[0]), '用过的特质不应再被推荐');
 });
 
-test('游标推进后，长期会把四十个特质轮完', () => {
+test('随机登场，不追求穷尽：多次抽取覆盖多数人，但不去排队轮完', () => {
   const { world } = setup();
   const seen = new Set();
-  for (let i = 0; i < TRAITS.length * 2; i++) {
-    for (const t of nextTraitSuggestions(world, 1)) seen.add(t.label);
-    advanceTraitCursor(world);
+  for (let i = 0; i < 40; i++) {
+    for (const t of nextTraitSuggestions(world, 1, () => (i % 7) / 7)) seen.add(t.label);
   }
-  assert.equal(seen.size, TRAITS.length);
+  assert.ok(seen.size >= 5, '随机抽取应能见到多种人');
+  assert.ok(seen.size < TRAITS.length, '随机抽样不该保证轮完整个库');
+});
+
+test('随机性可复现：同一个 rand 序列给同一份建议', () => {
+  const a = setup().world;
+  const b = setup().world;
+  const seq = () => 0.618;
+  assert.deepEqual(
+    nextTraitSuggestions(a, 3, seq).map((t) => t.label),
+    nextTraitSuggestions(b, 3, seq).map((t) => t.label),
+  );
 });
 
 test('差异化提示：带最近的人名、偏斜警告与建议', () => {
@@ -123,7 +133,6 @@ test('新 NPC 会落库：特质、欲望、忌讳、口吻都存下来', () => 
   assert.equal(npc.desire, '吞并对门铺子');
   assert.ok(npc.taboo.includes('丈夫'));
   assert.equal(world.traitLog.at(-1).label, '笑面虎');
-  assert.equal(world.traitCursor, 1, '有新人物时游标应推进');
 });
 
 test('模型给的特质不在库里：保留原描述，不写坏性格字段', () => {
@@ -152,8 +161,12 @@ test('回合提示词带【人物差异化】，给的是具体特质而不是�
   const text = messages.map((m) => m.content).join('\n');
   assert.ok(text.includes('【人物差异化】'));
   assert.ok(text.includes('不要默认清冷寡言或傲娇'));
-  const sug = nextTraitSuggestions(world, 3).map((t) => t.label);
-  assert.ok(sug.some((s) => text.includes(s)), '提示词里应出现轮换建议');
+  // 从"优先选：A、B、C"里取出建议，必须都是库里的合法标签
+  const m = text.match(/优先选：([^；。\n]+)/) || text.match(/作底子：([^；。\n]+)/);
+  assert.ok(m, '提示词里应给出具体建议');
+  const labels = m[1].split('、').map((s) => s.trim());
+  assert.equal(labels.length, 3);
+  for (const label of labels) assert.ok(traitByLabel(label), `${label} 不是合法特质`);
 });
 
 test('有过登场者后，提示词点名最近的人并警告偏斜', () => {

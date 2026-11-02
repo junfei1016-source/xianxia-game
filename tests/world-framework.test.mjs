@@ -173,21 +173,38 @@ test('回合提示词带世界切片，且切片在快照里也是同一份', ()
   assert.ok(fast.map((m) => m.content).join('\n').includes('travelTo'));
 });
 
-test('本地势力名单来自世界表，不依赖模型现编', () => {
-  const { world } = setup('qingwu');
-  world.factions = startingFactions('qingwu');
-  assert.ok(world.factions.length >= 2);
-  for (const f of world.factions) {
-    assert.ok(f.name && f.alignment && f.tier);
-    assert.equal(f.seeded, true);
+test('开局只登场一部分势力：当家人必在，其余随机，不把名单摊开', () => {
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) {
+    const list = startingFactions('qingwu', () => (i % 10) / 10);
+    assert.ok(list.length >= 2 && list.length <= 3, '开局只该有 2~3 家');
+    assert.ok(list.some((f) => f.name === '拾云门'), '当家人（二级）必须在场');
+    for (const f of list) {
+      assert.ok(f.name && f.alignment && f.tier);
+      assert.equal(f.seeded, true);
+      seen.add(f.name);
+    }
   }
-  assert.ok(world.factions.some((f) => f.hidden), '青芜国应保留暗桩设定');
+  const localTotal = factionsIn('qingwu').length;
+  assert.ok(seen.size > 3, '多次开局应见到不同组合');
+  assert.ok(seen.size <= localTotal);
 });
 
-test('开局区域与旧档迁移不产生重复势力', () => {
-  const { world } = setup('dayan');
-  const once = startingFactions('dayan').length;
-  const again = new Set(startingFactions('dayan').map((f) => f.name)).size;
-  assert.equal(once, again);
-  assert.ok(world.geo.regionId === 'dayan');
+test('开局抽取不会把自己抽重，也不会漏掉当家人', () => {
+  const list = startingFactions('dayan', () => 0.42);
+  const names = list.map((f) => f.name);
+  assert.equal(new Set(names).size, names.length, '同一份名单不能重名');
+  assert.ok(names.includes('镇魔司'), '一级当家人必须在场');
+});
+
+test('切片只列已打过交道的势力，其余只报个数', () => {
+  const { player, world } = setup('qingwu');
+  world.factions = startingFactions('qingwu', () => 0);
+  const slice = buildSlice(player, world);
+  assert.ok(slice.includes('已知势力'));
+  for (const f of world.factions) assert.ok(slice.includes(f.name));
+  assert.ok(slice.includes('未与之打过交道'), '没登场的势力不应逐一点名');
+  // 不在已知名单里的势力，切片里不应出现其名字
+  const unknown = factionsIn('qingwu').filter((f) => !world.factions.some((k) => k.name === f.name));
+  for (const f of unknown) assert.ok(!slice.includes(f.name), `${f.name} 不该出现在切片里`);
 });

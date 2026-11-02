@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 //  personality.js —— 人物性格库
 //
 //  问题：之前性格是自由文本，提示词里只举了"傲娇/伪君子/面冷心热/豪爽/阴狠"五个例子，
@@ -181,24 +181,17 @@ export function recentTraitEntries(world, n = 6) {
   return log.slice(-n);
 }
 
-// 轮换建议：从最近没用过的特质里，按游标取 k 个。游标只读，推进交给 applyStateUpdates，
-// 保证同一回合多次拼提示词得到同一份建议（不影响前缀缓存）。
-export function nextTraitSuggestions(world, k = 3) {
+// 建议特质：从最近没用过的人里随机抽 k 个。随机登场即可，不追求把 44 个轮完——
+// 没遇到的人就不该出现。rand 可注入，测试用。
+export function nextTraitSuggestions(world, k = 3, rand = Math.random) {
   const used = new Set(recentTraitEntries(world, 8).map((e) => e.label));
-  const cursor = (world && Number.isInteger(world.traitCursor)) ? world.traitCursor : 0;
+  const pool = TRAITS.filter((t) => !used.has(t.label));
+  const bag = (pool.length ? pool : TRAITS.slice()).slice();
   const out = [];
-  for (let i = 0; i < TRAITS.length && out.length < k; i++) {
-    const t = TRAITS[(cursor + i) % TRAITS.length];
-    if (!used.has(t.label)) out.push(t);
+  while (out.length < k && bag.length) {
+    out.push(bag.splice(Math.floor(rand() * bag.length), 1)[0]);
   }
   return out;
-}
-
-export function advanceTraitCursor(world, step = 1) {
-  if (!world) return 0;
-  const cursor = Number.isInteger(world.traitCursor) ? world.traitCursor : 0;
-  world.traitCursor = (cursor + step) % TRAITS.length;
-  return world.traitCursor;
 }
 
 // 每回合的差异化提示：最近登场者 + 偏得太多的一条轴 + 三个轮换建议。

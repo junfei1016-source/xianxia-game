@@ -6,7 +6,7 @@
 // ============================================================
 
 import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName } from './world.js';
-import { diversityBrief, normalizeTrait, rememberTrait, advanceTraitCursor } from './personality.js';
+import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
@@ -28,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.3.0';
+export const GAME_VERSION = '1.3.1';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -390,7 +390,6 @@ export function newWorldState() {
     npcs: [],        // [{name, desc, relation?}]
     aliasMap: {},    // 身份代称 → 已分配姓名（自动命名对照表）
     traitLog: [],    // 最近登场人物的性格记录（供"性格要多元"的反重复统计）
-    traitCursor: 0,  // 性格轮换游标（只读推进，保证长期轮完整个特质库）
     locations: [],   // [{name, desc}]
     items: [],       // 图鉴：获得过的物品（永久记录，[{name, desc}]）
     inventory: [],   // 背包：当前持有（带数量，[{name, desc, qty}]）
@@ -1516,7 +1515,6 @@ export function applyStateUpdates(player, world, input, report = {}) {
         rememberTrait(world, npc, eventTurn);
       }
     }
-    if (out.newNpcs.length) advanceTraitCursor(world, 1);
   }
 
   // 事迹：按主体记录事件（含关系标签、回合、年月）
