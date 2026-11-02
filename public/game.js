@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
@@ -28,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.3.1';
+export const GAME_VERSION = '1.3.2';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -390,6 +390,7 @@ export function newWorldState() {
     npcs: [],        // [{name, desc, relation?}]
     aliasMap: {},    // 身份代称 → 已分配姓名（自动命名对照表）
     traitLog: [],    // 最近登场人物的性格记录（供"性格要多元"的反重复统计）
+    knownSecrets: {}, // 势力底细的查明进度：{ 势力id: 'hinted' | 'revealed' }，没查过就没有键
     locations: [],   // [{name, desc}]
     items: [],       // 图鉴：获得过的物品（永久记录，[{name, desc}]）
     inventory: [],   // 背包：当前持有（带数量，[{name, desc, qty}]）
@@ -471,7 +472,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "combat": null,
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
-  "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [],
+  "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [], "reveals": [],
   "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "gainType": "neutral", "eraChange": null
 }
 字段说明：
@@ -493,10 +494,11 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 效果诉求 effectRequests：玩家明确表达"希望某种法宝/丹药/功法有某种效果"时登记，每项 {name, desc}；name 为物品或效果名，desc 为玩家想要的效果。只记录诉求，绝不虚构实现——注册表之外的诉求，GM 应按规则发最接近的注册表词条或标注叙事词条。没有诉求则留空数组。
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
+- 势力底细 reveals：玩家查到某势力隐情的**实证**（不是起疑、不是听说）时登记，每项 {faction: 势力名}；系统据此把该势力标为"表里不一"并记入事迹。没有则留空数组。
 - 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
 
-【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。`;
+【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals/reveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。`;
 
 const WORLD_GEN_RULES = `你是"武侠·修仙"开放世界的创世者。现在要为一位新玩家生成一个独一无二的开局世界种子。
 
@@ -559,6 +561,32 @@ function pickFactions(world) {
   };
   return fs.slice().sort((a, b) => score(b) - score(a)).slice(0, 12);
 }
+// 调查动作：玩家开始起疑时，才把"底细"的线索交给 GM；没起疑的势力一个字都不提。
+const INVESTIGATE_RE = /打听|查探|探查|追查|追问|求证|暗访|走访|盘问|试探|跟踪|盯梢|查一查|查查|调查|问起|翻查|摸清|摸一摸|套话|留意/;
+
+export function noteInvestigation(world, text) {
+  if (!world || !text) return [];
+  const t = String(text);
+  if (!INVESTIGATE_RE.test(t)) return [];
+  const region = world.geo ? regionById(world.geo.regionId) : null;
+  const pool = [
+    ...(world.factions || []).map((f) => factionByName(f.name)).filter(Boolean),
+    ...(region ? secretFactionsIn(region.id) : []),
+  ];
+  const hits = [];
+  const seen = new Set();
+  for (const f of pool) {
+    if (seen.has(f.id) || !t.includes(f.name)) continue;
+    seen.add(f.id);
+    if (!secretOf(f.id)) continue;
+    if (!world.knownSecrets) world.knownSecrets = {};
+    if (world.knownSecrets[f.id]) continue; // hinted / revealed 都不重复记
+    world.knownSecrets[f.id] = 'hinted';
+    hits.push(f);
+  }
+  return hits;
+}
+
 export function buildWorldContext(world, player = null) {
   const mem = typeof world.memory === 'string' ? world.memory : '';
   const geoRegion = world.geo ? regionById(world.geo.regionId) : null;
@@ -618,6 +646,19 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
       guide += `${fast ? ' ' : '\n'}【人物差异化】最近登场：${brief.text}。${brief.skewText}本轮若再引入新人物，别与这几位同轴同调，优先选：${sug}；每人补一句欲望、一句忌讳、一个说话习惯。`;
     } else {
       guide += `${fast ? ' ' : '\n'}【人物差异化】本轮新人物从这些里挑一个作底子：${sug}；不要默认清冷寡言或傲娇。每人补一句欲望、一句忌讳、一个说话习惯。`;
+    }
+  }
+  // 暗线：玩家起疑后才把真相与线索交给 GM；没查过的势力一个字都不提
+  if (s.godMode !== true) {
+    const hinted = Object.keys(world.knownSecrets || {})
+      .filter((id) => world.knownSecrets[id] === 'hinted' && secretOf(id));
+    if (hinted.length) {
+      const lines = hinted.map((id) => {
+        const f = factionById(id);
+        const sec = secretOf(id);
+        return `- ${f ? f.name : id}：真相是「${sec.truth}」；可给的线索：${sec.trail}`;
+      });
+      guide += `${fast ? ' ' : '\n'}【暗线·玩家正在查】玩家已起疑。本轮只能给互相矛盾的细节与可查的线索，不得直接点破，也不得让玩家凭空确认；玩家查到实证后，用 reveals 登记 [{faction:"势力名"}]，系统才会在切片与图鉴里标记。\n${lines.join('\n')}`;
     }
   }
   if ((world.closedStreak || 0) >= 2 && s.godMode !== true) {
@@ -729,6 +770,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "effectRequests": [],
   "retract": [],
   "personalityReveals": [],
+  "reveals": [],
   "flags": {},
   "goal": null,
   "timeMonths": 1,
@@ -761,11 +803,12 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 效果诉求 effectRequests：玩家明确表达"希望某种法宝/丹药/功法有某种效果"时登记，每项 {name, desc}；name 为物品或效果名，desc 为玩家想要的效果。只记录诉求，绝不虚构实现——注册表之外的诉求，GM 应按规则发最接近的注册表词条或标注叙事词条。没有诉求则留空数组。
 - 剧情撤回 retract：叙事中出现 GM 承认失言/记错/收回（如"是我失言了""并非你的经历""并无此事""是场误会"）时登记，每项 {subjects: [人物/势力名], titles: [事迹标题], flags: [标记名], items: [{name, delta}]}。系统据此删除对应的事迹、剧情标记与关系档案，并按 items 补回此前误耗的物品（delta 为正数，如误扣了 1 枚就填 1）。没有撤回则留空数组。
 - 识破真性 personalityReveals：叙事中玩家看透/识破某 NPC 的真实性格时登记，每项 {name: 人物名}。系统据此在图鉴揭示其真实性格。没有则留空数组。
+- 势力底细 reveals：玩家查到某势力隐情的**实证**（不是起疑、不是听说）时登记，每项 {faction: 势力名}；系统据此把该势力标为"表里不一"并记入事迹。没有则留空数组。
 - 重要剧情标记放 flags；目标变化放 goal。
 - 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。物品与撤回退款的 delta 必须明确给出有限数字，缺失不默认增加一件。普通 flags 仅用布尔值；deathImminent/qiDeviation 只允许 false 清除，不允许 true 伪造；deathByRisk/eraExpired/goalCompleted 由代码管理，不可写入或撤回。
 - 收益来源 gainType：当本回合玩家获得灵石等收益时，标注来源——"righteous"（正道途径：任务、交易、赠礼、帮人所得）或 "plunder"（掠夺途径：抢劫、偷窃、杀人越货、勒索）；无收益或无法判断填 "neutral"。
 - 大势演变 eraChange：若本回合发生改变天下大势的重大事件（如正魔大战结束、乱世平定），填 {type: "盛世/乱世/末法时代/秘境将启/正魔大战", text: "新大势一句话"}；否则填 null。若叙事中给出了新大势的期限（如"秘境将于三月后开启"），附带 months: 3（期限月数）；无期限则省略 months。
-- 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。本回合无任何变化时输出 {}。`;
+- 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals/reveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。本回合无任何变化时输出 {}。`;
 
 export function buildExtractMessages(narrative, player, world) {
   const god = world && world.settings && world.settings.godMode === true;
@@ -1203,6 +1246,7 @@ export function validateStateOutput(input) {
     newFactions: array(record(factionFields, ['name'])),
     npcRelations: array(record({ name: 'name', relation: 'string' }, ['name', 'relation'])),
     personalityReveals: array(record({ name: 'name' }, ['name'])),
+    reveals: array(record({ faction: 'name' }, ['faction'])),
     hooks: array(record({ theme: 'string', title: 'string', declined: 'boolean' }, ['theme'])),
     itemChanges: array(item), equipChanges: array(record({ name: 'name', equipped: 'boolean' }, ['name', 'equipped'])),
     goal: record(stringFields('desc', 'type', 'target', 'status')),
@@ -1329,6 +1373,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   }
   // 行路：抵达另一区域时，耗时由路程表决定，覆盖模型自报的 timeMonths（防止虚构距离）
   let travelNote = '';
+  let revealNote = '';
   if (typeof out.travelTo === 'string' && out.travelTo.trim()) {
     const target = regionByName(out.travelTo);
     const cur = world.geo ? regionById(world.geo.regionId) : null;
@@ -1638,6 +1683,30 @@ export function applyStateUpdates(player, world, input, report = {}) {
     }
   }
 
+  // 势力底细：玩家查到实证后才标记；只"起疑"不算，防止 GM 一次性说破
+  if (Array.isArray(out.reveals)) {
+    for (const rv of out.reveals) {
+      if (!rv || !rv.faction) continue;
+      const f = factionByName(rv.faction);
+      if (!f || !secretOf(f.id)) continue;
+      if (!world.knownSecrets) world.knownSecrets = {};
+      // 必须先起疑（hinted），GM 才可能拿到真相；没查过就直接报"查明"视为无效
+      if (world.knownSecrets[f.id] !== 'hinted') continue;
+      world.knownSecrets[f.id] = 'revealed';
+      revealNote = `【查出底细】${f.name}：${secretOf(f.id).truth}`;
+      addChronicleEvent(world, player, f.name, '查出底细', secretOf(f.id).truth, '');
+      // 查明了底细，这家势力也就进了玩家的名单
+      if (!(world.factions || []).some((x) => x.name === f.name)) {
+        if (!Array.isArray(world.factions)) world.factions = [];
+        world.factions.push({
+          id: f.id,
+          name: f.name, desc: f.desc, type: f.type, alignment: f.alignment,
+          tier: f.tier, seat: f.seat, seeded: true, relation: '中立', notedTurn: eventTurn,
+        });
+      }
+    }
+  }
+
   // ---------- 关系档案：长期感情线/人物脉络的一等公民存储（防 GM 遗忘）----------
   maintainRelationDossier(world, out, eventTurn);
 
@@ -1822,6 +1891,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const drain = activeHas(world.inventory, 'lifesteal') && hpLost > 0 ? ` · 噬血返还 ${Math.round(hpLost * 0.3)}` : '';
     return `【战斗】${enemyLabel}${realmNote} · 你${wound}（气血-${hpLost}${drain}）`;
   }
+  if (revealNote) return revealNote;
   if (travelNote) return travelNote;
   return null;
 }

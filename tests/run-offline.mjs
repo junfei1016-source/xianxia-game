@@ -16,6 +16,7 @@ const suites = [
   ['状态输入与任务终态', ['tests/state-input-guards.test.mjs']],
   ['世界骨架（区域/路程/物价/切片）', ['tests/world-framework.test.mjs']],
   ['人物性格多元（特质库/反重复）', ['tests/personality-diversity.test.mjs']],
+  ['势力底细（调查后揭露）', ['tests/hidden-secrets.test.mjs']],
 ];
 
 let failed = 0;

@@ -206,6 +206,36 @@ export function moveToRegion(world, targetId) {
   return { from, to, days };
 }
 
+// 势力的"底细"：引擎知道真相，但不写进开局切片。玩家起疑（调查类动作）才把线索交给 GM，
+// 查到实证（提取器 reveals）之后才在图鉴与切片里标记。真相与线索分离，避免一开口就剧透。
+const SECRETS = {
+  bailu: {
+    of: 'xuedao',
+    truth: '白鹿观明面中立，实为血刀寨暗桩，替其销赃、递消息。',
+    trail: '夜里常有戴斗笠的人从后门进出；账上多出一笔来路不明的灵石，记作"香火"。',
+  },
+  qingwu_court: {
+    of: 'shiyun',
+    truth: '青芜王朝年年向拾云门纳贡，换修士护国；国库那笔银子记作"河工"。',
+    trail: '每年秋后国库少一笔银子，账册写作"河工"，可河工这些年一次没修过。',
+  },
+};
+
+export function secretOf(factionId) {
+  return SECRETS[factionId] || null;
+}
+
+export function factionByName(name) {
+  if (!name) return null;
+  const raw = String(name).trim();
+  return FACTIONS.find((f) => f.name === raw) || null;
+}
+
+// 当前区域里"有底细"的势力（不论玩家是否见过）。
+export function secretFactionsIn(regionId) {
+  return FACTIONS.filter((f) => f.seat === regionId && SECRETS[f.id]);
+}
+
 const FACTION_TIER_LABEL = { 1: '一级', 2: '二级', 3: '三级', 4: '四级', 5: '五级' };
 
 // 每回合的切片：只给当前区域、**已打过交道的**当地势力、路口和物价系数。约 200~260 字。
@@ -220,7 +250,17 @@ export function buildSlice(player, world) {
   // 旧档或空名单：只给当家人，别把整张名单摊开
   if (!here.length) here = allHere.filter((f) => f.tier <= 2).slice(0, 2);
   const unknownCount = Math.max(0, allHere.length - here.length);
-  const facText = here.map((f) => `${f.name}(${FACTION_TIER_LABEL[f.tier]}·${f.alignment}${f.hidden ? '·表里不一' : ''})`).join('、');
+  const secrets = (world && world.knownSecrets) || {};
+  const facText = here.map((f) => {
+    const state = secrets[f.id];
+    const tag = f.hidden && state === 'revealed' ? '·表里不一' : (state === 'hinted' ? '·有蹊跷' : '');
+    return `${f.name}(${FACTION_TIER_LABEL[f.tier]}·${f.alignment}${tag})`;
+  }).join('、');
+  // 已查明的底细才写进切片，供 GM 引用；没查明的连字样都不出现
+  const revealedText = here
+    .filter((f) => secrets[f.id] === 'revealed' && SECRETS[f.id])
+    .map((f) => `${f.name}：${SECRETS[f.id].truth}`)
+    .join('');
   const roads = Object.entries(region.travel_days || {})
     .map(([id, d]) => { const r = regionById(id); return r ? `${r.name}${d}日` : ''; })
     .filter(Boolean).join('、');
@@ -234,6 +274,7 @@ export function buildSlice(player, world) {
     unknownCount > 0 ? `此外还有 ${unknownCount} 家势力未与之打过交道。` : '',
     roads ? `可达：${roads}。` : '',
     `物价×${mult.toFixed(2)}；本地产出上限${topRarity}。`,
+    revealedText ? `【已查明】${revealedText}` : '',
     overLevel ? '此地已压不住你，寻常收获寥寥；要机缘须往更险处。' : '',
     '【铁律】路程按上表计日、物价按系数、势力强弱按等级；不得自行编造距离、价格或势力地位。',
   ].filter(Boolean);
@@ -256,6 +297,7 @@ export function startingFactions(regionId, rand = Math.random) {
   const extra = 1 + Math.floor(rand() * Math.min(2, pool.length));
   const picked = [home, ...pool.slice(0, Math.min(extra, pool.length))];
   return picked.map((f) => ({
+    id: f.id,
     name: f.name,
     desc: f.desc,
     type: f.type,

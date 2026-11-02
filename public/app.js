@@ -49,6 +49,7 @@ import {
   achievementDesc,
   parseLLMJSON,
   updateFarmLog,
+  noteInvestigation,
   farmMult,
   affixLabels,
   equipItem,
@@ -1003,7 +1004,11 @@ function renderCodex() {
     const cls = r === '结盟' ? 'rel-ally' : (r === '敌对' ? 'rel-hostile' : 'rel-neutral');
     return `<span class="faction-rel ${cls}" title="与你的关系">${esc(r)}</span>`;
   };
-  const factionLine = (f) => `<div class="codex-item"><b class="codex-name">${esc(f.name)}</b>${alignTag(f)}${typeTag(f)}${factionTag(f.relation)}${f.desc ? '：' + esc(f.desc) : ''}</div>`;
+  const factionLine = (f) => {
+    const known = !!(world.knownSecrets && f.id && world.knownSecrets[f.id] === 'revealed');
+    const badge = known ? `<span class="faction-type" title="你已查明这家势力的底细">底细已明</span>` : '';
+    return `<div class="codex-item"><b class="codex-name">${esc(f.name)}</b>${alignTag(f)}${typeTag(f)}${factionTag(f.relation)}${badge}${f.desc ? '：' + esc(f.desc) : ''}</div>`;
+  };
   // 势力分层：重要的常驻展示；只是耳闻/久未提及的收进折叠组，避免图鉴冗杂
   const IMPORTANT_TURNS = 15;
   const factionIsImportant = (f) => {
@@ -1341,6 +1346,7 @@ async function sendTurn(forcedText) {
   const farmBefore = lastTurnState.world;
   const turnBefore = captureTurnState(); // 本回合变化提示用
   const farmStreak = updateFarmLog(world, text); // 记录本回合行动（重复刷取软墙）
+  noteInvestigation(world, text); // 玩家开始查某家势力时，才把底细的线索交给 GM
   appendChat('player', text);
 
   busy = true;
