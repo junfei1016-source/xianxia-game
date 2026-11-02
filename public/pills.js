@@ -154,12 +154,12 @@ export function recipeOf(pill) {
   const pieces = pill.tier === '残缺' ? 3 : 0;
   return {
     pill: pill.id,
-    name: `${pill.name}丹方`,
+    name: `${pill.name}方`,
     tier: pill.tier,
     pieces,
     chance: Math.round(pill.chance * t.chanceFactor * 100) / 100,
     materials: pill.materials || [],
-    price: Math.round((pill.price || 0) * t.priceFactor * 0.3),
+    price: Math.round((pill.price || 0) * t.priceFactor * 3),
   };
 }
 
