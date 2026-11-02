@@ -28,7 +28,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.4.0';
+export const GAME_VERSION = '1.5.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -390,6 +390,7 @@ export function newWorldState() {
     npcs: [],        // [{name, desc, relation?}]
     aliasMap: {},    // 身份代称 → 已分配姓名（自动命名对照表）
     traitLog: [],    // 最近登场人物的性格记录（供"性格要多元"的反重复统计）
+    npcLinks: [],    // 人物之间的关系网：[{a,b,type,note,turn}]，NPC 彼此也有师承/亲眷/恩怨
     knownSecrets: {}, // 势力底细的查明进度：{ 势力id: 'hinted' | 'revealed' }，没查过就没有键
     locations: [],   // [{name, desc}]
     items: [],       // 图鉴：获得过的物品（永久记录，[{name, desc}]）
@@ -482,7 +483,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - risk：玩家处于危险/濒死/作死处境时填 "high" 或 "lethal"，否则 null。
 - combat：玩家与敌人交手时填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，不明则填 "未知"。无战斗时省略。
 - died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 true；只写"重伤""濒死""命悬一线""生死一线"不填。系统据此触发身死道消结局。
-- newNpcs/newLocations/newSkills：新登场的人/地/功法，每项 {name, desc}（NPC 要带 temperament 外显气质、personality 真实性格（隐藏真相，可与气质相反）、trait 性格特质（从系统给的特质库里选一个标签，如"笑面虎""闷葫芦"）、desire 想要什么、taboo 碰不得什么、speech 说话习惯；功法带 grade 品阶）。
+- newNpcs/newLocations/newSkills：新登场的人/地/功法，每项 {name, desc}（NPC 要带 temperament 外显气质、personality 真实性格（隐藏真相，可与气质相反）、trait 性格特质（从系统给的特质库里选一个标签，如"笑面虎""闷葫芦"）、desire 想要什么、taboo 碰不得什么、speech 说话习惯；links 是与其他人物的关系 [{to: 对方姓名, type: 师承/同门/亲属/道侣/结义/主仆/仇怨/交易, note: 一句说明}]；功法带 grade 品阶）。
 - npcRelations：与 NPC 的长期关系变化，每项 {name, relation?, debt?, grudge?, trust?, need?}。relation 是标签（结义/拜师/道侣/结仇等）；debt/grudge/trust/need 是四个 0~100 的**增减量**（恩/怨/信/需）：救命赠礼→debt 正，伤害背叛→grudge 正/trust 负，托付守诺→trust 正，长期需要→need 正。给了数值就按数值结算，只给标签则按标签给一份种子。标签只是快照，别只换标签不结账。
 - newEvents：本回合重要事件，每项 {subject, title, desc, relation}（subject 为人物/地点/势力/目标名，relation 为关系状态）。
 - itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}（获得正、消耗负）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
@@ -598,6 +599,7 @@ export function buildWorldContext(world, player = null) {
     worldSlice: player ? buildSlice(player, world) : undefined,
     startingLocation: world.startingLocation,
     factions: pickFactions(world),
+    npcLinks: (world.npcLinks || []).slice(-12),
     npcs: world.npcs,
     locations: world.locations,
     inventory: world.inventory,
@@ -646,6 +648,14 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
       guide += `${fast ? ' ' : '\n'}【人物差异化】最近登场：${brief.text}。${brief.skewText}本轮若再引入新人物，别与这几位同轴同调，优先选：${sug}；每人补一句欲望、一句忌讳、一个说话习惯。`;
     } else {
       guide += `${fast ? ' ' : '\n'}【人物差异化】本轮新人物从这些里挑一个作底子：${sug}；不要默认清冷寡言或傲娇。每人补一句欲望、一句忌讳、一个说话习惯。`;
+    }
+  }
+  // 人物关系网：NPC 彼此的关系要影响他们的立场，不是只围着玩家转
+  if (s.godMode !== true) {
+    const links = (world.npcLinks || []).slice(-8);
+    if (links.length) {
+      const text = links.map((l) => `${l.a}—${l.b}（${l.type}${l.note ? '：' + l.note : ''}）`).join('；');
+      guide += `${fast ? ' ' : '\n'}【人物关系网】${text}。这些人之间的亲疏恩怨会影响他们的言行与站队（帮亲、护短、迁怒、通风报信），不得改写已登记的关系；新人物可以带 links 入网。`;
     }
   }
   // 暗线：玩家起疑后才把真相与线索交给 GM；没查过的势力一个字都不提
@@ -789,7 +799,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 危险判定 risk：当叙事中玩家处于危险/濒死/作死处境（如被强敌重创、身中剧毒、跳入绝地、硬闯必死之地、自不量力挑战远超自己的存在）时，填 "high"（危险）或 "lethal"（致命/作死）；否则填 null。
 - 死亡 died：只有叙事**明确描写玩家身死**（殒命/气绝/身亡/身死道消/形神俱灭等）才填 died:true；只写"重伤""濒死""命悬一线""生死一线"时不要填。系统据此触发身死道消结局。
 - 战斗 combat：当叙事描写玩家与敌人交手/战斗时，填 {enemy: 敌人名, realm: 敌人境界}；realm 必须严格来自境界阶梯：${LADDER_TEXT}，若叙事没明说敌人境界则填 "未知"。无战斗时省略。
-- 新登场的 NPC/地点/功法分别放 newNpcs/newLocations/newSkills，每项 {name, desc}（NPC 要带 relation、temperament 外显气质、personality 真实性格（隐藏真相，可与气质相反）、trait 性格特质（从【人物差异化】的建议里挑一个标签）、desire 想要什么、taboo 碰不得什么、speech 说话习惯）。功法 newSkills 要带 grade 品阶（基础/玄阶/地阶/天阶/仙阶，越高修炼越快）。若该 NPC 与其他人物有血缘关系，附 family: {of: "对方姓名或称呼", relation: "父子/兄弟/姐妹/母子等"}。
+- 新登场的 NPC/地点/功法分别放 newNpcs/newLocations/newSkills，每项 {name, desc}（NPC 要带 relation、temperament 外显气质、personality 真实性格（隐藏真相，可与气质相反）、trait 性格特质（从【人物差异化】的建议里挑一个标签）、desire 想要什么、taboo 碰不得什么、speech 说话习惯；links 是与其他人物的关系 [{to: 对方姓名, type: 师承/同门/亲属/道侣/结义/主仆/仇怨/交易, note: 一句说明}]，新人最好至少挂一条，别让他孤立地存在）。功法 newSkills 要带 grade 品阶（基础/玄阶/地阶/天阶/仙阶，越高修炼越快）。若该 NPC 与其他人物有血缘关系，附 family: {of: "对方姓名或称呼", relation: "父子/兄弟/姐妹/母子等"}。
 - NPC 关系 npcRelations：当玩家与某个 NPC 的长期关系结下或改变时登记，每项 {name, relation, debt?, grudge?, trust?, need?}。relation 是标签（如"结义""拜师""道侣""结仇"）；四个数值是 0~100 的**增减量**——救人赠礼记 debt 正（他欠你），受恩记 debt 负（你欠他），伤害/背信记 grudge 正、trust 负，守诺/共患难记 trust 正，长期彼此需要记 need 正。有数值按数值结算；只给标签时系统按标签给种子。结为道侣这类大事件应同时给 trust+need 的正量。
 - 事迹 newEvents：本回合发生的重要事件，每项 {subject, title, desc, relation}。subject 为事件主体（人物/地点/势力/目标名），title 为短标题（如"初遇""结仇"），desc 为描述，relation 为该事件后你与该主体的关系状态（如"挚友""仇敌""师徒""结盟""敌对"，可省略）。同一主体的相关小事件会归成一条脉络，务必给准 subject。
 - 物品 itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}；获得填正 delta（如获得 3 枚疗伤丹 → delta:3），消耗填负 delta（如用掉 1 枚 → delta:-1）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
@@ -1230,7 +1240,7 @@ export function autoNameNpcs(world, newNpcs) {
     const raw = String(n.name).trim();
     const finalName = nameMap[raw] || raw;
     const kinNote = n.family && n.family.of ? `（${n.family.of}的${n.family.relation || '亲人'}）` : '';
-    return { name: finalName, desc: (n.desc || '') + kinNote, relation: n.relation || '', kin: n.family || null, temperament: n.temperament || '', personality: n.personality || '', trait: n.trait || '', desire: n.desire || '', taboo: n.taboo || '', speech: n.speech || '' };
+    return { name: finalName, desc: (n.desc || '') + kinNote, relation: n.relation || '', kin: n.family || null, temperament: n.temperament || '', personality: n.personality || '', trait: n.trait || '', desire: n.desire || '', taboo: n.taboo || '', speech: n.speech || '', links: Array.isArray(n.links) ? n.links : [] };
   });
 }
 
@@ -1285,7 +1295,7 @@ export function validateStateOutput(input) {
     realmChange: enumeration(...REALM_LADDER),
     combat: record({ enemy: 'string', realm: enumeration(...REALM_LADDER, '未知') }),
     flags: 'flags',
-    newNpcs: array(record({ name: 'name', ...stringFields('desc', 'relation', 'temperament', 'personality', 'trait', 'desire', 'taboo', 'speech'), family: record({ of: 'name', relation: 'string' }, ['of']) }, ['name'])),
+    newNpcs: array(record({ name: 'name', ...stringFields('desc', 'relation', 'temperament', 'personality', 'trait', 'desire', 'taboo', 'speech'), family: record({ of: 'name', relation: 'string' }, ['of']), links: array(record({ to: 'name', type: 'string', note: 'string' }, ['to'])) }, ['name'])),
     newLocations: array(record({ name: 'name', desc: 'string' }, ['name'])),
     newSkills: array(record({ name: 'name', desc: 'string', grade: enumeration(...Object.keys(SKILL_GRADES)) }, ['name'])),
     newEvents: array(record({ subject: 'name', title: 'name', desc: 'string', relation: 'string' }, ['subject', 'title'])),
@@ -1594,6 +1604,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   if (out.flags && typeof out.flags === 'object') Object.assign(world.flags, out.flags);
 
   // 自动命名 NPC（身份代称→姓名，血缘同姓）
+  const createdNpcs = [];
   if (Array.isArray(out.newNpcs)) {
     for (const n of autoNameNpcs(world, out.newNpcs)) {
       if (n && n.name && !world.npcs.some((t) => t.name === n.name)) {
@@ -1602,11 +1613,61 @@ export function applyStateUpdates(player, world, input, report = {}) {
           temperament: n.temperament || '', personality: n.personality || '',
           trait: normalizeTrait(n.trait || n.personality)?.label || '',
           desire: n.desire || '', taboo: n.taboo || '', speech: n.speech || '',
+          links: Array.isArray(n.links) ? n.links : [],
           bond: { ...BOND_BASE, ...(bondSeedFor(n.relation) || {}) },
           lastTouchMonth: monthOrdinal(world.date),
         };
         world.npcs.push(npc);
+        createdNpcs.push(npc);
         rememberTrait(world, npc, eventTurn);
+      }
+    }
+  }
+
+  // 人物之间的关系网：NPC 彼此也有师承、亲眷、恩怨，不是只围着玩家转
+  if (createdNpcs.length) {
+    if (!Array.isArray(world.npcLinks)) world.npcLinks = [];
+    const resolveName = (raw) => {
+      if (!raw) return '';
+      const key = String(raw).trim();
+      if (world.aliasMap && hasOwn(world.aliasMap, key)) return world.aliasMap[key];
+      const hit = (world.npcs || []).find((n) => n.name === key);
+      return hit ? hit.name : '';
+    };
+    const addLink = (a, b, type, note) => {
+      if (!a || !b || a === b || !type) return;
+      const pair = [a, b].sort().join('|');
+      if (world.npcLinks.some((l) => [l.a, l.b].sort().join('|') === pair && l.type === type)) return;
+      world.npcLinks.push({ a, b, type, note: note || '', turn: eventTurn });
+    };
+    for (const npc of createdNpcs) {
+      for (const l of npc.links || []) {
+        if (!l || !l.to) continue;
+        addLink(npc.name, resolveName(l.to), l.type || '相识', l.note);
+      }
+      if (npc.kin && npc.kin.of) addLink(npc.name, resolveName(npc.kin.of), '亲属', npc.kin.relation || '');
+      if (world.npcLinks.length > 60) world.npcLinks = world.npcLinks.slice(-60);
+    }
+    // 牵一发动全身：新人的初始态度受其关系网中人的态度影响
+    for (const npc of createdNpcs) {
+      const partners = world.npcLinks
+        .filter((l) => l.a === npc.name || l.b === npc.name)
+        .map((l) => (l.a === npc.name ? l.b : l.a));
+      let trust = 0;
+      let grudge = 0;
+      for (const name of partners) {
+        const other = world.npcs.find((n) => n.name === name);
+        if (!other) continue;
+        const b = bondOf(other);
+        if (b.grudge >= 60) { grudge += 20; trust -= 10; }
+        else if (b.trust >= 70) { trust += 10; }
+      }
+      if (trust || grudge) {
+        npc.bond = {
+          ...npc.bond,
+          trust: clampBond(npc.bond.trust + trust),
+          grudge: clampBond(npc.bond.grudge + grudge),
+        };
       }
     }
   }

@@ -19,6 +19,7 @@ const suites = [
   ['势力底细（调查后揭露）', ['tests/hidden-secrets.test.mjs']],
   ['审阅白名单与入口', ['tests/review-assets.test.mjs']],
   ['人物关系四维账本', ['tests/npc-bond.test.mjs']],
+  ['人物关系网', ['tests/npc-network.test.mjs']],
 ];
 
 let failed = 0;

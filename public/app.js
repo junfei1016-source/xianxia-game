@@ -986,11 +986,17 @@ function renderCodex() {
     const persLabel = x.trait || x.personality;
     const detail = [x.desire ? '想要：' + x.desire : '', x.taboo ? '忌讳：' + x.taboo : '', x.speech ? '口吻：' + x.speech : '']
       .filter(Boolean).join('；');
+    const linkText = withRelation
+      ? (world.npcLinks || [])
+          .filter((l) => l && (l.a === x.name || l.b === x.name))
+          .map((l) => `${l.a === x.name ? l.b : l.a}（${l.type}）`)
+          .join('、')
+      : '';
     const pers = withRelation
       ? (stage === 'insight'
-          ? `<span class="npc-pers" data-tip="真实性格（深交后揭示）：${esc(persLabel)}${detail ? '；' + esc(detail) : ''}">${esc(persLabel)}</span>`
+          ? `<span class="npc-pers" data-tip="真实性格（深交后揭示）：${esc(persLabel)}${detail ? '；' + esc(detail) : ''}${linkText ? '；关系网：' + esc(linkText) : ''}">${esc(persLabel)}</span>`
           : (stage === 'acquaintance'
-              ? `<span class="npc-pers temp" data-tip="初识气质（第一印象，未必是真性情）：${esc(x.temperament)}">${esc(x.temperament)}</span>`
+              ? `<span class="npc-pers temp" data-tip="初识气质（第一印象，未必是真性情）：${esc(x.temperament)}${linkText ? '；关系网：' + esc(linkText) : ''}">${esc(x.temperament)}</span>`
               : `<span class="npc-pers unknown" data-tip="尚未深交，真性情未明——多多往来，方能看清此人">性格未明</span>`))
       : '';
     const gradeTag = !withRelation && x.grade ? `<span class="skill-grade">${esc(x.grade)}</span>` : '';
