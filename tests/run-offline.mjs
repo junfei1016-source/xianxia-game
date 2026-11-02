@@ -31,6 +31,8 @@ const suites = [
   ['交易结算（丹药/丹方）', ['tests/trade.test.mjs']],
   ['黑市与拍卖', ['tests/market-auction.test.mjs']],
   ['拍卖会期（每年三月/九月）', ['tests/auction-schedule.test.mjs']],
+  ['完整地图（九域二十家）', ['tests/world-map-full.test.mjs']],
+  ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 
 let failed = 0;

@@ -29,7 +29,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.9.0';
+export const GAME_VERSION = '1.17.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -1169,10 +1169,11 @@ export function itemPrice(world, player, name, action = 'buy') {
   return Math.max(1, Math.round(base * regionMult * repFactor * kind));
 }
 
-// 黑市：危险度 ≥4 的无法之地（赤沙荒原），只认钱不认来路
+// 黑市：只认钱不认来路的无法之地——赤沙荒原（灰市）与星陨荒原（陨铁盟）
+const BLACK_MARKET_REGIONS = new Set(['chisha', 'xingyun']);
 export function isBlackMarket(world) {
   const region = world && world.geo ? regionById(world.geo.regionId) : null;
-  return !!region && (region.danger >= 4 || region.id === 'chisha');
+  return !!region && BLACK_MARKET_REGIONS.has(region.id);
 }
 export function isForbiddenGood(name) {
   const raw = String(name || '');

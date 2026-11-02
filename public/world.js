@@ -9,38 +9,62 @@
 //  规则层（game.js）只消费这里的纯函数，不在这里写剧情判定。
 // ============================================================
 
-export const WORLD_VERSION = '1.0.0';
+export const WORLD_VERSION = '1.1.0';
 
 const REGIONS = [
   {
     id: 'qingwu', name: '青芜国', terrain: '丘陵水乡', qi: 2, danger: 1,
     products: ['凡品', '灵品'],
-    travel_days: { luoxia: 3, dayan: 8, chisha: 12, hanyuan: 15 },
+    travel_days: { luoxia: 3, dayan: 8, chisha: 12, hanyuan: 15, guixu: 18, wanyao: 25, xingyun: 20 },
     desc: '新手立足之地。三小派互相牵制，王朝只管凡人，不管修士。',
   },
   {
     id: 'luoxia', name: '落霞坊', terrain: '河谷集市', qi: 2, danger: 2,
     products: ['凡品', '灵品'],
-    travel_days: { qingwu: 3, dayan: 8, chisha: 10, hanyuan: 14 },
+    travel_days: { qingwu: 3, dayan: 8, chisha: 10, hanyuan: 14, guixu: 10, wanyao: 22, xingyun: 18 },
     desc: '中立坊市，万宝阁在此设分号。价格公道，但坊内禁斗，杀人者遭全坊通缉。',
   },
   {
     id: 'dayan', name: '大衍王朝', terrain: '平原都城', qi: 3, danger: 3,
     products: ['灵品', '玄品'],
-    travel_days: { qingwu: 8, luoxia: 8, chisha: 9, hanyuan: 11 },
+    travel_days: { qingwu: 8, luoxia: 8, chisha: 9, hanyuan: 11, guixu: 15, wanyao: 12, xingyun: 16 },
     desc: '凡俗最强王朝，镇魔司专缉魔修。世家与朝廷共治，宗门在此须低头。',
   },
   {
     id: 'chisha', name: '赤沙荒原', terrain: '荒漠戈壁', qi: 1, danger: 4,
     products: ['灵品', '玄品'],
-    travel_days: { qingwu: 12, luoxia: 10, dayan: 9, hanyuan: 18 },
+    travel_days: { qingwu: 12, luoxia: 10, dayan: 9, hanyuan: 18, guixu: 20, wanyao: 15, xingyun: 8 },
     desc: '灵气枯竭，正道不管。血刀寨与散修混居，价格翻倍但什么都能买到。',
   },
   {
     id: 'hanyuan', name: '寒渊海', terrain: '群岛深海', qi: 3, danger: 5,
     products: ['玄品', '仙品'],
-    travel_days: { qingwu: 15, luoxia: 14, dayan: 11, chisha: 18 },
+    travel_days: { qingwu: 15, luoxia: 14, dayan: 11, chisha: 18, guixu: 16, wanyao: 9, xingyun: 11 },
     desc: '海外群岛，鲛人族盘踞。深海遗迹出仙品材料，但十去九不回。',
+  },
+  {
+    id: 'guixu', name: '归墟城', terrain: '悬空巨城', qi: 4, danger: 3,
+    products: ['玄品'],
+    travel_days: { qingwu: 18, luoxia: 10, dayan: 15, chisha: 20, hanyuan: 16, wanyao: 14, xingyun: 13 },
+    desc: '悬于云海之上的中立巨城，靠星舟与传送阵进出。万族在此议价，规矩只有一条：城里不许见血。',
+  },
+  {
+    id: 'wanyao', name: '万妖岭', terrain: '妖山', qi: 4, danger: 5,
+    products: ['仙品'],
+    travel_days: { qingwu: 25, luoxia: 22, dayan: 12, chisha: 15, hanyuan: 9, guixu: 14, xingyun: 10 },
+    desc: '妖族世居的绵延妖山，七妖王各据一岭。人族入山须持妖王信物，否则视作血食。',
+  },
+  {
+    id: 'xingyun', name: '星陨荒原', terrain: '陨坑荒原', qi: 3, danger: 5,
+    products: ['仙品'],
+    travel_days: { qingwu: 20, luoxia: 18, dayan: 16, chisha: 8, hanyuan: 11, guixu: 13, wanyao: 10 },
+    desc: '上古天星坠地之处，陨铁与星砂遍地，遗族与陨铁盟为矿脉争了千年。',
+  },
+  {
+    id: 'taiqing', name: '太清仙域', terrain: '仙山云海', qi: 6, danger: 3,
+    products: ['仙品', '神品'],
+    travel_days: {}, // 仙界不与凡界通paths：只能飞升
+    desc: '传说中的仙界一角，灵气浓得化作云海。凡界无路可至，唯有飞升。',
   },
 ];
 
@@ -57,6 +81,14 @@ const FACTIONS = [
   { id: 'huishi', name: '灰市', type: '商会', alignment: '中立', tier: 3, seat: 'chisha', desc: '赤沙荒原的黑市组织，只做买卖不问来路。' },
   { id: 'jiaoren', name: '鲛人族', type: '妖族', alignment: '中立', tier: 2, seat: 'hanyuan', desc: '深海妖族，控潮汐与沉船。入海须持鳞符，否则视为猎物。' },
   { id: 'xingluo', name: '星罗岛', type: '宗门', alignment: '正道', tier: 3, seat: 'hanyuan', desc: '海外散修结社，靠打捞沉船遗宝维生，与鲛人族有旧约。' },
+  { id: 'guixufu', name: '归墟府', type: '朝廷', alignment: '正道', tier: 1, seat: 'guixu', desc: '归墟城的秩序掌控者，城中禁斗之规由它执行，靠星舟税养城。' },
+  { id: 'xingzhou', name: '星舟行会', type: '商会', alignment: '中立', tier: 2, seat: 'guixu', desc: '垄断跨界星舟与传送阵，票价说一不二，万宝阁也让它三分。' },
+  { id: 'qiyao', name: '七妖王', type: '妖族', alignment: '中立', tier: 1, seat: 'wanyao', desc: '万妖岭七位妖王共治，各自划界，人族的"信物"就是它们的牙印。' },
+  { id: 'qingqiu', name: '青丘', type: '妖族', alignment: '中立', tier: 2, seat: 'wanyao', desc: '狐族一脉，善幻术与丹药，与七妖王面和心不和。' },
+  { id: 'xingyun_clan', name: '星陨遗族', type: '散修联盟', alignment: '中立', tier: 2, seat: 'xingyun', desc: '自称上古星官后裔，守着陨坑里的星砂矿，与陨铁盟世代争矿。' },
+  { id: 'yuntie', name: '陨铁盟', type: '帮派', alignment: '魔道', tier: 3, seat: 'xingyun', desc: '以陨铁锻兵起家的矿帮，强征遗族矿洞，血债累累。' },
+  { id: 'taiqing_gong', name: '太清仙宫', type: '朝廷', alignment: '正道', tier: 1, seat: 'taiqing', desc: '仙界秩序的执掌者，凡人飞升在此登记，仙籍与凡籍一刀两断。' },
+  { id: 'taishu', name: '太清书院', type: '宗门', alignment: '中立', tier: 2, seat: 'taiqing', desc: '仙域里的讲道之所，藏有天书残卷，对凡界飞升者既不亲也不拒。' },
 ];
 
 const RELATIONS = [
@@ -71,6 +103,17 @@ const RELATIONS = [
   { a: 'zhenmo', b: 'cui', type: '竞争', note: '朝廷与世家争夺丹药贡路之利。' },
   { a: 'huishi', b: 'xuedao', type: '盟约', note: '灰市替血刀寨出货，抽两成。' },
   { a: 'xingluo', b: 'xuedao', type: '敌对', note: '血刀寨劫过星罗岛的船，结下梁子。' },
+  { a: 'wanbao', b: 'xingzhou', type: '竞争', note: '万宝阁想自开星舟线，行会寸步不让。' },
+  { a: 'guixufu', b: 'xingzhou', type: '盟约', note: '城规靠行会的船运撑着，行会靠城规的禁斗护着。' },
+  { a: 'guixufu', b: 'taiqing_gong', type: '从属', note: '归墟城的仙籍由太清仙宫册封，名义上听调。' },
+  { a: 'qiyao', b: 'qingqiu', type: '竞争', note: '七妖王忌惮青丘幻术，划界时从不与狐族相邻。' },
+  { a: 'qingqiu', b: 'cui', type: '交易', note: '青丘的丹方换崔氏的灵药，两家都说是"私谊"。' },
+  { a: 'xingyun_clan', b: 'yuntie', type: '世仇', note: '陨铁盟强占矿洞，遗族的祭坛被推平了三座。' },
+  { a: 'yuntie', b: 'huishi', type: '交易', note: '陨铁经灰市出货，绕过镇魔司的关防。' },
+  { a: 'zhenmo', b: 'yuntie', type: '敌对', note: '镇魔司的缉魔令上，陨铁盟排在血刀寨之后第二位。' },
+  { a: 'taiqing_gong', b: 'taishu', type: '竞争', note: '仙宫管仙籍，书院管传道，谁说了算争了万年。' },
+  { a: 'taiqing_gong', b: 'jiaoren', type: '从属', note: '鲛人族的祖鳞是仙宫赐下的，故奉其号令。' },
+  { a: 'xingluo', b: 'xingyun_clan', type: '盟约', note: '两族都自称星官后裔，认了同宗，互通沉船与星砂的消息。' },
 ];
 
 // 价格带：以「下品灵石」为单位。稀有度由获得难度决定，与提取器口径一致。
@@ -84,6 +127,7 @@ const PRICE_BANDS = {
 
 const REGION_PRICE_MULT = {
   qingwu: 1.0, luoxia: 0.9, dayan: 1.1, chisha: 2.0, hanyuan: 1.3,
+  guixu: 1.6, wanyao: 1.8, xingyun: 1.7, taiqing: 3.0,
 };
 
 // 大势对物价的影响（与游戏 ERA_TYPES 的收益口径分开：这里只算市价）
