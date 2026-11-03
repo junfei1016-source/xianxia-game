@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn, priceMultiplier, addRegion } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
@@ -40,7 +40,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.30.0';
+export const GAME_VERSION = '1.31.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -418,6 +418,8 @@ export function newPlayerState() {
     pillUsageMonth: 0,  // 上次消退的月份
     crafts: { 符箓: 0, 阵法: 0, 丹道: 0, 炼器: 0 }, // 四艺造诣（经验值，每 100 一级）
     craftMasters: {},   // 各艺的师承：{ '丹道': '师父名' }
+    craftSecrets: {},   // 暗中拜的师：{ '丹道': {master, from, sinceMonth} }
+    craftStuck: {},     // 各艺卡瓶颈的次数（越高越容易顿悟）
   };
 }
 
@@ -1771,12 +1773,35 @@ export function dismantleFormation(world, player, input) {
 
 // ---------- 四艺修习与符箓 ----------
 // 修习靠练、靠师父指点、靠照玉简参研；造诣分五级，从"初窥门径"到"出神入化"。
-export function practiceCraft(world, player, input) {
+// 卡在瓶颈上时，引擎每修习一次会掷一次"自发顿悟"：卡得越久，悟开的机会越大。
+export function practiceCraft(world, player, input, rand = Math.random) {
   const skill = String((input && input.skill) || '').trim();
   if (!CRAFT_NAMES.includes(skill)) return { ok: false, reason: '四艺只有符箓、阵法、丹道、炼器' };
   const days = Math.max(1, Math.min(10, Math.floor(Number(input.days) || 3)));
   if (!player.crafts) player.crafts = { 符箓: 0, 阵法: 0, 丹道: 0, 炼器: 0 };
+  if (!player.craftStuck) player.craftStuck = {};
   const before = skillLevelOf(player.crafts[skill]).name;
+
+  // 已卡瓶颈：先掷顿悟，悟开了才继续涨
+  if (isBottlenecked(player.crafts[skill])) {
+    player.craftStuck[skill] = (player.craftStuck[skill] || 0) + 1;
+    const stuck = player.craftStuck[skill];
+    const chance = Math.min(0.35, 0.06 + 0.03 * stuck);
+    if (rand() < chance) {
+      const lv = skillLevelOf(player.crafts[skill]).level;
+      player.crafts[skill] = (lv + 1) * 100;
+      delete player.craftStuck[skill];
+      return {
+        ok: true, days, insight: true,
+        note: `【顿悟】${days} 日枯坐，忽然心头一亮——${skill}那层窗户纸破了，进境到「${SKILL_LEVELS[lv + 1]}」。`,
+      };
+    }
+    return {
+      ok: true, days,
+      note: `【修习】${days} 日练${skill}，仍是不得其门（卡在瓶颈第 ${stuck} 回）。这层纸，也许哪天就破了。`,
+    };
+  }
+
   const gain = practiceGain(player.crafts[skill], days);
   const { exp, capped } = applyCraftExp(player.crafts[skill], gain);
   player.crafts[skill] = exp;
@@ -1802,6 +1827,25 @@ export function craftInsight(world, player, input) {
   return { ok: true, note: `【顿悟】${skill}那层窗户纸破了，进境到「${SKILL_LEVELS[lv + 1]}」。` };
 }
 
+// 两位师父是否"师门为敌"：要么 NPC 之间有旧怨，要么两家势力是敌对/世仇。
+// 光换师父不算叛门——小说里墨大夫那样的前期师父，到后期本就没有交集。
+function mastersAreEnemies(world, oldNpc, newNpc) {
+  if (!oldNpc || !newNpc) return false;
+  const linked = (world.npcLinks || []).some((l) => l && (
+    (l.a === oldNpc.name && l.b === newNpc.name) || (l.a === newNpc.name && l.b === oldNpc.name)
+  ) && /仇怨|敌对|世仇/.test(l.type || ''));
+  if (linked) return true;
+  const a = oldNpc.sect || oldNpc.faction;
+  const b = newNpc.sect || newNpc.faction;
+  if (!a || !b) return false;
+  const fa = factionByName(a);
+  const fb = factionByName(b);
+  if (!fa || !fb) return false;
+  return relationsOf(fa.id).some((r) => (
+    (r.a === fa.id && r.b === fb.id) || (r.b === fa.id && r.a === fb.id)
+  ) && /敌对|世仇/.test(r.type));
+}
+
 export function studyCraft(world, player, input) {
   const skill = String((input && input.skill) || '').trim();
   if (!CRAFT_NAMES.includes(skill)) return { ok: false, reason: '四艺只有符箓、阵法、丹道、炼器' };
@@ -1817,13 +1861,23 @@ export function studyCraft(world, player, input) {
     }
     const prev = player.craftMasters[skill];
     if (prev && prev !== master.name) {
-      // 叛门：另投他师在修仙界是"欺师灭祖"，旧师翻脸、名声受损
       const old = (world.npcs || []).find((n) => n.name === prev);
-      if (old) {
+      const secret = input.secret === true;
+      const stillClose = !!old && /师父|拜师|师徒/.test(old.relation || '') && bondOf(old).trust >= 20;
+      const enemy = mastersAreEnemies(world, old, master);
+      if (secret) {
+        // 秘而不宣：旧师不知道，就不算欺师灭祖；但记一笔，日后可能被揭破
+        if (!player.craftSecrets) player.craftSecrets = {};
+        player.craftSecrets[skill] = { master: master.name, from: prev, sinceMonth: monthOrdinal(world.date) };
+        note = `你未对人提起，暗地里拜在${master.name}门下。`;
+      } else if (stillClose && enemy) {
+        // 真正的叛门：投到与师门为敌的人门下，且旧师知道
         old.bond = { ...bondOf(old), trust: clampBond(bondOf(old).trust - 40), grudge: clampBond(bondOf(old).grudge + 30) };
+        player.reputation = Math.max(0, (player.reputation || 0) - 10);
+        note = `【叛门】你抛下旧师「${prev}」，转投与师门为敌的${master.name}——旧师与你恩断义绝，声名有损（声望 -10）。`;
+      } else if (stillClose && !enemy) {
+        note = `旧师「${prev}」与你已无甚交集，另投${master.name}不算背师。`;
       }
-      player.reputation = Math.max(0, (player.reputation || 0) - 10);
-      note = `【叛门】你抛下旧师「${prev}」另投${master.name}，旧师与你恩断义绝，声名有损（声望 -10）。`;
     }
     player.craftMasters[skill] = master.name;
   } else {
@@ -2424,7 +2478,7 @@ export function validateStateOutput(input) {
     breakFormation: record({ name: 'name', method: enumeration('寻阵眼', '以力破阵'), days: 'number' }, ['name']),
     foeFormation: record({ name: 'name', tier: 'string' }, ['name']),
     practiceCraft: record({ skill: enumeration(...CRAFT_NAMES), days: 'number' }, ['skill']),
-    studyCraft: record({ skill: enumeration(...CRAFT_NAMES), from: enumeration('师父', '玉简') }, ['skill']),
+    studyCraft: record({ skill: enumeration(...CRAFT_NAMES), from: enumeration('师父', '玉简'), secret: 'boolean' }, ['skill']),
     newJadeSlip: record({ name: 'name', skill: enumeration(...CRAFT_NAMES), kind: enumeration('心得', '丹方', '功法', '阵图'), recipe: 'string', grade: enumeration(...Object.keys(SKILL_GRADES)) }, ['skill']),
     craftTalisman: record({ name: 'name' }, ['name']),
     useTalisman: record({ name: 'name' }, ['name']),

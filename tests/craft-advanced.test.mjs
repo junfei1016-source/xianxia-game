@@ -29,10 +29,20 @@ test('瓶颈：略有小成往上，经验卡在 99 那层纸上', () => {
   const { player, world } = setup();
   player.crafts['丹道'] = 299; // 略有小成，99
   assert.equal(isBottlenecked(299), true);
-  const res = practiceCraft(world, player, { skill: '丹道', days: 10 });
+  const res = practiceCraft(world, player, { skill: '丹道', days: 10 }, () => 0.99);
   assert.equal(res.ok, true);
   assert.equal(player.crafts['丹道'], 299, '撞瓶颈后不该再涨');
-  assert.ok(res.note.includes('窗户纸'), res.note);
+  assert.ok(res.note.includes('瓶颈'), res.note);
+});
+
+test('自发顿悟：卡得越久，自己悟开的可能越大', () => {
+  const { player, world } = setup();
+  player.crafts['丹道'] = 299;
+  player.craftStuck = { 丹道: 5 };
+  const res = practiceCraft(world, player, { skill: '丹道', days: 5 }, () => 0.01);
+  assert.equal(res.insight, true);
+  assert.ok(res.note.includes('顿悟'), res.note);
+  assert.equal(skillLevelOf(player.crafts['丹道']).name, '登堂入室');
 });
 
 test('顿悟：卡瓶颈才能悟，悟了直接进一级', () => {
@@ -55,26 +65,53 @@ test('师父只能教到登堂入室，再往上得靠自己', () => {
   assert.ok(res.reason.includes('登堂入室'));
 });
 
-test('叛门：另投他师，旧师翻脸、声望受损', () => {
+test('换师父不算叛门：旧师与新师无仇，只是各教一段', () => {
   const { player, world } = setup();
   world.npcs = [
     { name: '旧师', relation: '拜师', bond: { debt: 0, grudge: 0, trust: 80, need: 60 } },
     { name: '新师', relation: '拜师', bond: { debt: 0, grudge: 0, trust: 80, need: 60 } },
   ];
-  player.crafts['丹道'] = 0;
-  // 先拜旧师
-  const first = studyCraft(world, player, { skill: '丹道', from: '师父' });
-  assert.equal(first.ok, true);
   player.craftMasters['丹道'] = '旧师';
+  world.npcs[0].bond.trust = 30; // 新师才是"信得过"的那位
+  const res = studyCraft(world, player, { skill: '丹道', from: '师父' });
+  assert.equal(res.ok, true);
+  assert.ok(!res.note.includes('叛门'), res.note);
+  assert.ok(res.note.includes('无甚交集') || res.note.includes('不算背师'), res.note);
+  assert.ok(player.reputation >= 0, '声望不动不变负');
+  assert.equal(world.npcs.find((n) => n.name === '旧师').bond.grudge, 0);
+});
 
-  // 让旧师先成为"信得过"的那位，再换新师：手动把旧师的信降下去、新师留高
-  world.npcs[0].bond.trust = 10;
-  const second = studyCraft(world, player, { skill: '丹道', from: '师父' });
-  assert.equal(second.ok, true);
-  assert.ok(second.note.includes('叛门'), second.note);
-  assert.equal(player.reputation, 0, '声望不会变负');
+test('叛门：投到与师门为敌的人门下，旧师翻脸、声望受损', () => {
+  const { player, world } = setup();
+  world.npcs = [
+    { name: '旧师', relation: '拜师', bond: { debt: 0, grudge: 0, trust: 80, need: 60 } },
+    { name: '新师', relation: '拜师', bond: { debt: 0, grudge: 0, trust: 80, need: 60 } },
+  ];
+  world.npcLinks = [{ a: '旧师', b: '新师', type: '仇怨' }];
+  player.craftMasters['丹道'] = '旧师';
+  world.npcs[0].bond.trust = 30;
+  const res = studyCraft(world, player, { skill: '丹道', from: '师父' });
+  assert.equal(res.ok, true);
+  assert.ok(res.note.includes('叛门'), res.note);
   const oldMaster = world.npcs.find((n) => n.name === '旧师');
   assert.ok(oldMaster.bond.grudge > 0);
+});
+
+test('秘密拜师：旧师不知道，就不算叛门', () => {
+  const { player, world } = setup();
+  world.npcs = [
+    { name: '旧师', relation: '拜师', bond: { debt: 0, grudge: 0, trust: 80, need: 60 } },
+    { name: '新师', relation: '拜师', bond: { debt: 0, grudge: 0, trust: 80, need: 60 } },
+  ];
+  world.npcLinks = [{ a: '旧师', b: '新师', type: '仇怨' }];
+  player.craftMasters['丹道'] = '旧师';
+  world.npcs[0].bond.trust = 30;
+  const res = studyCraft(world, player, { skill: '丹道', from: '师父', secret: true });
+  assert.equal(res.ok, true);
+  assert.ok(!res.note.includes('叛门'), res.note);
+  assert.ok(player.craftSecrets['丹道'], '暗中之事宜记一笔');
+  assert.equal(player.craftSecrets['丹道'].master, '新师');
+  assert.equal(world.npcs.find((n) => n.name === '旧师').bond.grudge, 0);
 });
 
 test('玉简·丹方：读到即得丹方', () => {
