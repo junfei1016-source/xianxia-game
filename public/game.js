@@ -34,7 +34,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.23.0';
+export const GAME_VERSION = '1.24.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -1341,10 +1341,40 @@ function majorRankOf(realm) {
 }
 
 // ---------- 采集点（药圃/矿脉/妖巢）----------
-// 每个区域按采集类型生成固定几处采集点，采过会枯竭、按月份恢复；
-// 采不到点时只能野外碰运气（一份）。
+// 稀有度随"灵气 + 凶险"抬升：低灵气区只有凡品灵草，绝地才出仙品；
+// 高阶采集点恢复更慢、一茬收成更少（仙品以上一次只得一份）。
 const NODE_KINDS = { 采药: '药圃', 挖矿: '矿脉', 猎妖: '妖巢' };
-const NODE_RESPAWN = { 药圃: 12, 矿脉: 8, 妖巢: 10 };
+export const NODE_RARITIES = ['凡品', '灵品', '玄品', '仙品', '神品'];
+const RARITY_RESPAWN = { 凡品: 6, 灵品: 12, 玄品: 24, 仙品: 48, 神品: 96 };
+const RARITY_YIELD_CAP = { 凡品: 99, 灵品: 99, 玄品: 2, 仙品: 1, 神品: 1 };
+
+// 区域能出到的最高稀有度：灵气+危险越高越可能出高货；灵气 ≥5 的仙域可出神品
+export function regionNodeCap(region) {
+  if (!region) return 0;
+  if ((region.qi || 1) >= 5) return 4;
+  const power = (region.qi || 1) + (region.danger || 1);
+  if (power >= 10) return 4;
+  if (power >= 8) return 3;
+  if (power >= 6) return 2;
+  if (power >= 4) return 1;
+  return 0;
+}
+
+export function nodeRespawn(tier) {
+  return RARITY_RESPAWN[tier] || 12;
+}
+
+function pickNodeRarity(region, rand) {
+  const cap = regionNodeCap(region);
+  const weights = [6, 4, 2, 1, 0.5].slice(0, cap + 1); // 越低越常见
+  const total = weights.reduce((a, b) => a + b, 0);
+  let hit = rand() * total;
+  for (let i = 0; i < weights.length; i++) {
+    hit -= weights[i];
+    if (hit <= 0) return NODE_RARITIES[i];
+  }
+  return '凡品';
+}
 
 function ensureRegionNodes(world, region, gatherKind, rand) {
   if (!Array.isArray(world.nodes)) world.nodes = [];
@@ -1356,13 +1386,25 @@ function ensureRegionNodes(world, region, gatherKind, rand) {
   const count = Math.min(3, pool.length);
   const created = [];
   for (let i = 0; i < count; i++) {
-    const m = pool[Math.floor(rand() * pool.length)];
+    const wanted = pickNodeRarity(region, rand);
+    let rank = NODE_RARITIES.indexOf(wanted);
+    let material = null;
+    // 该稀有度没有对应材料就往下找，最差落到凡品
+    while (rank >= 0 && !material) {
+      const cand = pool.filter((x) => (MATERIAL_TIERS[materialTier(x)] || { rank: 0 }).rank === rank);
+      if (cand.length) material = cand[Math.floor(rand() * cand.length)];
+      rank -= 1;
+    }
+    if (!material) material = pool[0];
+    const realRank = (MATERIAL_TIERS[materialTier(material)] || { rank: 0 }).rank;
+    const rarity = NODE_RARITIES[realRank] || '凡品';
     created.push({
       id: `${region.id}_${nodeKind}_${i}`,
       region: region.id,
       kind: nodeKind,
-      material: m.name,
-      respawnMonths: NODE_RESPAWN[nodeKind],
+      material: material.name,
+      rarity,
+      respawnMonths: nodeRespawn(rarity),
       harvestedMonth: null,
     });
   }
@@ -1400,9 +1442,11 @@ export function gatherMaterials(world, player, input, rand = Math.random) {
   let siteNote = '';
   if (nodes.length) {
     const node = nodes[Math.floor(rand() * nodes.length)];
-    for (let i = 0; i < times; i++) picks.push(node.material);
+    const cap = RARITY_YIELD_CAP[node.rarity] || 99;
+    const got = Math.min(times, cap);
+    for (let i = 0; i < got; i++) picks.push(node.material);
     node.harvestedMonth = now;
-    siteNote = `在${node.kind}采得「${node.material}」`;
+    siteNote = `在${node.kind}（${node.rarity}）采得「${node.material}」`;
   } else {
     // 采集点都枯竭了：野外只能碰运气，一份
     picks.push(usable[Math.floor(rand() * usable.length)].name);

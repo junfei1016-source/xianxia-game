@@ -37,6 +37,7 @@ const suites = [
   ['材料（年份/五行/产地/毒物）', ['tests/materials.test.mjs']],
   ['采集与五行炼丹', ['tests/gather-elements.test.mjs']],
   ['采集点与炼器', ['tests/nodes-forge.test.mjs']],
+  ['采集点稀有度', ['tests/node-rarity.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 
