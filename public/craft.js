@@ -54,6 +54,30 @@ export function studyGain(exp = 0, source = '玉简') {
   return Math.max(1, Math.round(base * decay));
 }
 
+// ---------- 瓶颈与顿悟 ----------
+// 第 9 章"只隔着薄薄一层纸，再加把劲就突破瓶颈"；第 15 章韩立遇练功瓶颈。
+// 略有所成（2 级）起，经验会卡在 99，须顿悟或师承点化才过得去。
+export const BOTTLENECK_LEVEL = 2;
+
+export function expCapFor(exp = 0) {
+  const lv = skillLevelOf(exp).level;
+  return lv >= BOTTLENECK_LEVEL ? lv * LEVEL_EXP + LEVEL_EXP - 1 : Infinity;
+}
+
+export function isBottlenecked(exp = 0) {
+  const lv = skillLevelOf(exp).level;
+  return lv >= BOTTLENECK_LEVEL && Number(exp) % LEVEL_EXP === LEVEL_EXP - 1;
+}
+
+export function applyCraftExp(exp = 0, gain = 0) {
+  const cap = expCapFor(exp);
+  const next = Math.min(Number(exp) + Number(gain), cap);
+  return { exp: next, capped: next < Number(exp) + Number(gain) };
+}
+
+// 师父能把人教到哪一级：登堂入室（3 级）为止，再往上得靠自己
+export const MASTER_CAP_LEVEL = 3;
+
 // ---------- 符箓 ----------
 // 阶位：凡符 / 灵符 / 宝符 / 仙符；画符要符纸、朱砂（高阶加灵墨、妖血）
 export const TALISMAN_TIERS = {

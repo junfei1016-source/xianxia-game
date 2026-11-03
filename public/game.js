@@ -11,7 +11,7 @@ import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js'
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
 import { materialByName, materialTier, materialBrewBonus, elementalBrewAdjust, GATHER_KINDS, gatherPool, MATERIAL_TIERS, elementRelation, elementsClash } from './materials.js';
 import { formationByName, formationCost, canSetFormation, formationEffects, FORMATION_TIERS, isPortable, FORMATIONS, canSetOnLeyline, upgradeCost, FORMATION_MAX_LEVEL, leylinePhase, LEYLINE_MIN_QI } from './formations.js';
-import { CRAFT_NAMES, SKILL_LEVELS, skillLevelOf, craftBonus, practiceGain, studyGain, talismanByName, TALISMAN_TIERS, TALISMANS, drawChance } from './craft.js';
+import { CRAFT_NAMES, SKILL_LEVELS, skillLevelOf, craftBonus, practiceGain, studyGain, talismanByName, TALISMAN_TIERS, TALISMANS, drawChance, applyCraftExp, isBottlenecked, MASTER_CAP_LEVEL } from './craft.js';
 
 // 法宝名录目录（注入提示词：阶位定死，名字管够）
 const TREASURE_CATALOG = treasureCatalog();
@@ -40,7 +40,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.29.0';
+export const GAME_VERSION = '1.30.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -417,6 +417,7 @@ export function newPlayerState() {
     pillUsage: {},      // 各丹药服过几次（抗药性）；每半年消退一次
     pillUsageMonth: 0,  // 上次消退的月份
     crafts: { 符箓: 0, 阵法: 0, 丹道: 0, 炼器: 0 }, // 四艺造诣（经验值，每 100 一级）
+    craftMasters: {},   // 各艺的师承：{ '丹道': '师父名' }
   };
 }
 
@@ -544,7 +545,9 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 阵法：名录——${FORMATION_CATALOG}。玩家布阵时登记 setFormation {name}，撤阵记 dismantleFormation {name}，加固记 upgradeFormation {name}。**一级到四级可用阵旗阵盘随行布设；五级起是大阵，须借地脉（灵气≥3）**，地脉还按月有旺衰（旺月大阵更强、衰月减色）。布阵要耗灵石、对修为有要求，系统最多同时保留两座；加固最多三层，每层加两成半威力。效果由系统结算，不要自己写数值。
 - 破阵：遇到敌阵时，叙事里先说明"这是什么阵、几级"，并登记 foeFormation {name, tier}；玩家破阵时记 breakFormation {name, method: "寻阵眼" 或 "以力破阵", days}。寻阵眼靠眼力与时间（要几天），硬闯快但伤得重；失败会受伤、阵还在。成败由系统掷，不要自己写结果。
 - 四艺：符箓、阵法、丹道、炼器各分五级造诣（未入门/初窥门径/略有小成/登堂入室/出神入化）。玩家**自己练**记 practiceCraft {skill, days}；**向师父或玉简求教**记 studyCraft {skill, from: "师父"/"玉简"}——师父须有师徒名分且信≥60，玉简读一次就记下（新得玉简用 newJadeSlip {name, skill} 登记）。造诣影响：丹道与炼器的成功率、阵法的破阵率与布阵折扣、符箓的成符率与符威。这些数值由系统算，你只负责写修行过程。
-- 符箓：符谱——${TALISMAN_CATALOG}。玩家画符记 craftTalisman {name}（须符纸朱砂，高阶加灵墨妖血；造诣不够会被拒），用符记 useTalisman {name}（回血或给一段时间的护身/神行/伤敌符力）。符是一次性的，用完即废。
+- 符箓：符谱——${TALISMAN_CATALOG}。玩家画符记 craftTalisman {name}（须符纸朱砂，高阶加灵墨妖血；造诣不够会被拒），用符记 useTalisman {name}（回血或给一段时间的护身/神行/伤敌符力）。符是一次性的，用完即废；**同一种符可以续时，最多并存三种符力**；三张同符合成符阵记 talismanArray {name}（须符箓「略有小成」）。
+- 四艺的瓶颈与顿悟：**略有小成往上会卡瓶颈**（经验停在 99），此时自练与求教都难寸进；须由叙事给出**顿悟**——你判断玩家真的参悟了，就登记 craftInsight {skill}，系统会破一层瓶颈。**师父只能教到「登堂入室」**；另投他师视为叛门（欺师灭祖），旧师会翻脸、玩家声望受损——这种事要在叙事里写出后果。
+- 玉简的内容：newJadeSlip 可带 kind（心得/丹方/功法/阵图）。丹方玉简须给 recipe（丹药名），读到即得丹方；功法玉简给功法名与 grade，读到即得功法；心得与阵图只长造诣。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
 - questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
 - factionRelations：与势力关系变化，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
@@ -915,7 +918,9 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 阵法：名录——${FORMATION_CATALOG}。玩家布阵时登记 setFormation {name}，撤阵记 dismantleFormation {name}，加固记 upgradeFormation {name}。**一级到四级可用阵旗阵盘随行布设；五级起是大阵，须借地脉（灵气≥3）**，地脉还按月有旺衰（旺月大阵更强、衰月减色）。布阵要耗灵石、对修为有要求，系统最多同时保留两座；加固最多三层，每层加两成半威力。效果由系统结算，不要自己写数值。
 - 破阵：遇到敌阵时，叙事里先说明"这是什么阵、几级"，并登记 foeFormation {name, tier}；玩家破阵时记 breakFormation {name, method: "寻阵眼" 或 "以力破阵", days}。寻阵眼靠眼力与时间（要几天），硬闯快但伤得重；失败会受伤、阵还在。成败由系统掷，不要自己写结果。
 - 四艺：符箓、阵法、丹道、炼器各分五级造诣（未入门/初窥门径/略有小成/登堂入室/出神入化）。玩家**自己练**记 practiceCraft {skill, days}；**向师父或玉简求教**记 studyCraft {skill, from: "师父"/"玉简"}——师父须有师徒名分且信≥60，玉简读一次就记下（新得玉简用 newJadeSlip {name, skill} 登记）。造诣影响：丹道与炼器的成功率、阵法的破阵率与布阵折扣、符箓的成符率与符威。这些数值由系统算，你只负责写修行过程。
-- 符箓：符谱——${TALISMAN_CATALOG}。玩家画符记 craftTalisman {name}（须符纸朱砂，高阶加灵墨妖血；造诣不够会被拒），用符记 useTalisman {name}（回血或给一段时间的护身/神行/伤敌符力）。符是一次性的，用完即废。
+- 符箓：符谱——${TALISMAN_CATALOG}。玩家画符记 craftTalisman {name}（须符纸朱砂，高阶加灵墨妖血；造诣不够会被拒），用符记 useTalisman {name}（回血或给一段时间的护身/神行/伤敌符力）。符是一次性的，用完即废；**同一种符可以续时，最多并存三种符力**；三张同符合成符阵记 talismanArray {name}（须符箓「略有小成」）。
+- 四艺的瓶颈与顿悟：**略有小成往上会卡瓶颈**（经验停在 99），此时自练与求教都难寸进；须由叙事给出**顿悟**——你判断玩家真的参悟了，就登记 craftInsight {skill}，系统会破一层瓶颈。**师父只能教到「登堂入室」**；另投他师视为叛门（欺师灭祖），旧师会翻脸、玩家声望受损——这种事要在叙事里写出后果。
+- 玉简的内容：newJadeSlip 可带 kind（心得/丹方/功法/阵图）。丹方玉简须给 recipe（丹药名），读到即得丹方；功法玉简给功法名与 grade，读到即得功法；心得与阵图只长造诣。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
 - 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
@@ -1773,10 +1778,28 @@ export function practiceCraft(world, player, input) {
   if (!player.crafts) player.crafts = { 符箓: 0, 阵法: 0, 丹道: 0, 炼器: 0 };
   const before = skillLevelOf(player.crafts[skill]).name;
   const gain = practiceGain(player.crafts[skill], days);
-  player.crafts[skill] += gain;
-  const after = skillLevelOf(player.crafts[skill]);
+  const { exp, capped } = applyCraftExp(player.crafts[skill], gain);
+  player.crafts[skill] = exp;
+  const after = skillLevelOf(exp);
   const up = after.name !== before ? `，进境到「${after.name}」` : '';
-  return { ok: true, days, note: `【修习】${days} 日练${skill}，经验 +${gain}${up}（${after.name}）。` };
+  const stuck = capped || isBottlenecked(exp);
+  return {
+    ok: true, days,
+    note: `【修习】${days} 日练${skill}，经验 +${gain}${up}（${after.name}）${stuck ? '。练到此处再难寸进——这层窗户纸，得靠顿悟或名师点化' : ''}。`,
+  };
+}
+
+// 顿悟：卡在瓶颈上时，一次参悟可破（第 9 章"只隔着一层纸"）
+export function craftInsight(world, player, input) {
+  const skill = String((input && input.skill) || '').trim();
+  if (!CRAFT_NAMES.includes(skill)) return { ok: false, reason: '四艺只有符箓、阵法、丹道、炼器' };
+  if (!player.crafts) player.crafts = { 符箓: 0, 阵法: 0, 丹道: 0, 炼器: 0 };
+  const exp = player.crafts[skill];
+  if (!isBottlenecked(exp)) return { ok: false, reason: `${skill}尚未到瓶颈，无需顿悟` };
+  const lv = skillLevelOf(exp).level;
+  if (lv >= SKILL_LEVELS.length - 1) return { ok: false, reason: '已到出神入化，无级可破' };
+  player.crafts[skill] = (lv + 1) * 100;
+  return { ok: true, note: `【顿悟】${skill}那层窗户纸破了，进境到「${SKILL_LEVELS[lv + 1]}」。` };
 }
 
 export function studyCraft(world, player, input) {
@@ -1784,20 +1807,53 @@ export function studyCraft(world, player, input) {
   if (!CRAFT_NAMES.includes(skill)) return { ok: false, reason: '四艺只有符箓、阵法、丹道、炼器' };
   const from = input.from === '师父' ? '师父' : '玉简';
   if (!player.crafts) player.crafts = { 符箓: 0, 阵法: 0, 丹道: 0, 炼器: 0 };
+  if (!player.craftMasters) player.craftMasters = {};
+  let note = '';
   if (from === '师父') {
     const master = (world.npcs || []).find((n) => /师父|拜师|师徒/.test(n.relation || '') && bondOf(n).trust >= 60);
     if (!master) return { ok: false, reason: '身边没有信得过的师父（须师徒名分且信≥60）' };
+    if (skillLevelOf(player.crafts[skill]).level >= MASTER_CAP_LEVEL) {
+      return { ok: false, reason: `师父能教的到「${SKILL_LEVELS[MASTER_CAP_LEVEL]}」为止，再往上得看你自己` };
+    }
+    const prev = player.craftMasters[skill];
+    if (prev && prev !== master.name) {
+      // 叛门：另投他师在修仙界是"欺师灭祖"，旧师翻脸、名声受损
+      const old = (world.npcs || []).find((n) => n.name === prev);
+      if (old) {
+        old.bond = { ...bondOf(old), trust: clampBond(bondOf(old).trust - 40), grudge: clampBond(bondOf(old).grudge + 30) };
+      }
+      player.reputation = Math.max(0, (player.reputation || 0) - 10);
+      note = `【叛门】你抛下旧师「${prev}」另投${master.name}，旧师与你恩断义绝，声名有损（声望 -10）。`;
+    }
+    player.craftMasters[skill] = master.name;
   } else {
     const slip = (world.jadeSlips || []).find((s) => s.skill === skill && !s.read);
     if (!slip) return { ok: false, reason: `没有可读的${skill}玉简` };
     slip.read = true;
+    if (slip.kind === '丹方' && slip.recipe) {
+      const pill = pillByName(slip.recipe);
+      if (pill && !(world.recipes || []).some((r) => r.name === `${pill.name}方`)) {
+        if (!Array.isArray(world.recipes)) world.recipes = [];
+        const base = recipeOf(pill);
+        world.recipes.push({ ...base, name: `${pill.name}方`, have: pill.tier === '残缺' ? 0 : base.pieces, source: '玉简学得' });
+        note = `玉简里录着「${pill.name}方」，丹方到手。`;
+      }
+    } else if (slip.kind === '功法') {
+      if (!Array.isArray(world.skills)) world.skills = [];
+      if (!world.skills.some((s) => s.name === slip.name)) {
+        world.skills.push({ name: slip.name, grade: slip.grade || '玄阶', desc: '玉简所录' });
+        note = `玉简里录着一门「${slip.name}」（${slip.grade || '玄阶'}），参研有得。`;
+      }
+    }
   }
   const before = skillLevelOf(player.crafts[skill]).name;
   const gain = studyGain(player.crafts[skill], from);
-  player.crafts[skill] += gain;
-  const after = skillLevelOf(player.crafts[skill]);
+  const { exp, capped } = applyCraftExp(player.crafts[skill], gain);
+  player.crafts[skill] = exp;
+  const after = skillLevelOf(exp);
   const up = after.name !== before ? `，进境到「${after.name}」` : '';
-  return { ok: true, note: `【求教】${from === '师父' ? '师父指点' : '照玉简参研'}${skill}，经验 +${gain}${up}（${after.name}）。` };
+  const stuck = capped || isBottlenecked(exp) ? '，却卡在瓶颈上' : '';
+  return { ok: true, note: `${note ? `${note}；` : ''}【求教】${from === '师父' ? '师父指点' : '照玉简参研'}${skill}，经验 +${gain}${up}${stuck}（${after.name}）。` };
 }
 
 export function addJadeSlip(world, input) {
@@ -1805,8 +1861,13 @@ export function addJadeSlip(world, input) {
   if (!CRAFT_NAMES.includes(skill)) return { ok: false, reason: '玉简所录须是四艺之一' };
   if (!Array.isArray(world.jadeSlips)) world.jadeSlips = [];
   const name = String((input && input.name) || `${skill}玉简`).trim();
-  world.jadeSlips.push({ name, skill, read: false });
-  return { ok: true, note: `【玉简】得「${name}」，可照简参研${skill}。` };
+  const kind = ['心得', '丹方', '功法', '阵图'].includes(input && input.kind) ? input.kind : '心得';
+  const slip = { name, skill, kind, read: false };
+  if (kind === '丹方' && input.recipe) slip.recipe = String(input.recipe).trim();
+  if (kind === '功法') slip.grade = input.grade || '玄阶';
+  world.jadeSlips.push(slip);
+  const what = kind === '丹方' ? `录着一门丹方（${slip.recipe || '未名'}）` : kind === '功法' ? `录着一门功法（${slip.grade}）` : kind === '阵图' ? '录着一幅阵图' : '记着修行心得';
+  return { ok: true, note: `【玉简】得「${name}」，${what}，可照简参研${skill}。` };
 }
 
 export function craftTalisman(world, player, input, rand = Math.random) {
@@ -1849,16 +1910,68 @@ export function useTalisman(world, player, input) {
   }
   if (e.damageTaken || e.deathMult || e.travelMult) {
     const months = Math.max(1, Math.min(6, e.months || 1));
-    world.talismanBuff = {
+    if (!Array.isArray(world.talismanBuffs)) world.talismanBuffs = [];
+    const now = monthOrdinal(world.date);
+    world.talismanBuffs = world.talismanBuffs.filter((b) => b.untilMonth > now);
+    const same = world.talismanBuffs.find((b) => b.name === def.name);
+    const buff = {
       name: def.name,
       damageTaken: e.damageTaken ? Math.max(0.4, 1 - (1 - e.damageTaken) * power) : 1,
       deathMult: e.deathMult ? Math.max(0.4, 1 - (1 - e.deathMult) * power) : 1,
       travelMult: e.travelMult ? Math.max(0.4, 1 - (1 - e.travelMult) * power) : 1,
-      untilMonth: monthOrdinal(world.date) + months,
+      untilMonth: now + months,
     };
-    bits.push(`符力持续 ${months} 个月`);
+    if (same) {
+      // 同符叠加只延长时间，最多在现有基础上再续六个月
+      same.untilMonth = Math.max(same.untilMonth, Math.min(same.untilMonth + months, now + 6));
+      bits.push(`符力再续（至第 ${same.untilMonth - now} 个月后）`);
+    } else {
+      if (world.talismanBuffs.length >= 3) world.talismanBuffs.shift();
+      world.talismanBuffs.push(buff);
+      bits.push(`符力持续 ${months} 个月`);
+    }
+    world.talismanBuff = buff; // 保留最近一次的镜像，便于展示
   }
   return { ok: true, note: `【用符】「${def.name}」化了：${bits.join('，')}。` };
+}
+
+// 符阵：同一种符三张并作一符阵，符力更久更强（符箓造诣须略有小成）
+export function setTalismanArray(world, player, input, rand = Math.random) {
+  const name = String((input && input.name) || '').trim();
+  const def = talismanByName(name);
+  if (!def) return { ok: false, reason: `「${name}」不是符箓` };
+  const exp = (player.crafts && player.crafts['符箓']) || 0;
+  if (skillLevelOf(exp).level < 2) return { ok: false, reason: '符箓造诣须「略有小成」才能结符阵' };
+  const owned = (world.inventory || []).filter((x) => x.name === def.name).reduce((n, x) => n + (x.qty || 0), 0);
+  if (owned < 3) return { ok: false, reason: `结符阵要三张「${def.name}」（现有 ${owned}）` };
+  for (let i = 0; i < 3; i++) applyItemChange(world, { name: def.name }, -1);
+  const power = (1 + craftBonus(exp, '符箓').power) * 1.5;
+  const e = def.effect || {};
+  if (!Array.isArray(world.talismanBuffs)) world.talismanBuffs = [];
+  const now = monthOrdinal(world.date);
+  const buff = {
+    name: `${def.name}·符阵`,
+    damageTaken: e.damageTaken ? Math.max(0.35, 1 - (1 - e.damageTaken) * power) : 1,
+    deathMult: e.deathMult ? Math.max(0.35, 1 - (1 - e.deathMult) * power) : 1,
+    travelMult: e.travelMult ? Math.max(0.35, 1 - (1 - e.travelMult) * power) : 1,
+    untilMonth: now + Math.max(2, (e.months || 1) * 2),
+  };
+  world.talismanBuffs.push(buff);
+  world.talismanBuff = buff;
+  return { ok: true, note: `【符阵】三张「${def.name}」布成符阵，符力翻倍且更久（约 ${buff.untilMonth - now} 个月）。` };
+}
+
+// 所有生效符力的合计（相乘）
+function talismanBuffFx(world) {
+  const now = monthOrdinal(world.date);
+  const list = (world.talismanBuffs || []).filter((b) => b.untilMonth > now);
+  const fx = { damageTaken: 1, deathMult: 1, travelMult: 1 };
+  for (const b of list) {
+    fx.damageTaken *= b.damageTaken || 1;
+    fx.deathMult *= b.deathMult || 1;
+    fx.travelMult *= b.travelMult || 1;
+  }
+  return { fx, active: list.length > 0 };
 }
 
 // ---------- 炼器（五行配材）----------
@@ -2312,9 +2425,11 @@ export function validateStateOutput(input) {
     foeFormation: record({ name: 'name', tier: 'string' }, ['name']),
     practiceCraft: record({ skill: enumeration(...CRAFT_NAMES), days: 'number' }, ['skill']),
     studyCraft: record({ skill: enumeration(...CRAFT_NAMES), from: enumeration('师父', '玉简') }, ['skill']),
-    newJadeSlip: record({ name: 'name', skill: enumeration(...CRAFT_NAMES) }, ['skill']),
+    newJadeSlip: record({ name: 'name', skill: enumeration(...CRAFT_NAMES), kind: enumeration('心得', '丹方', '功法', '阵图'), recipe: 'string', grade: enumeration(...Object.keys(SKILL_GRADES)) }, ['skill']),
     craftTalisman: record({ name: 'name' }, ['name']),
     useTalisman: record({ name: 'name' }, ['name']),
+    talismanArray: record({ name: 'name' }, ['name']),
+    craftInsight: record({ skill: enumeration(...CRAFT_NAMES) }, ['skill']),
     forge: record({ name: 'name', materials: array('string'), fire: enumeration('真火', '地火') }, ['name']),
     newRegion: record({
       name: 'name', terrain: 'string', qi: 'number', danger: 'number', desc: 'string',
@@ -2476,8 +2591,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const cur = world.geo ? regionById(world.geo.regionId) : null;
     if (target && (!cur || target.id !== cur.id)) {
       const travelFx = formationEffects((world.formations || []).filter((f) => !cur || f.region === cur.id), world);
-      const travelBuff = world.talismanBuff && world.talismanBuff.untilMonth > monthOrdinal(world.date)
-        ? (world.talismanBuff.travelMult || 1) : 1;
+      const travelBuff = talismanBuffFx(world).fx.travelMult;
       const moved = moveToRegion(world, target.id);
       if (moved) {
         const days = Math.max(1, Math.round(moved.days * travelFx.travelMult * travelBuff));
@@ -2507,9 +2621,8 @@ export function applyStateUpdates(player, world, input, report = {}) {
   const s = world.settings || {};
   const god = s.godMode === true; // 言出法随（外挂模式）：不受伤害、不掷死亡骰
   const formationFx = formationEffects(world.formations || [], world); // 已布之阵的合计效果（取最强不叠加，大阵吃地脉涨落）
-  // 符箓的短时符力（过期即散）
-  const activeBuff = world.talismanBuff && world.talismanBuff.untilMonth > monthOrdinal(world.date) ? world.talismanBuff : null;
-  const buffFx = activeBuff ? activeBuff : { damageTaken: 1, deathMult: 1, travelMult: 1 };
+  // 符箓的短时符力（过期即散；多张并存相乘）
+  const buffFx = talismanBuffFx(world).fx;
   const diff = DIFFICULTIES[s.difficulty] || DIFFICULTIES['普通'];
   const pace = PACES[s.pace] || PACES['慢'];
   const eventTurn = (world.turn || 0) + 1;
@@ -2698,6 +2811,16 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const r = useTalisman(world, player, out.useTalisman);
     pillNotes.push(r.note || `【用符】${r.reason}`);
     delete out.useTalisman;
+  }
+  if (out.talismanArray && typeof out.talismanArray === 'object') {
+    const r = setTalismanArray(world, player, out.talismanArray);
+    pillNotes.push(r.note || `【符阵】${r.reason}`);
+    delete out.talismanArray;
+  }
+  if (out.craftInsight && typeof out.craftInsight === 'object') {
+    const r = craftInsight(world, player, out.craftInsight);
+    pillNotes.push(r.note || `【顿悟】${r.reason}`);
+    delete out.craftInsight;
   }
   // 炼器：五行配材，成败由系统掷（名录外的器物炼不出来）
   if (out.forge && typeof out.forge === 'object') {
