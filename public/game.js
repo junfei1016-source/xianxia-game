@@ -8,7 +8,10 @@
 import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn, priceMultiplier, addRegion } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
-import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES } from './treasures.js';
+import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog } from './treasures.js';
+
+// 法宝名录目录（注入提示词：阶位定死，名字管够）
+const TREASURE_CATALOG = treasureCatalog();
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
@@ -30,7 +33,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.19.0';
+export const GAME_VERSION = '1.20.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -497,7 +500,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - npcRelations：与 NPC 的长期关系变化，每项 {name, relation?, debt?, grudge?, trust?, need?}。relation 是标签（结义/拜师/道侣/结仇等）；debt/grudge/trust/need 是四个 0~100 的**增减量**（恩/怨/信/需）：救命赠礼→debt 正，伤害背叛→grudge 正/trust 负，托付守诺→trust 正，长期需要→need 正。给了数值就按数值结算，只给标签则按标签给一份种子。标签只是快照，别只换标签不结账。
 - newEvents：本回合重要事件，每项 {subject, title, desc, relation}（subject 为人物/地点/势力/目标名，relation 为关系状态）。
 - itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}（获得正、消耗负）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
-- 法宝名录：法器（青叶飞剑/铁精盾/玄铁钉/赤火珠）、下品法宝（青蛟旗/玄龟盾/定风珠/金砖）、中品法宝（银丝网/天雷竹/玄铁飞剑）、上品法宝（金蚨子母刃/元磁神山/青竹蜂云剑）、极品法宝（七焰扇/寒髓镜）、古宝（紫铖兜）、通天灵宝（虚天鼎）、玄天之宝（玄天斩灵剑/掌天瓶）。**名录里的法宝，阶位与词条由系统按名录定**，你只填名字，不要自己写 grade/rarity；名录外的法宝才用 grade/rarity。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
+- 法宝名录（阶位：常见名字）——${TREASURE_CATALOG}。**阶位定死、名字管够**：名录里的法宝，阶位与词条由系统按表定，你只填名字，不要自写 grade/rarity；要给玩家新法宝，优先从名录里挑同阶的名字，或按"器物名+器型"另起一个（另起名的按旧规则走 grade/rarity）。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
 - 本命法宝 refineTreasure：玩家以精血祭炼某件**已有**法宝时登记 [{name: 法宝名}]。一名修士只能有一件本命，须金丹以上，耗三成气血与灵石；祭成后威力更胜同阶、与心神相连。属性变化由系统结算，不要自己写。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
 - questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
@@ -858,7 +861,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - NPC 关系 npcRelations：当玩家与某个 NPC 的长期关系结下或改变时登记，每项 {name, relation, debt?, grudge?, trust?, need?}。relation 是标签（如"结义""拜师""道侣""结仇"）；四个数值是 0~100 的**增减量**——救人赠礼记 debt 正（他欠你），受恩记 debt 负（你欠他），伤害/背信记 grudge 正、trust 负，守诺/共患难记 trust 正，长期彼此需要记 need 正。有数值按数值结算；只给标签时系统按标签给种子。结为道侣这类大事件应同时给 trust+need 的正量。
 - 事迹 newEvents：本回合发生的重要事件，每项 {subject, title, desc, relation}。subject 为事件主体（人物/地点/势力/目标名），title 为短标题（如"初遇""结仇"），desc 为描述，relation 为该事件后你与该主体的关系状态（如"挚友""仇敌""师徒""结盟""敌对"，可省略）。同一主体的相关小事件会归成一条脉络，务必给准 subject。
 - 物品 itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}；获得填正 delta（如获得 3 枚疗伤丹 → delta:3），消耗填负 delta（如用掉 1 枚 → delta:-1）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
-- 法宝名录：法器（青叶飞剑/铁精盾/玄铁钉/赤火珠）、下品法宝（青蛟旗/玄龟盾/定风珠/金砖）、中品法宝（银丝网/天雷竹/玄铁飞剑）、上品法宝（金蚨子母刃/元磁神山/青竹蜂云剑）、极品法宝（七焰扇/寒髓镜）、古宝（紫铖兜）、通天灵宝（虚天鼎）、玄天之宝（玄天斩灵剑/掌天瓶）。**名录里的法宝，阶位与词条由系统按名录定**，你只填名字，不要自己写 grade/rarity；名录外的法宝才用 grade/rarity。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
+- 法宝名录（阶位：常见名字）——${TREASURE_CATALOG}。**阶位定死、名字管够**：名录里的法宝，阶位与词条由系统按表定，你只填名字，不要自写 grade/rarity；要给玩家新法宝，优先从名录里挑同阶的名字，或按"器物名+器型"另起一个（另起名的按旧规则走 grade/rarity）。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
 - 本命法宝 refineTreasure：玩家以精血祭炼某件**已有**法宝时登记 [{name: 法宝名}]。一名修士只能有一件本命，须金丹以上，耗三成气血与灵石；祭成后威力更胜同阶、与心神相连。属性变化由系统结算，不要自己写。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。

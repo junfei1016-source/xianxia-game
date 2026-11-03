@@ -3,16 +3,14 @@
 //
 //  原文层级：
 //   · 法器：炼气修士所用，最低阶；
-//   · 法宝：下品 / 中品 / 上品 / 极品，筑基起才能真正驱动（第 156、397 章一带）；
+//   · 法宝：下品 / 中品 / 上品 / 极品；
 //   · 古宝：上古遗府的旧物，威力大但认主不易（第 707 章 紫铖兜）；
 //   · 本命法宝：以精血祭炼、与心神相连（韩立 青竹蜂云剑）；
 //   · 灵宝 / 通天灵宝：虚天鼎 即通天灵宝（第 641 章）；
 //   · 玄天之宝：混沌万灵榜上的通灵之宝（第 1359 章 玄天斩灵剑）。
 //
-//  规则要点：
-//   1) 修为不够，法宝驱动不了（差一个大境界只能发挥一半，再低则完全无用）；
-//   2) 本命法宝只能有一件，祭炼要耗精血与灵石，但威力更大且不易被夺；
-//   3) 越是高阶，越不流通——古宝以上基本买不到。
+//  **阶位定死，名字管够**：九阶的数值与门槛是规则；名录只是"常见样例"，
+//  同阶可以有无数个名字。模型可以从名录里挑，也可以自造同阶之物（须带器型）。
 // ============================================================
 
 const MAJORS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
@@ -35,46 +33,110 @@ export const TREASURE_TIERS = {
   玄天之宝: { rank: 8, minRealm: '大乘', mult: 2.60, ascendBonus: 40, price: 0, tradable: false },
 };
 
-// type 决定用法：剑/刃/钉/扇/梭 主攻，盾/幡/网/镜/塔/钟/印/珠 主防，其余为奇物
-export const ATTACK_TYPES = new Set(['飞剑', '刃', '钉', '扇', '梭']);
-export const DEFENSE_TYPES = new Set(['盾', '幡', '网', '镜', '塔', '钟', '印', '珠']);
+// 器型决定用法：攻击型按阶位降致死，防御型按阶位减伤，奇物只叙事/辅助
+export const ATTACK_TYPES = new Set(['飞剑', '剑', '刃', '钉', '扇', '梭', '锤', '剪', '锥', '鞭', '针', '刀', '枪']);
+export const DEFENSE_TYPES = new Set(['盾', '幡', '网', '镜', '塔', '钟', '印', '珠', '环', '甲', '罩', '丝', '旗', '鼎', '葫芦']);
 
+// 名录：同阶多名，名字只是皮；阶位与词条由表定。
 export const TREASURES = [
-  // 法器（炼气）
-  { name: '青叶飞剑', tier: '法器', type: '飞剑', affix: '锋芒·剑走轻灵', desc: '青竹削成的飞剑，炼气弟子人手一柄。' },
-  { name: '铁精盾', tier: '法器', type: '盾', affix: '护体·挡得三击', desc: '铁精所铸的小盾，挡得住寻常法术。' },
-  { name: '玄铁钉', tier: '法器', type: '钉', affix: '锋芒·破甲', desc: '三寸长的黑钉，专破护体灵光。' },
-  { name: '赤火珠', tier: '法器', type: '珠', affix: '护体·避火', desc: '内蕴火气的珠子，能挡一时火法。' },
+  // ---------- 法器（炼气）----------
+  { name: '青叶飞剑', tier: '法器', type: '飞剑', affix: '锋芒·剑走轻灵' },
+  { name: '铁精盾', tier: '法器', type: '盾', affix: '护体·挡得三击' },
+  { name: '玄铁钉', tier: '法器', type: '钉', affix: '锋芒·破甲' },
+  { name: '赤火珠', tier: '法器', type: '珠', affix: '护体·避火' },
+  { name: '竹节剑', tier: '法器', type: '剑', affix: '锋芒·轻捷' },
+  { name: '黄铜环', tier: '法器', type: '环', affix: '护体·缠斗' },
+  { name: '木傀儡', tier: '法器', type: '奇物', affix: '隐匿·代主受过' },
+  { name: '火球符', tier: '法器', type: '奇物', affix: '锋芒·一次之威' },
+  { name: '青石盾', tier: '法器', type: '盾', affix: '护体·顽石' },
+  { name: '铁线鞭', tier: '法器', type: '鞭', affix: '锋芒·缠敌' },
 
-  // 下品法宝（筑基）
-  { name: '青蛟旗', tier: '下品法宝', type: '幡', affix: '护体·御敌', desc: '旗面绘蛟，祭起时黑气如幕。' },
-  { name: '玄龟盾', tier: '下品法宝', type: '盾', affix: '护体·金刚', desc: '玄龟甲炼成，硬接同阶飞剑。' },
-  { name: '定风珠', tier: '下品法宝', type: '珠', affix: '镇心·定神', desc: '风中不摇，可定心神与身法。' },
-  { name: '金砖', tier: '下品法宝', type: '印', affix: '锋芒·斩敌', desc: '看着像块金砖，砸下来却很疼。' },
+  // ---------- 下品法宝（筑基）----------
+  { name: '青蛟旗', tier: '下品法宝', type: '旗', affix: '护体·御敌' },
+  { name: '玄龟盾', tier: '下品法宝', type: '盾', affix: '护体·金刚' },
+  { name: '定风珠', tier: '下品法宝', type: '珠', affix: '镇心·定神' },
+  { name: '金砖', tier: '下品法宝', type: '印', affix: '锋芒·斩敌' },
+  { name: '赤铜镜', tier: '下品法宝', type: '镜', affix: '护体·照影' },
+  { name: '黑铁印', tier: '下品法宝', type: '印', affix: '锋芒·镇压' },
+  { name: '白骨钉', tier: '下品法宝', type: '钉', affix: '锋芒·阴毒破甲' },
+  { name: '火鸦扇', tier: '下品法宝', type: '扇', affix: '锋芒·焚敌' },
+  { name: '青丝网', tier: '下品法宝', type: '网', affix: '护体·困敌' },
+  { name: '泥傀儡', tier: '下品法宝', type: '奇物', affix: '隐匿·替身' },
+  { name: '青铜钟', tier: '下品法宝', type: '钟', affix: '护体·震慑' },
+  { name: '玄铁鞭', tier: '下品法宝', type: '鞭', affix: '锋芒·裂甲' },
 
-  // 中品法宝（筑基）
-  { name: '银丝网', tier: '中品法宝', type: '网', affix: '护体·困敌', desc: '银丝织成，网住便难以脱身。' },
-  { name: '天雷竹', tier: '中品法宝', type: '奇物', affix: '破劫·抗雷', desc: '雷击木所化，渡劫时可挡一道天雷。' },
-  { name: '玄铁飞剑', tier: '中品法宝', type: '飞剑', affix: '锋芒·锐利', desc: '玄铁打就，斩金断玉。' },
+  // ---------- 中品法宝（筑基）----------
+  { name: '银丝网', tier: '中品法宝', type: '网', affix: '护体·困敌' },
+  { name: '天雷竹', tier: '中品法宝', type: '奇物', affix: '破劫·抗雷' },
+  { name: '玄铁飞剑', tier: '中品法宝', type: '飞剑', affix: '锋芒·锐利' },
+  { name: '紫竹箫', tier: '中品法宝', type: '奇物', affix: '镇心·清音' },
+  { name: '玄阴幡', tier: '中品法宝', type: '幡', affix: '护体·聚阴' },
+  { name: '冰蚕丝', tier: '中品法宝', type: '丝', affix: '护体·韧性' },
+  { name: '火麟盾', tier: '中品法宝', type: '盾', affix: '护体·御火' },
+  { name: '金蛇锥', tier: '中品法宝', type: '锥', affix: '锋芒·穿刺' },
+  { name: '土行珠', tier: '中品法宝', type: '珠', affix: '护体·遁地' },
+  { name: '青木印', tier: '中品法宝', type: '印', affix: '护体·回春' },
+  { name: '白玉环', tier: '中品法宝', type: '环', affix: '镇心·守意' },
+  { name: '雷公锤', tier: '中品法宝', type: '锤', affix: '锋芒·雷击' },
 
-  // 上品法宝（金丹）
-  { name: '金蚨子母刃', tier: '上品法宝', type: '刃', affix: '锋芒·斩敌破甲', desc: '母刃藏子刃，出手便是两处伤。' },
-  { name: '元磁神山', tier: '上品法宝', type: '印', affix: '护体·金刚不减', desc: '一座小山压在头顶，重若千钧。' },
-  { name: '青竹蜂云剑', tier: '上品法宝', type: '飞剑', affix: '锋芒·剑气纵横，悟道·养剑养神', desc: '韩立的本命飞剑，七十二口青竹蜂云剑。' },
+  // ---------- 上品法宝（金丹）----------
+  { name: '金蚨子母刃', tier: '上品法宝', type: '刃', affix: '锋芒·斩敌破甲' },
+  { name: '元磁神山', tier: '上品法宝', type: '印', affix: '护体·金刚' },
+  { name: '青竹蜂云剑', tier: '上品法宝', type: '飞剑', affix: '锋芒·剑气纵横，悟道·养剑养神' },
+  { name: '天鬼幡', tier: '上品法宝', type: '幡', affix: '锋芒·噬血' },
+  { name: '紫电锤', tier: '上品法宝', type: '锤', affix: '锋芒·雷击破甲' },
+  { name: '混元珠', tier: '上品法宝', type: '珠', affix: '护体·混元一气' },
+  { name: '玄铁塔', tier: '上品法宝', type: '塔', affix: '护体·镇压' },
+  { name: '碧玉葫芦', tier: '上品法宝', type: '葫芦', affix: '护体·收纳' },
+  { name: '赤焰旗', tier: '上品法宝', type: '旗', affix: '锋芒·焚敌' },
+  { name: '冰魄针', tier: '上品法宝', type: '针', affix: '锋芒·透骨' },
+  { name: '金蚕丝', tier: '上品法宝', type: '丝', affix: '护体·缚敌' },
+  { name: '落魂钟', tier: '上品法宝', type: '钟', affix: '镇心·摄魂' },
 
-  // 极品法宝（金丹）
-  { name: '七焰扇', tier: '极品法宝', type: '扇', affix: '锋芒·焚敌', desc: '一扇七焰，寻常法宝近不得身。' },
-  { name: '寒髓镜', tier: '极品法宝', type: '镜', affix: '护体·照破幻术', desc: '寒髓为镜，可照破幻术与隐匿。' },
+  // ---------- 极品法宝（金丹）----------
+  { name: '七焰扇', tier: '极品法宝', type: '扇', affix: '锋芒·焚敌' },
+  { name: '寒髓镜', tier: '极品法宝', type: '镜', affix: '护体·照破幻术' },
+  { name: '金蛟剪', tier: '极品法宝', type: '剪', affix: '锋芒·断金' },
+  { name: '紫金葫芦', tier: '极品法宝', type: '葫芦', affix: '护体·收纳万物' },
+  { name: '玄龟甲', tier: '极品法宝', type: '甲', affix: '护体·金身' },
+  { name: '天罡印', tier: '极品法宝', type: '印', affix: '锋芒·镇压' },
+  { name: '玄铁重剑', tier: '极品法宝', type: '剑', affix: '锋芒·重剑无锋' },
+  { name: '九环刀', tier: '极品法宝', type: '刀', affix: '锋芒·连斩' },
+  { name: '火云罩', tier: '极品法宝', type: '罩', affix: '护体·焚敌' },
+  { name: '冰魄神光', tier: '极品法宝', type: '奇物', affix: '锋芒·冻敌' },
 
-  // 古宝（元婴）
-  { name: '紫铖兜', tier: '古宝', type: '网', affix: '护体·困敌', desc: '蛮荒时期的古宝，单论困敌之能冠绝一时。' },
+  // ---------- 古宝（元婴）----------
+  { name: '紫铖兜', tier: '古宝', type: '网', affix: '护体·困敌' },
+  { name: '太乙五烟罗', tier: '古宝', type: '罩', affix: '护体·五烟护体' },
+  { name: '玄阴罗', tier: '古宝', type: '网', affix: '护体·缚敌' },
+  { name: '紫罗极火罩', tier: '古宝', type: '罩', affix: '锋芒·焚敌' },
+  { name: '元磁神光', tier: '古宝', type: '奇物', affix: '锋芒·磁光断兵' },
+  { name: '玄龟古甲', tier: '古宝', type: '甲', affix: '护体·不坏' },
 
-  // 通天灵宝（化神）
-  { name: '虚天鼎', tier: '通天灵宝', type: '钟', affix: '护体·镇岳', desc: '通天灵宝，鼎中藏乾蓝冰焰，非化神不可开启。' },
+  // ---------- 灵宝（元婴）----------
+  { name: '灵犀珠', tier: '灵宝', type: '珠', affix: '镇心·通灵' },
+  { name: '九幽幡', tier: '灵宝', type: '幡', affix: '锋芒·九幽摄魂' },
+  { name: '天音钟', tier: '灵宝', type: '钟', affix: '镇心·荡魔' },
+  { name: '玄天镜', tier: '灵宝', type: '镜', affix: '护体·照破万法' },
+  { name: '紫霄环', tier: '灵宝', type: '环', affix: '锋芒·雷环' },
+  { name: '混元幡', tier: '灵宝', type: '幡', affix: '护体·混元' },
+  { name: '太虚塔', tier: '灵宝', type: '塔', affix: '护体·镇岳' },
+  { name: '玄阴葫芦', tier: '灵宝', type: '葫芦', affix: '护体·收纳' },
 
-  // 玄天之宝（大乘）
-  { name: '玄天斩灵剑', tier: '玄天之宝', type: '飞剑', affix: '锋芒·斩灵', desc: '混沌万灵榜排名前三的玄天之宝，出世必引血雨腥风。' },
-  { name: '掌天瓶', tier: '玄天之宝', type: '奇物', affix: '长青·催灵', desc: '韩立所得的小瓶，能催熟灵药，来历不明。' },
+  // ---------- 通天灵宝（化神）----------
+  { name: '虚天鼎', tier: '通天灵宝', type: '鼎', affix: '护体·镇岳' },
+  { name: '乾蓝鼎', tier: '通天灵宝', type: '鼎', affix: '锋芒·冰焰' },
+  { name: '太虚神鼎', tier: '通天灵宝', type: '鼎', affix: '护体·太虚' },
+  { name: '玄天锁', tier: '通天灵宝', type: '奇物', affix: '护体·锁天' },
+  { name: '紫霄神雷塔', tier: '通天灵宝', type: '塔', affix: '锋芒·神雷' },
+  { name: '混元金斗', tier: '通天灵宝', type: '奇物', affix: '护体·收纳乾坤' },
+
+  // ---------- 玄天之宝（大乘）----------
+  { name: '玄天斩灵剑', tier: '玄天之宝', type: '飞剑', affix: '锋芒·斩灵' },
+  { name: '掌天瓶', tier: '玄天之宝', type: '奇物', affix: '长青·催灵' },
+  { name: '玄天如意', tier: '玄天之宝', type: '奇物', affix: '护体·如意随心' },
+  { name: '混沌葫芦', tier: '玄天之宝', type: '葫芦', affix: '护体·收纳混沌' },
+  { name: '太初剑', tier: '玄天之宝', type: '飞剑', affix: '锋芒·太初' },
 ];
 
 const BY_NAME = new Map(TREASURES.map((t) => [t.name, t]));
@@ -83,10 +145,24 @@ export function treasureByName(name) {
   if (!name) return null;
   const raw = String(name).trim();
   if (BY_NAME.has(raw)) return BY_NAME.get(raw);
+  // 名字里包含名录中的某件（如「青竹蜂云剑（仿）」），取最长的匹配，避免误配短名
+  let best = null;
   for (const t of TREASURES) {
-    if (raw.includes(t.name)) return t;
+    if (raw.includes(t.name) && (!best || t.name.length > best.name.length)) best = t;
   }
-  return null;
+  return best;
+}
+
+// 某阶位的全部名录（供提示词或奇遇抽取）
+export function treasuresOfTier(tier) {
+  return TREASURES.filter((t) => t.tier === tier);
+}
+
+// 名录目录：按阶位分组，注入提示词用。约 700 字，比逐个列 field 省得多。
+export function treasureCatalog() {
+  return Object.keys(TREASURE_TIERS)
+    .map((tier) => `${tier}（${TREASURE_TIERS[tier].minRealm}）：${treasuresOfTier(tier).map((t) => t.name).join('、')}`)
+    .join('；');
 }
 
 export function tierOf(treasure) {

@@ -241,10 +241,10 @@ assert('品类操作方式', ITEM_KINDS['丹药'].action === 'use' && ITEM_KINDS
 const iWorld = newWorldState();
 applyStateUpdates(newPlayerState(), iWorld, { itemChanges: [
   { name: '疗伤丹', desc: '恢复气血', delta: 3 },
-  { name: '紫金葫芦', desc: '天阶法宝', delta: 1, kind: '法宝', grade: '天阶' },
+  { name: '玉髓葫芦', desc: '天阶法宝', delta: 1, kind: '法宝', grade: '天阶' },
 ] });
 const iPill = iWorld.inventory.find((t) => t.name === '疗伤丹');
-const iTreasure = iWorld.inventory.find((t) => t.name === '紫金葫芦');
+const iTreasure = iWorld.inventory.find((t) => t.name === '玉髓葫芦');
 assert('物品自动标注品类', iPill.kind === '丹药' && iTreasure.kind === '法宝' && iTreasure.grade === '天阶');
 
 // 物品数量规范化：丹药/装备整数，天材地宝/材料允许半份

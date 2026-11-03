@@ -13,7 +13,10 @@ import {
 import {
   TREASURE_TIERS,
   TREASURES,
+  ATTACK_TYPES,
+  DEFENSE_TYPES,
   treasureByName,
+  treasureCatalog,
   wieldFactor,
   treasurePower,
   canRefine,
@@ -45,6 +48,28 @@ test('名录：九个阶位齐全，价目随阶位递增', () => {
   assert.ok(TREASURES.length >= 15);
   assert.ok(treasureByName('青竹蜂云剑'));
   assert.ok(treasureByName('虚天鼎'));
+});
+
+test('名字管够：八十件以上，每阶至少五件，且不重名', () => {
+  assert.ok(TREASURES.length >= 80, `实际 ${TREASURES.length}`);
+  assert.equal(new Set(TREASURES.map((t) => t.name)).size, TREASURES.length, '名录不能重名');
+  for (const tier of Object.keys(TREASURE_TIERS)) {
+    const n = TREASURES.filter((t) => t.tier === tier).length;
+    assert.ok(n >= 5, `${tier} 只有 ${n} 件`);
+  }
+});
+
+test('每件的器型与词条都合法，目录按阶位分组', () => {
+  const kinds = new Set([...ATTACK_TYPES, ...DEFENSE_TYPES, '奇物']);
+  for (const t of TREASURES) {
+    assert.ok(kinds.has(t.type), `${t.name} 的器型「${t.type}」不认识`);
+    assert.ok(t.affix, `${t.name} 缺词条`);
+  }
+  const catalog = treasureCatalog();
+  for (const tier of Object.keys(TREASURE_TIERS)) {
+    assert.ok(catalog.includes(tier), `目录缺 ${tier}`);
+  }
+  assert.ok(catalog.includes('青竹蜂云剑'));
 });
 
 test('修为决定驱动：够 = 全额，差一境 = 半，差两境 = 驱动不了', () => {
