@@ -12,6 +12,7 @@ import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_
 import { materialByName, materialTier, materialBrewBonus, elementalBrewAdjust, GATHER_KINDS, gatherPool, MATERIAL_TIERS, elementRelation, elementsClash } from './materials.js';
 import { formationByName, formationCost, canSetFormation, formationEffects, FORMATION_TIERS, isPortable, FORMATIONS, canSetOnLeyline, upgradeCost, FORMATION_MAX_LEVEL, leylinePhase, LEYLINE_MIN_QI } from './formations.js';
 import { CRAFT_NAMES, SKILL_LEVELS, skillLevelOf, craftBonus, practiceGain, studyGain, talismanByName, TALISMAN_TIERS, TALISMANS, drawChance, applyCraftExp, isBottlenecked, MASTER_CAP_LEVEL } from './craft.js';
+import { TECHNIQUES, TECH_GRADES, TECH_TYPES, MAX_LAYER, techniqueByName, techniqueEffect, techniqueEffects, gradeOf, layerCost, layerUpCost } from './techniques.js';
 
 // 法宝名录目录（注入提示词：阶位定死，名字管够）
 const TREASURE_CATALOG = treasureCatalog();
@@ -19,6 +20,8 @@ const TREASURE_CATALOG = treasureCatalog();
 const FORMATION_CATALOG = FORMATIONS.map((f) => `${f.name}（${f.tier}·${f.type}）`).join('、');
 // 符谱（阶位）
 const TALISMAN_CATALOG = TALISMANS.map((t) => `${t.name}（${t.tier}）`).join('、');
+// 功法名录（品阶·类型·属性）
+const TECH_CATALOG = TECHNIQUES.map((t) => `${t.name}（${t.grade}·${t.type}·${t.element}）`).join('、');
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
@@ -40,7 +43,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.31.0';
+export const GAME_VERSION = '1.32.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -420,6 +423,8 @@ export function newPlayerState() {
     craftMasters: {},   // 各艺的师承：{ '丹道': '师父名' }
     craftSecrets: {},   // 暗中拜的师：{ '丹道': {master, from, sinceMonth} }
     craftStuck: {},     // 各艺卡瓶颈的次数（越高越容易顿悟）
+    techniques: [],     // 已修功法：[{name, layer, exp}]
+    mainTechnique: null, // 主修功法名（只吃一门）
   };
 }
 
@@ -549,7 +554,8 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 四艺：符箓、阵法、丹道、炼器各分五级造诣（未入门/初窥门径/略有小成/登堂入室/出神入化）。玩家**自己练**记 practiceCraft {skill, days}；**向师父或玉简求教**记 studyCraft {skill, from: "师父"/"玉简"}——师父须有师徒名分且信≥60，玉简读一次就记下（新得玉简用 newJadeSlip {name, skill} 登记）。造诣影响：丹道与炼器的成功率、阵法的破阵率与布阵折扣、符箓的成符率与符威。这些数值由系统算，你只负责写修行过程。
 - 符箓：符谱——${TALISMAN_CATALOG}。玩家画符记 craftTalisman {name}（须符纸朱砂，高阶加灵墨妖血；造诣不够会被拒），用符记 useTalisman {name}（回血或给一段时间的护身/神行/伤敌符力）。符是一次性的，用完即废；**同一种符可以续时，最多并存三种符力**；三张同符合成符阵记 talismanArray {name}（须符箓「略有小成」）。
 - 四艺的瓶颈与顿悟：**略有小成往上会卡瓶颈**（经验停在 99），此时自练与求教都难寸进；须由叙事给出**顿悟**——你判断玩家真的参悟了，就登记 craftInsight {skill}，系统会破一层瓶颈。**师父只能教到「登堂入室」**；另投他师视为叛门（欺师灭祖），旧师会翻脸、玩家声望受损——这种事要在叙事里写出后果。
-- 玉简的内容：newJadeSlip 可带 kind（心得/丹方/功法/阵图）。丹方玉简须给 recipe（丹药名），读到即得丹方；功法玉简给功法名与 grade，读到即得功法；心得与阵图只长造诣。
+- 玉简的内容：newJadeSlip 可带 kind（心得/丹方/功法/阵图）。丹方玉简须给 recipe（丹药名），读到即得丹方；功法玉简给功法名与 grade（基础/低阶/中阶/高阶/顶阶功法），读到即得功法；心得与阵图只长造诣。
+- 功法：名录——${TECH_CATALOG}。学功法记 learnTechnique {name}；修功记 practiceTechnique {name, days}（逐层练，火候满了要耗灵石冲关，九层为止）；择主修记 setMainTechnique {name}（**转修要散掉一成修为**）。主修功法加修炼，炼体减伤、剑诀伤敌、神识助破阵——数值由系统算。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
 - questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
 - factionRelations：与势力关系变化，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
@@ -922,7 +928,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 四艺：符箓、阵法、丹道、炼器各分五级造诣（未入门/初窥门径/略有小成/登堂入室/出神入化）。玩家**自己练**记 practiceCraft {skill, days}；**向师父或玉简求教**记 studyCraft {skill, from: "师父"/"玉简"}——师父须有师徒名分且信≥60，玉简读一次就记下（新得玉简用 newJadeSlip {name, skill} 登记）。造诣影响：丹道与炼器的成功率、阵法的破阵率与布阵折扣、符箓的成符率与符威。这些数值由系统算，你只负责写修行过程。
 - 符箓：符谱——${TALISMAN_CATALOG}。玩家画符记 craftTalisman {name}（须符纸朱砂，高阶加灵墨妖血；造诣不够会被拒），用符记 useTalisman {name}（回血或给一段时间的护身/神行/伤敌符力）。符是一次性的，用完即废；**同一种符可以续时，最多并存三种符力**；三张同符合成符阵记 talismanArray {name}（须符箓「略有小成」）。
 - 四艺的瓶颈与顿悟：**略有小成往上会卡瓶颈**（经验停在 99），此时自练与求教都难寸进；须由叙事给出**顿悟**——你判断玩家真的参悟了，就登记 craftInsight {skill}，系统会破一层瓶颈。**师父只能教到「登堂入室」**；另投他师视为叛门（欺师灭祖），旧师会翻脸、玩家声望受损——这种事要在叙事里写出后果。
-- 玉简的内容：newJadeSlip 可带 kind（心得/丹方/功法/阵图）。丹方玉简须给 recipe（丹药名），读到即得丹方；功法玉简给功法名与 grade，读到即得功法；心得与阵图只长造诣。
+- 玉简的内容：newJadeSlip 可带 kind（心得/丹方/功法/阵图）。丹方玉简须给 recipe（丹药名），读到即得丹方；功法玉简给功法名与 grade（基础/低阶/中阶/高阶/顶阶功法），读到即得功法；心得与阵图只长造诣。
+- 功法：名录——${TECH_CATALOG}。学功法记 learnTechnique {name}；修功记 practiceTechnique {name, days}（逐层练，火候满了要耗灵石冲关，九层为止）；择主修记 setMainTechnique {name}（**转修要散掉一成修为**）。主修功法加修炼，炼体减伤、剑诀伤敌、神识助破阵——数值由系统算。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
 - 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
@@ -1741,7 +1748,7 @@ export function breakFormation(world, player, input, rand = Math.random) {
   const foeRank = Math.max(1, Object.keys(FORMATION_TIERS).indexOf(target.tier) + 1 || 2);
   const pRank = majorRankOf(player.realm);
   const atk = (world.inventory || []).some((it) => it && it.equipped && it.tier && ATTACK_TYPES.has(it.type)) ? 0.08 : 0;
-  const zhenBonus = craftBonus((player.crafts && player.crafts['阵法']) || 0, '阵法').breakForm; // 阵道造诣
+  const zhenBonus = craftBonus((player.crafts && player.crafts['阵法']) || 0, '阵法').breakForm + (techniqueEffects(player.techniques || []).breakForm || 0); // 阵道造诣 + 神识功法
   const chance = method === '寻阵眼'
     ? Math.max(0.1, Math.min(0.9, 0.35 + (pRank - foeRank) * 0.08 + zhenBonus))
     : Math.max(0.1, Math.min(0.9, 0.5 - foeRank * 0.04 + atk + zhenBonus));
@@ -1893,10 +1900,17 @@ export function studyCraft(world, player, input) {
         note = `玉简里录着「${pill.name}方」，丹方到手。`;
       }
     } else if (slip.kind === '功法') {
-      if (!Array.isArray(world.skills)) world.skills = [];
-      if (!world.skills.some((s) => s.name === slip.name)) {
-        world.skills.push({ name: slip.name, grade: slip.grade || '玄阶', desc: '玉简所录' });
-        note = `玉简里录着一门「${slip.name}」（${slip.grade || '玄阶'}），参研有得。`;
+      const known = techniqueByName(slip.name);
+      if (known) {
+        const r = learnTechnique(world, player, { name: known.name });
+        note = r.note || r.reason;
+      } else {
+        // 名录外的功法（模型自造）：只记在册，不给数值加成
+        if (!Array.isArray(world.skills)) world.skills = [];
+        if (!world.skills.some((s) => s.name === slip.name)) {
+          world.skills.push({ name: slip.name, grade: slip.grade || '基础功法', desc: '玉简所录' });
+          note = `玉简里录着一门「${slip.name}」（${slip.grade || '基础功法'}），参研有得（名录外，只记在册）。`;
+        }
       }
     }
   }
@@ -1918,7 +1932,7 @@ export function addJadeSlip(world, input) {
   const kind = ['心得', '丹方', '功法', '阵图'].includes(input && input.kind) ? input.kind : '心得';
   const slip = { name, skill, kind, read: false };
   if (kind === '丹方' && input.recipe) slip.recipe = String(input.recipe).trim();
-  if (kind === '功法') slip.grade = input.grade || '玄阶';
+  if (kind === '功法') slip.grade = TECH_GRADES[input.grade] ? input.grade : '基础功法';
   world.jadeSlips.push(slip);
   const what = kind === '丹方' ? `录着一门丹方（${slip.recipe || '未名'}）` : kind === '功法' ? `录着一门功法（${slip.grade}）` : kind === '阵图' ? '录着一幅阵图' : '记着修行心得';
   return { ok: true, note: `【玉简】得「${name}」，${what}，可照简参研${skill}。` };
@@ -2026,6 +2040,94 @@ function talismanBuffFx(world) {
     fx.travelMult *= b.travelMult || 1;
   }
   return { fx, active: list.length > 0 };
+}
+
+// ---------- 功法 ----------
+// 学到手、逐层练、择一门主修。主修吃修炼倍率，其余功法吃各自那一摊（炼体减伤、剑诀伤敌、神识助破阵）。
+export function learnTechnique(world, player, input) {
+  const def = techniqueByName(input && input.name);
+  if (!def) return { ok: false, reason: `「${(input && input.name) || ''}」不是所知功法` };
+  const grade = gradeOf(def);
+  if (majorRankOf(player.realm) < majorRankOf(grade.minRealm)) {
+    return { ok: false, reason: `修为不足，${def.grade}须${grade.minRealm}起才能修` };
+  }
+  if (!Array.isArray(player.techniques)) player.techniques = [];
+  if (player.techniques.some((t) => t.name === def.name)) return { ok: false, reason: `已修「${def.name}」` };
+  player.techniques.push({ name: def.name, layer: 1, exp: 0 });
+  if (!player.mainTechnique && (def.type === '主修' || def.type === '辅助')) player.mainTechnique = def.name;
+  return { ok: true, note: `【得法】你记下了「${def.name}」（${def.grade}·${def.type}·${def.element}属），从第一层起修。` };
+}
+
+export function practiceTechnique(world, player, input) {
+  const name = String((input && input.name) || '').trim();
+  const tech = (player.techniques || []).find((t) => t.name === (techniqueByName(name) || {}).name);
+  if (!tech) return { ok: false, reason: `未修「${name}」` };
+  const def = techniqueByName(tech.name);
+  const days = Math.max(1, Math.min(30, Math.floor(Number(input.days) || 5)));
+  const gain = Math.max(1, Math.round(days * (2 + (tech.layer || 1) * 0.5)));
+  tech.exp = (tech.exp || 0) + gain;
+  const need = layerCost(tech.layer);
+  let note = `【修功】${days} 日修「${tech.name}」第 ${tech.layer} 层，火候 +${gain}（${tech.exp}/${need}）。`;
+  if (tech.exp >= need && tech.layer < MAX_LAYER) {
+    const cost = layerUpCost(def, tech.layer);
+    if (player.spiritStones >= cost) {
+      player.spiritStones -= cost;
+      tech.layer += 1;
+      tech.exp = 0;
+      note += ` 灵石一催，破入第 ${tech.layer} 层（灵石 -${cost}）。`;
+    } else {
+      note += ` 火候已足，只差 ${cost} 块灵石冲关。`;
+    }
+  } else if (tech.layer >= MAX_LAYER) {
+    note += ' 已至第九层，再无可进。';
+  }
+  return { ok: true, days, note };
+}
+
+export function setMainTechnique(world, player, input) {
+  const def = techniqueByName(input && input.name);
+  if (!def) return { ok: false, reason: '没有这门功法' };
+  const tech = (player.techniques || []).find((t) => t.name === def.name);
+  if (!tech) return { ok: false, reason: `未修「${def.name}」` };
+  if (player.mainTechnique === def.name) return { ok: false, reason: `「${def.name}」已是主修` };
+  const prev = player.mainTechnique;
+  if (prev) {
+    // 转修要散功：旧功法练出的法力要散掉一部分
+    const lost = Math.round((player.cultivation || 0) * 0.1 * 100) / 100;
+    player.cultivation = Math.max(0, Math.round(((player.cultivation || 0) - lost) * 100) / 100);
+    player.mainTechnique = def.name;
+    return { ok: true, note: `【转修】弃「${prev}」改修「${def.name}」，旧功散了一成修为（修为 -${lost}）。` };
+  }
+  player.mainTechnique = def.name;
+  return { ok: true, note: `【主修】以「${def.name}」为主修功法。` };
+}
+
+// 秘密拜师会不会被旧师察觉：过得越久、旧师越在意，越容易露
+export function checkCraftSecretExposure(world, player, rand = Math.random) {
+  const secrets = player.craftSecrets || {};
+  const skills = Object.keys(secrets);
+  if (!skills.length) return null;
+  const now = monthOrdinal(world.date);
+  const exposed = [];
+  for (const skill of skills) {
+    const s = secrets[skill];
+    const months = Math.max(1, now - (s.sinceMonth || now));
+    const old = (world.npcs || []).find((n) => n.name === s.from);
+    const watchful = old && bondOf(old).trust >= 60 ? 1.5 : 1;
+    const chance = Math.min(0.85, 0.02 * months * watchful);
+    if (rand() < chance) exposed.push({ skill, s, old, chance });
+  }
+  if (!exposed.length) return null;
+  let note = '';
+  for (const { skill, s, old } of exposed) {
+    if (old) {
+      old.bond = { ...bondOf(old), trust: clampBond(bondOf(old).trust - 40), grudge: clampBond(bondOf(old).grudge + 30) };
+    }
+    player.reputation = Math.max(0, (player.reputation || 0) - 10);
+    delete player.craftSecrets[skill];
+    note += `【事泄】你暗拜「${s.master}」学${skill}的事被旧师「${s.from}」知道了——欺师灭祖的罪名坐实（声望 -10）。`;
+  }
+  return note;
 }
 
 // ---------- 炼器（五行配材）----------
@@ -2484,6 +2586,9 @@ export function validateStateOutput(input) {
     useTalisman: record({ name: 'name' }, ['name']),
     talismanArray: record({ name: 'name' }, ['name']),
     craftInsight: record({ skill: enumeration(...CRAFT_NAMES) }, ['skill']),
+    learnTechnique: record({ name: 'name' }, ['name']),
+    practiceTechnique: record({ name: 'name', days: 'number' }, ['name']),
+    setMainTechnique: record({ name: 'name' }, ['name']),
     forge: record({ name: 'name', materials: array('string'), fire: enumeration('真火', '地火') }, ['name']),
     newRegion: record({
       name: 'name', terrain: 'string', qi: 'number', danger: 'number', desc: 'string',
@@ -2675,6 +2780,12 @@ export function applyStateUpdates(player, world, input, report = {}) {
   const s = world.settings || {};
   const god = s.godMode === true; // 言出法随（外挂模式）：不受伤害、不掷死亡骰
   const formationFx = formationEffects(world.formations || [], world); // 已布之阵的合计效果（取最强不叠加，大阵吃地脉涨落）
+  // 功法：主修吃修炼倍率，其余（炼体/剑诀/神识）吃各自那一摊
+  const techFx = techniqueEffects(player.techniques || []);
+  const mainTechName = player.mainTechnique;
+  const mainTechEntry = mainTechName ? (player.techniques || []).find((t) => t.name === mainTechName) : null;
+  const mainTechDef = mainTechName ? techniqueByName(mainTechName) : null;
+  const techCultMult = (mainTechDef && mainTechEntry) ? (techniqueEffect(mainTechDef, mainTechEntry.layer || 1).cultMult || 1) : 1;
   // 符箓的短时符力（过期即散；多张并存相乘）
   const buffFx = talismanBuffFx(world).fx;
   const diff = DIFFICULTIES[s.difficulty] || DIFFICULTIES['普通'];
@@ -2741,9 +2852,9 @@ export function applyStateUpdates(player, world, input, report = {}) {
     else continue;
     // 本回合服了丹：气血/修为的正增量交给系统按丹方结算，避免模型重复加一遍
     if (pillApplied && (key === 'hp' || key === 'cultivation') && delta > 0) continue;
-    if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1) * formationFx.damageTaken * buffFx.damageTaken); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条减伤+护山阵+符力
+    if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1) * formationFx.damageTaken * buffFx.damageTaken * (techFx.damageTaken || 1)); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条+护山阵+符力+炼体
     if (key === 'cultivation' && delta > 0) {
-      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm * formationFx.cultMult; // 再加聚灵阵
+      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm * formationFx.cultMult * techCultMult; // 再加聚灵阵与主修功法
       if (closedDoor) {
         // 闭关：修为按时长结算，模型给的 delta 只当效率提示（不再 ×closeMonths，避免一次闭关灌满）
         delta = Math.round(seclusionGain(player.realm, out.timeMonths, delta) * mults * 100) / 100;
@@ -2876,6 +2987,23 @@ export function applyStateUpdates(player, world, input, report = {}) {
     pillNotes.push(r.note || `【顿悟】${r.reason}`);
     delete out.craftInsight;
   }
+  // 功法：学、练、择主修
+  if (out.learnTechnique && typeof out.learnTechnique === 'object') {
+    const r = learnTechnique(world, player, out.learnTechnique);
+    pillNotes.push(r.note || `【得法】${r.reason}`);
+    delete out.learnTechnique;
+  }
+  if (out.practiceTechnique && typeof out.practiceTechnique === 'object') {
+    const r = practiceTechnique(world, player, out.practiceTechnique);
+    pillNotes.push(r.note || `【修功】${r.reason}`);
+    if (r.days) out.timeMonths = Math.max(Number(out.timeMonths) || 0, Math.round((r.days / 30) * 1000) / 1000);
+    delete out.practiceTechnique;
+  }
+  if (out.setMainTechnique && typeof out.setMainTechnique === 'object') {
+    const r = setMainTechnique(world, player, out.setMainTechnique);
+    pillNotes.push(r.note || `【主修】${r.reason}`);
+    delete out.setMainTechnique;
+  }
   // 炼器：五行配材，成败由系统掷（名录外的器物炼不出来）
   if (out.forge && typeof out.forge === 'object') {
     const f = forgeTreasure(world, player, out.forge);
@@ -2960,7 +3088,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   // 疾风（战斗）/隐匿（非战斗）降低概率；铁骨保底不死。濒死状态下不再重复掷骰。言出法随豁免。
   if (!god && !world.flags.deathImminent && (out.risk === 'high' || out.risk === 'lethal')) {
     const base = out.risk === 'lethal' ? diff.deathLethal : diff.deathHigh;
-    let chance = Math.min(0.95, base * (combat ? combatDeathMult(realmDiff) : 1) * (combat ? equipAtk : 1) * (formationFx.deathMult || 1) * (buffFx.deathMult || 1));
+    let chance = Math.min(0.95, base * (combat ? combatDeathMult(realmDiff) : 1) * (combat ? equipAtk : 1) * (formationFx.deathMult || 1) * (buffFx.deathMult || 1) * (techFx.deathMult || 1));
     if (combat && activeHas(world.inventory, 'swift')) chance *= 0.8;   // 疾风
     if (!combat && activeHas(world.inventory, 'stealth')) chance *= 0.8; // 隐匿
     if (Math.random() < chance) {
@@ -3504,6 +3632,12 @@ export function applyStateUpdates(player, world, input, report = {}) {
       const heal = Math.min(player.maxHp - player.hp, Math.max(1, Math.round(player.maxHp * 0.05)));
       player.hp += heal;
     }
+  }
+
+  // 秘密拜师：日子一长，旧师可能察觉（过得越久、旧师越在意，越容易露）
+  if (Number(out.timeMonths) > 0) {
+    const exposure = checkCraftSecretExposure(world, player);
+    if (exposure) pillNotes.push(exposure);
   }
 
   // 结算（半透明展示）：逆天改命 > 战斗 > 闭关被打断 > 关系浮出 > 行路

@@ -122,12 +122,12 @@ test('玉简·丹方：读到即得丹方', () => {
   assert.ok(world.recipes.some((r) => r.name === '回春丹方'));
 });
 
-test('玉简·功法：读到即得功法', () => {
+test('玉简·功法：读到即得功法（入功法册）', () => {
   const { player, world } = setup();
-  addJadeSlip(world, { name: '长春功', skill: '丹道', kind: '功法', grade: '玄阶' });
+  addJadeSlip(world, { name: '长春功', skill: '丹道', kind: '功法' });
   const res = studyCraft(world, player, { skill: '丹道', from: '玉简' });
   assert.equal(res.ok, true);
-  assert.ok(world.skills.some((s) => s.name === '长春功' && s.grade === '玄阶'));
+  assert.ok(player.techniques.some((t) => t.name === '长春功'), '名录内功法应入功法册');
 });
 
 test('符力可并存：金刚符与神行符各管一摊', () => {
