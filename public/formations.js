@@ -93,13 +93,17 @@ export function canSetFormation(realm, formation) {
   return majorRank(realm) >= majorRank(t.minRealm);
 }
 
-// 已布之阵的合计效果（同一效果取最强，不叠加）
-export function formationEffects(formations = []) {
+// 已布之阵的合计效果（同一效果取最强，不叠加）；传入 world 时计入地脉涨落
+export function formationEffects(formations = [], world = null) {
+  const phase = world ? leylinePhase(world) : '平';
+  const phaseMult = phase === '旺' ? 1.1 : phase === '衰' ? 0.9 : 1;
   const fx = { cultMult: 1, damageTaken: 1, deathMult: 1, interruptMult: 1, travelMult: 1 };
   for (const f of formations) {
     const def = formationByName(f.name);
     if (!def) continue;
-    const e = def.effect || {};
+    const tier = formationTier(def);
+    const usePhase = tier && tier.big ? phaseMult : 1; // 只有大阵吃地脉
+    const e = scaledEffect(f.name, f.level || 1, usePhase);
     if (e.cultMult) fx.cultMult = Math.max(fx.cultMult, e.cultMult);
     if (e.damageTaken) fx.damageTaken = Math.min(fx.damageTaken, e.damageTaken);
     if (e.deathMult) fx.deathMult = Math.min(fx.deathMult, e.deathMult);
@@ -113,4 +117,45 @@ export function formationEffects(formations = []) {
 export function isPortable(formation) {
   const t = formationTier(formation);
   return !!t && !t.big;
+}
+
+// ---------- 加固与地脉 ----------
+// 原文：阵眼处镶嵌灵石供灵力、以主阵旗操控（第 231 章）；大阵借地脉（第 870 章地肺火脉），
+// 而地脉阴气有涨落（第 913、917 章）。所以：阵可加固、大阵吃地脉、地脉有旺衰。
+export const FORMATION_MAX_LEVEL = 3;
+export const LEYLINE_MIN_QI = 3;
+
+export function canSetOnLeyline(region) {
+  return !!region && (region.qi || 0) >= LEYLINE_MIN_QI;
+}
+
+// 地脉涨落：按月份轮转，旺则加成、衰则减色
+export function leylinePhase(world) {
+  const month = (world && world.date && Number(world.date.month)) || 1;
+  const m = month % 4;
+  if (m === 1) return '旺';
+  if (m === 3) return '衰';
+  return '平';
+}
+
+// 加固一级的代价（以布阵价为基准）
+export function upgradeCost(formation, level = 1) {
+  const base = formationCost(formation);
+  return Math.round(base * 0.6 * Math.max(1, level));
+}
+
+// 按加固层数放大效果：每层 +25%；大阵再乘地脉涨落
+export function scaledEffect(name, level = 1, phaseMult = 1) {
+  const def = formationByName(name);
+  if (!def) return {};
+  const e = def.effect || {};
+  const lv = 1 + 0.25 * (Math.max(1, Math.min(FORMATION_MAX_LEVEL, level)) - 1);
+  const k = lv * phaseMult;
+  const out = {};
+  if (e.cultMult) out.cultMult = 1 + (e.cultMult - 1) * k;
+  if (e.damageTaken) out.damageTaken = Math.max(0.2, 1 - (1 - e.damageTaken) * k);
+  if (e.deathMult) out.deathMult = Math.max(0.2, 1 - (1 - e.deathMult) * k);
+  if (e.interruptMult) out.interruptMult = Math.max(0.15, 1 - (1 - e.interruptMult) * k);
+  if (e.travelMult) out.travelMult = Math.max(0.3, 1 - (1 - e.travelMult) * k);
+  return out;
 }
