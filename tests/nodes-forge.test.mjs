@@ -45,10 +45,13 @@ test('采集点会枯竭：把三处都采空后只能碰运气', () => {
   assert.equal(total, 1, '野外只能采一份');
 });
 
-test('隔几个月恢复：一年后再采又能满份', () => {
+test('隔年恢复：三处都采空后，过几年再采又能满份', () => {
   const { player, world } = setup('qingwu');
-  gatherMaterials(world, player, { kind: '采药', days: 8 }, () => 0.2);
-  world.date = { year: 2, month: 4, day: 1 }; // 过了一年多
+  for (let i = 0; i < 3; i++) gatherMaterials(world, player, { kind: '采药', days: 8 }, () => 0.2);
+  const dry = gatherMaterials(world, player, { kind: '采药', days: 8 }, () => 0.2);
+  assert.ok(dry.note.includes('枯竭'), '三处应已采空');
+
+  world.date = { year: 4, month: 4, day: 1 }; // 凡品两年一熟，过了三年多
   const res = gatherMaterials(world, player, { kind: '采药', days: 8 }, () => 0.2);
   assert.ok(!res.note.includes('枯竭'), res.note);
   assert.equal(Object.values(res.items).reduce((a, b) => a + b, 0), 2);

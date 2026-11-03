@@ -35,11 +35,11 @@ test('区域稀有度上限：按灵气+危险排，仙域最高', () => {
 });
 
 test('恢复周期按稀有度：凡品半年，神品八年', () => {
-  assert.equal(nodeRespawn('凡品'), 6);
-  assert.equal(nodeRespawn('灵品'), 12);
-  assert.equal(nodeRespawn('玄品'), 24);
-  assert.equal(nodeRespawn('仙品'), 48);
-  assert.equal(nodeRespawn('神品'), 96);
+  assert.equal(nodeRespawn('凡品'), 24); // 2 年
+  assert.equal(nodeRespawn('灵品'), 120); // 10 年
+  assert.equal(nodeRespawn('玄品'), 600); // 50 年
+  assert.equal(nodeRespawn('仙品'), 2400); // 200 年
+  assert.equal(nodeRespawn('神品'), 9600); // 800 年
 });
 
 test('青芜的采集点只能是凡品，材料也对得上', () => {
@@ -48,7 +48,7 @@ test('青芜的采集点只能是凡品，材料也对得上', () => {
   assert.equal(world.nodes.length, 3);
   for (const n of world.nodes) {
     assert.equal(n.rarity, '凡品');
-    assert.equal(n.respawnMonths, 6);
+    assert.equal(n.respawnMonths, 24);
   }
 });
 
@@ -56,7 +56,7 @@ test('星陨荒原能出到仙品，但出不了神品', () => {
   const seen = new Set();
   for (let i = 0; i < 30; i++) {
     const { player, world } = setup('xingyun', '元婴初期');
-    gatherMaterials(world, player, { kind: '挖矿', days: 4 }, seq([0.05 * i, 0.3, 0.5, 0.9]));
+    gatherMaterials(world, player, { kind: '挖矿', days: 4 }, seq([(i % 20) / 20, 0.3, 0.5, 0.9]));
     for (const n of world.nodes) {
       seen.add(n.rarity);
       assert.ok(NODE_RARITIES.indexOf(n.rarity) <= 3, `${n.rarity} 超出上限`);
@@ -69,7 +69,7 @@ test('太清仙域能出神品', () => {
   const seen = new Set();
   for (let i = 0; i < 40; i++) {
     const { player, world } = setup('taiqing', '化神初期');
-    gatherMaterials(world, player, { kind: '采药', days: 4 }, seq([0.02 * i, 0.5, 0.7, 0.95]));
+    gatherMaterials(world, player, { kind: '采药', days: 4 }, seq([(i % 20) / 20, 0.5, 0.7, 0.95]));
     for (const n of world.nodes) seen.add(n.rarity);
   }
   assert.ok(seen.has('神品') || seen.has('仙品'), `仙域应出仙品以上：${[...seen].join('、')}`);

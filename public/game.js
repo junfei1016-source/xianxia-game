@@ -34,7 +34,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.24.0';
+export const GAME_VERSION = '1.25.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -1341,31 +1341,48 @@ function majorRankOf(realm) {
 }
 
 // ---------- 采集点（药圃/矿脉/妖巢）----------
-// 稀有度随"灵气 + 凶险"抬升：低灵气区只有凡品灵草，绝地才出仙品；
-// 高阶采集点恢复更慢、一茬收成更少（仙品以上一次只得一份）。
+// 稀有度随"灵气 + 凶险"抬升，并随大势浮动：秘境将启会催生高货，末法时代连灵草都难长。
+// 恢复周期按小说口径以"年"计（百年灵药不是半年就能再长一茬的）。
 const NODE_KINDS = { 采药: '药圃', 挖矿: '矿脉', 猎妖: '妖巢' };
 export const NODE_RARITIES = ['凡品', '灵品', '玄品', '仙品', '神品'];
-const RARITY_RESPAWN = { 凡品: 6, 灵品: 12, 玄品: 24, 仙品: 48, 神品: 96 };
+const RARITY_RESPAWN_YEARS = { 凡品: 2, 灵品: 10, 玄品: 50, 仙品: 200, 神品: 800 };
 const RARITY_YIELD_CAP = { 凡品: 99, 灵品: 99, 玄品: 2, 仙品: 1, 神品: 1 };
 
-// 区域能出到的最高稀有度：灵气+危险越高越可能出高货；灵气 ≥5 的仙域可出神品
-export function regionNodeCap(region) {
+// 大势对采集点稀有度的影响：秘境将启催生灵物，战乱与末法让灵脉枯竭
+const ERA_NODE_DELTA = { 盛世: 1, 秘境将启: 2, 乱世: 0, 正魔大战: -1, 末法时代: -2 };
+
+// 区域能出到的最高稀有度：灵气+危险越高越可能出高货；灵气 ≥5 的仙域可出神品；再由大势加减
+export function regionNodeCap(region, eraType = '') {
   if (!region) return 0;
-  if ((region.qi || 1) >= 5) return 4;
-  const power = (region.qi || 1) + (region.danger || 1);
-  if (power >= 10) return 4;
-  if (power >= 8) return 3;
-  if (power >= 6) return 2;
-  if (power >= 4) return 1;
-  return 0;
+  let cap;
+  if ((region.qi || 1) >= 5) cap = 4;
+  else {
+    const power = (region.qi || 1) + (region.danger || 1);
+    cap = power >= 10 ? 4 : power >= 8 ? 3 : power >= 6 ? 2 : power >= 4 ? 1 : 0;
+  }
+  cap += ERA_NODE_DELTA[eraType] || 0;
+  return Math.max(0, Math.min(4, cap));
 }
 
+// 恢复周期（月）：凡品 2 年、灵品 10 年、玄品 50 年、仙品 200 年、神品 800 年
 export function nodeRespawn(tier) {
-  return RARITY_RESPAWN[tier] || 12;
+  return (RARITY_RESPAWN_YEARS[tier] || 10) * 12;
 }
 
-function pickNodeRarity(region, rand) {
-  const cap = regionNodeCap(region);
+// 高阶采集点的守护：仙品起必有，玄品三成
+const GUARD_NAMES = ['守药妖兽', '护脉石傀', '毒蛟', '铁背妖狼', '阴魂'];
+function makeGuard(rarity, rand) {
+  const rank = NODE_RARITIES.indexOf(rarity);
+  if (rank < 3 && !(rank === 2 && rand() < 0.3)) return null;
+  return {
+    name: GUARD_NAMES[Math.floor(rand() * GUARD_NAMES.length)],
+    rank: Math.max(2, rank), // 守护的境界：玄品=金丹，仙品=元婴，神品=化神
+    defeated: false,
+  };
+}
+
+function pickNodeRarity(region, rand, eraType = '') {
+  const cap = regionNodeCap(region, eraType);
   const weights = [6, 4, 2, 1, 0.5].slice(0, cap + 1); // 越低越常见
   const total = weights.reduce((a, b) => a + b, 0);
   let hit = rand() * total;
@@ -1376,9 +1393,41 @@ function pickNodeRarity(region, rand) {
   return '凡品';
 }
 
+function fillNode(node, region, gatherKind, rand) {
+  const pool = gatherPool(region.id, gatherKind);
+  if (!pool.length) return node;
+  const wanted = pickNodeRarity(region, rand, node.eraType || '');
+  let rank = NODE_RARITIES.indexOf(wanted);
+  let material = null;
+  while (rank >= 0 && !material) {
+    const cand = pool.filter((x) => (MATERIAL_TIERS[materialTier(x)] || { rank: 0 }).rank === rank);
+    if (cand.length) material = cand[Math.floor(rand() * cand.length)];
+    rank -= 1;
+  }
+  if (!material) {
+    // 大势压得太狠、当地没有低阶之物：退而取本地最低阶的那一种
+    let best = null;
+    let bestRank = 99;
+    for (const x of pool) {
+      const r = (MATERIAL_TIERS[materialTier(x)] || { rank: 0 }).rank;
+      if (r < bestRank) { bestRank = r; best = x; }
+    }
+    material = best || pool[0];
+  }
+  const realRank = (MATERIAL_TIERS[materialTier(material)] || { rank: 0 }).rank;
+  const rarity = NODE_RARITIES[realRank] || '凡品';
+  node.material = material.name;
+  node.rarity = rarity;
+  node.respawnMonths = nodeRespawn(rarity);
+  node.guard = makeGuard(rarity, rand);
+  node.harvestedMonth = null;
+  return node;
+}
+
 function ensureRegionNodes(world, region, gatherKind, rand) {
   if (!Array.isArray(world.nodes)) world.nodes = [];
   const nodeKind = NODE_KINDS[gatherKind];
+  const eraType = (world && world.eraType) || '';
   const exist = world.nodes.filter((n) => n.region === region.id && n.kind === nodeKind);
   if (exist.length) return exist;
   const pool = gatherPool(region.id, gatherKind);
@@ -1386,27 +1435,12 @@ function ensureRegionNodes(world, region, gatherKind, rand) {
   const count = Math.min(3, pool.length);
   const created = [];
   for (let i = 0; i < count; i++) {
-    const wanted = pickNodeRarity(region, rand);
-    let rank = NODE_RARITIES.indexOf(wanted);
-    let material = null;
-    // 该稀有度没有对应材料就往下找，最差落到凡品
-    while (rank >= 0 && !material) {
-      const cand = pool.filter((x) => (MATERIAL_TIERS[materialTier(x)] || { rank: 0 }).rank === rank);
-      if (cand.length) material = cand[Math.floor(rand() * cand.length)];
-      rank -= 1;
-    }
-    if (!material) material = pool[0];
-    const realRank = (MATERIAL_TIERS[materialTier(material)] || { rank: 0 }).rank;
-    const rarity = NODE_RARITIES[realRank] || '凡品';
-    created.push({
+    created.push(fillNode({
       id: `${region.id}_${nodeKind}_${i}`,
       region: region.id,
       kind: nodeKind,
-      material: material.name,
-      rarity,
-      respawnMonths: nodeRespawn(rarity),
-      harvestedMonth: null,
-    });
+      eraType,
+    }, region, gatherKind, rand));
   }
   world.nodes.push(...created);
   return created;
@@ -1433,15 +1467,41 @@ export function gatherMaterials(world, player, input, rand = Math.random) {
 
   const times = Math.max(1, Math.round(days / 4)); // 四天一份
   const now = monthOrdinal(world.date);
-  const nodes = ensureRegionNodes(world, region, kind, rand).filter((n) => {
+  const eraType = (world && world.eraType) || '';
+  const all = ensureRegionNodes(world, region, kind, rand);
+  // 到了恢复期的采集点，按当前大势重新生成：秘境将启会催出高货，末法时代会掉档
+  for (const n of all) {
+    if (Number.isFinite(n.harvestedMonth) && nodeReady(n, now)) {
+      n.eraType = eraType;
+      fillNode(n, region, kind, rand);
+    }
+  }
+  const nodes = all.filter((n) => {
     const m = materialByName(n.material);
     return m && tierRank(m) <= rank && nodeReady(n, now);
   });
 
+  let hpLoss = 0;
+  let dangerNote = '';
   const picks = [];
   let siteNote = '';
   if (nodes.length) {
     const node = nodes[Math.floor(rand() * nodes.length)];
+    // 守护：仙品以上必有，玄品三成。打不过就采不到，还会受伤。
+    if (node.guard && !node.guard.defeated) {
+      const chance = Math.max(0.05, Math.min(0.95, 0.5 + (rank - node.guard.rank) * 0.15));
+      if (rand() >= chance) {
+        hpLoss = Math.max(1, Math.round(player.maxHp * (0.2 + rand() * 0.2)));
+        player.hp = Math.max(1, player.hp - hpLoss);
+        return {
+          ok: true, kind, days, items: {}, hpLoss,
+          site: `${node.kind}（${node.rarity}）有${node.guard.name}守着`,
+          note: `【采集】${kind} ${days} 日：${node.kind}（${node.rarity}）旁有${node.guard.name}，你没能得手，反被所伤（气血 -${hpLoss}）。`,
+        };
+      }
+      node.guard.defeated = true;
+      dangerNote = `击退了${node.guard.name}`;
+    }
     const cap = RARITY_YIELD_CAP[node.rarity] || 99;
     const got = Math.min(times, cap);
     for (let i = 0; i < got; i++) picks.push(node.material);
@@ -1454,13 +1514,11 @@ export function gatherMaterials(world, player, input, rand = Math.random) {
   }
   for (const name of picks) applyItemChange(world, { name }, 1);
 
-  let hpLoss = 0;
-  let dangerNote = '';
   const risk = (kind === '猎妖' ? 0.15 : 0.08) + region.danger * 0.02;
   if (rand() < risk) {
     hpLoss = Math.max(1, Math.round(player.maxHp * (0.06 + rand() * 0.12)));
     player.hp = Math.max(1, player.hp - hpLoss);
-    dangerNote = `遭了埋伏，气血 -${hpLoss}`;
+    dangerNote = `${dangerNote ? `${dangerNote}；` : ''}遭了埋伏，气血 -${hpLoss}`;
   }
 
   const tally = {};
