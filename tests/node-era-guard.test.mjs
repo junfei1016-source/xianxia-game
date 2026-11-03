@@ -64,12 +64,12 @@ test('高阶采集点有守护：打不过就采不到，还会受伤', () => {
   world.nodes = [{
     id: 'xingyun_矿脉_0', region: 'xingyun', kind: '矿脉',
     material: '陨铁', rarity: '仙品', respawnMonths: 2400, harvestedMonth: null,
-    guard: { name: '护脉石傀', rank: 3, defeated: false },
+    guard: { name: '护脉石傀', rank: 3, hp: 9, maxHp: 9, defeated: false, aggroUntil: null },
   }];
   const hp0 = player.hp;
   const res = gatherMaterials(world, player, { kind: '挖矿', days: 4 }, () => 0.9);
   assert.equal(res.ok, true);
-  assert.ok(res.note.includes('没能得手'), res.note);
+  assert.ok(res.note.includes('斗了'), res.note);
   assert.ok(res.hpLoss > 0);
   assert.ok(player.hp < hp0);
   assert.equal(world.nodes[0].guard.defeated, false, '没打过，守护还在');
@@ -80,7 +80,7 @@ test('打赢守护：采得到，守护倒下', () => {
   world.nodes = [{
     id: 'xingyun_矿脉_0', region: 'xingyun', kind: '矿脉',
     material: '陨铁', rarity: '仙品', respawnMonths: 2400, harvestedMonth: null,
-    guard: { name: '护脉石傀', rank: 3, defeated: false },
+    guard: { name: '护脉石傀', rank: 3, hp: 9, maxHp: 9, defeated: false, aggroUntil: null },
   }];
   const res = gatherMaterials(world, player, { kind: '挖矿', days: 4 }, () => 0.1);
   assert.ok(res.note.includes('击退'), res.note);

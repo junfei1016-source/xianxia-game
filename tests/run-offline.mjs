@@ -39,6 +39,7 @@ const suites = [
   ['采集点与炼器', ['tests/nodes-forge.test.mjs']],
   ['采集点稀有度', ['tests/node-rarity.test.mjs']],
   ['采集点守护与大势', ['tests/node-era-guard.test.mjs']],
+  ['守护缠斗与灵田经营', ['tests/plots-guard.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 

@@ -34,7 +34,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.25.0';
+export const GAME_VERSION = '1.26.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -422,6 +422,7 @@ export function newWorldState() {
     npcLinks: [],    // 人物之间的关系网：[{a,b,type,note,turn}]，NPC 彼此也有师承/亲眷/恩怨
     recipes: [],     // 已知丹方：{name,pill,tier,pieces,have,chance,materials,price}
     nodes: [],       // 采集点：{id,region,kind(药圃/矿脉/妖巢),material,respawnMonths,harvestedMonth}
+    plots: [],       // 自营灵田/矿脉：{id,region,kind,material,tier,matureMonth}
     knownSecrets: {}, // 势力底细的查明进度：{ 势力id: 'hinted' | 'revealed' }，没查过就没有键
     locations: [],   // [{name, desc}]
     items: [],       // 图鉴：获得过的物品（永久记录，[{name, desc}]）
@@ -525,6 +526,8 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 采集 gather：玩家在野外地界采药/挖矿/猎妖时登记 {kind: "采药"/"挖矿"/"猎妖", days: 天数 1~30}。**出什么由系统按区域与玩家境界定**（境界越高越能取高阶之物），耗时从日历扣、野外有受伤风险；你不要自己写材料产出。每次采集会落到该区域的**采集点**（药圃/矿脉/妖巢）：采过会枯竭，隔几个月才恢复——叙事里可以写"药圃已被采空，得等来年"。
 - 炼器 forge：玩家开炉炼器时登记 {name: 法宝名, materials: [材料名…], fire: "真火"/"地火"}。**只有名录里的法宝炼得出来**，至少要两味材料且须在背包里；成器率看阶位与**五行配材**——材料与法宝同属/相生则加成，相克则减成，地火炼火属法宝再加一成。成败、扣料、废器由系统结算，你不要自己写。
 - 法宝相冲：同时装备两件五行相克的名录法宝，双方威力减半（多宝不是随便堆的）。火克金、金克木、木克土、土克水、水克火。
+- 灵田/矿脉：玩家在合适地界开垦时登记 plant {material: 材料名}（消耗一份作种，最多 3 处）；照料记 tendPlot {id?}（耗灵石，缩短成熟）；收成记 harvestPlot {id?}。成熟周期按年份（凡品 2 年、灵品 10 年、玄品 50 年、仙品 200 年、神品 800 年），**收成由系统结算**，不要自己写产出。
+- 守护：高阶采集点有守护，采之前要交手（最多六合）。打不过会受伤撤退，并被它记仇半年——这半年再靠近只会被赶走。叙事里可写"它认得了你的气息"。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
 - questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
 - factionRelations：与势力关系变化，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
@@ -890,6 +893,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 采集 gather：玩家在野外地界采药/挖矿/猎妖时登记 {kind: "采药"/"挖矿"/"猎妖", days: 天数 1~30}。**出什么由系统按区域与玩家境界定**（境界越高越能取高阶之物），耗时从日历扣、野外有受伤风险；你不要自己写材料产出。每次采集会落到该区域的**采集点**（药圃/矿脉/妖巢）：采过会枯竭，隔几个月才恢复——叙事里可以写"药圃已被采空，得等来年"。
 - 炼器 forge：玩家开炉炼器时登记 {name: 法宝名, materials: [材料名…], fire: "真火"/"地火"}。**只有名录里的法宝炼得出来**，至少要两味材料且须在背包里；成器率看阶位与**五行配材**——材料与法宝同属/相生则加成，相克则减成，地火炼火属法宝再加一成。成败、扣料、废器由系统结算，你不要自己写。
 - 法宝相冲：同时装备两件五行相克的名录法宝，双方威力减半（多宝不是随便堆的）。火克金、金克木、木克土、土克水、水克火。
+- 灵田/矿脉：玩家在合适地界开垦时登记 plant {material: 材料名}（消耗一份作种，最多 3 处）；照料记 tendPlot {id?}（耗灵石，缩短成熟）；收成记 harvestPlot {id?}。成熟周期按年份（凡品 2 年、灵品 10 年、玄品 50 年、仙品 200 年、神品 800 年），**收成由系统结算**，不要自己写产出。
+- 守护：高阶采集点有守护，采之前要交手（最多六合）。打不过会受伤撤退，并被它记仇半年——这半年再靠近只会被赶走。叙事里可写"它认得了你的气息"。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
 - 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
@@ -1369,15 +1374,19 @@ export function nodeRespawn(tier) {
   return (RARITY_RESPAWN_YEARS[tier] || 10) * 12;
 }
 
-// 高阶采集点的守护：仙品起必有，玄品三成
+// 高阶采集点的守护：仙品起必有，玄品三成。守护有耐久，会连打几回合、会记仇。
 const GUARD_NAMES = ['守药妖兽', '护脉石傀', '毒蛟', '铁背妖狼', '阴魂'];
 function makeGuard(rarity, rand) {
   const rank = NODE_RARITIES.indexOf(rarity);
   if (rank < 3 && !(rank === 2 && rand() < 0.3)) return null;
+  const hp = 6 + rank; // 玄品 8 点、仙品 9 点、神品 10 点——同境硬拼六合也打不完
   return {
     name: GUARD_NAMES[Math.floor(rand() * GUARD_NAMES.length)],
-    rank: Math.max(2, rank), // 守护的境界：玄品=金丹，仙品=元婴，神品=化神
+    rank: Math.max(2, rank), // 玄品=金丹，仙品=元婴，神品=化神
+    hp,
+    maxHp: hp,
     defeated: false,
+    aggroUntil: null,
   };
 }
 
@@ -1391,6 +1400,30 @@ function pickNodeRarity(region, rand, eraType = '') {
     if (hit <= 0) return NODE_RARITIES[i];
   }
   return '凡品';
+}
+
+// 守护是场短斗：最多六合，气力不济就退。守护有耐久，打退一次还会记仇（半年内绕开你）。
+function fightGuard(world, player, node, rand) {
+  const g = node.guard;
+  const pRank = majorRankOf(player.realm);
+  const hasAtk = (world.inventory || []).some((it) => it && it.equipped && it.tier && ATTACK_TYPES.has(it.type));
+  const dmg = 1 + (pRank > g.rank ? 1 : 0) + (hasAtk ? 1 : 0);
+  let rounds = 0;
+  let hpLoss = 0;
+  while (g.hp > 0 && player.hp > player.maxHp * 0.2 && rounds < 6) {
+    g.hp -= dmg;
+    rounds += 1;
+    if (g.hp <= 0) break;
+    const hurt = Math.max(1, Math.round(player.maxHp * (0.06 + rand() * 0.06)));
+    player.hp = Math.max(1, player.hp - hurt);
+    hpLoss += hurt;
+  }
+  if (g.hp <= 0) {
+    g.defeated = true;
+    return { win: true, rounds, hpLoss };
+  }
+  g.aggroUntil = monthOrdinal(world.date) + 6;
+  return { win: false, rounds, hpLoss };
 }
 
 function fillNode(node, region, gatherKind, rand) {
@@ -1487,20 +1520,23 @@ export function gatherMaterials(world, player, input, rand = Math.random) {
   let siteNote = '';
   if (nodes.length) {
     const node = nodes[Math.floor(rand() * nodes.length)];
-    // 守护：仙品以上必有，玄品三成。打不过就采不到，还会受伤。
+    // 守护：仙品以上必有，玄品三成。多回合交手，打不过就退、会被记仇。
     if (node.guard && !node.guard.defeated) {
-      const chance = Math.max(0.05, Math.min(0.95, 0.5 + (rank - node.guard.rank) * 0.15));
-      if (rand() >= chance) {
-        hpLoss = Math.max(1, Math.round(player.maxHp * (0.2 + rand() * 0.2)));
-        player.hp = Math.max(1, player.hp - hpLoss);
+      if (Number.isFinite(node.guard.aggroUntil) && now < node.guard.aggroUntil) {
         return {
-          ok: true, kind, days, items: {}, hpLoss,
-          site: `${node.kind}（${node.rarity}）有${node.guard.name}守着`,
-          note: `【采集】${kind} ${days} 日：${node.kind}（${node.rarity}）旁有${node.guard.name}，你没能得手，反被所伤（气血 -${hpLoss}）。`,
+          ok: true, kind, days, items: {}, hpLoss: 0, site: `${node.kind}（${node.rarity}）`,
+          note: `【采集】${node.kind}（${node.rarity}）旁，${node.guard.name}还在气头上，你暂且绕开。`,
         };
       }
-      node.guard.defeated = true;
-      dangerNote = `击退了${node.guard.name}`;
+      const fight = fightGuard(world, player, node, rand);
+      hpLoss = fight.hpLoss;
+      if (!fight.win) {
+        return {
+          ok: true, kind, days, items: {}, hpLoss, site: `${node.kind}（${node.rarity}）有${node.guard.name}守着`,
+          note: `【采集】${kind} ${days} 日：${node.kind}（${node.rarity}）旁与${node.guard.name}斗了 ${fight.rounds} 合，你力有不逮，退了回来（气血 -${hpLoss}）。`,
+        };
+      }
+      dangerNote = `击退了${node.guard.name}（${fight.rounds} 合）`;
     }
     const cap = RARITY_YIELD_CAP[node.rarity] || 99;
     const got = Math.min(times, cap);
@@ -1528,6 +1564,79 @@ export function gatherMaterials(world, player, input, rand = Math.random) {
     ok: true, kind, days, items: tally, hpLoss, site: siteNote,
     note: `【采集】${kind} ${days} 日：${siteNote}，${items}${dangerNote ? `；${dangerNote}` : ''}`,
   };
+}
+
+// ---------- 灵田与矿脉（自营采集点）----------
+// 种下去、养起来、按年份收。成熟周期沿用采集点的年数口径，照料可提前。
+export const PLOT_LIMIT = 3;
+const PLOT_KIND = {
+  灵草: '灵田', 灵花: '灵田', 灵果: '灵田', 灵液: '灵田',
+  矿石: '矿脉', 灵木: '矿脉', 奇物: '矿脉',
+  妖丹: '妖巢', 妖骨: '妖巢', 妖皮: '妖巢', 妖血: '妖巢',
+};
+
+export function plantPlot(world, player, input) {
+  const name = String((input && input.material) || '').trim();
+  const mat = materialByName(name);
+  if (!mat) return { ok: false, reason: `「${name}」不是能栽种的材料` };
+  const region = world && world.geo ? regionById(world.geo.regionId, world) : null;
+  if (!region) return { ok: false, reason: '不知身在何处' };
+  if (!(mat.regions || []).includes(region.id)) return { ok: false, reason: `${region.name}养不活「${name}」` };
+  if (!Array.isArray(world.plots)) world.plots = [];
+  if (world.plots.length >= PLOT_LIMIT) return { ok: false, reason: `最多经营 ${PLOT_LIMIT} 处灵田/矿脉` };
+  if (!(world.inventory || []).some((it) => it.name === mat.name && it.qty >= 1)) {
+    return { ok: false, reason: `没有「${name}」作种` };
+  }
+  const tier = materialTier(mat);
+  const growth = nodeRespawn(tier);
+  const now = monthOrdinal(world.date);
+  applyItemChange(world, { name: mat.name }, -1);
+  const plot = {
+    id: `plot_${world.plots.length + 1}`,
+    region: region.id,
+    kind: PLOT_KIND[mat.kind] || '灵田',
+    material: mat.name,
+    tier,
+    plantedMonth: now,
+    growthMonths: growth,
+    matureMonth: now + growth,
+  };
+  world.plots.push(plot);
+  return {
+    ok: true, plot,
+    note: `【开垦】你在${region.name}辟出一处${plot.kind}，种下「${mat.name}」（${tier}，约 ${Math.max(1, Math.round(growth / 12))} 年成熟）。`,
+  };
+}
+
+export function tendPlot(world, player, input) {
+  const id = String((input && input.id) || '').trim();
+  const plots = world.plots || [];
+  const plot = plots.find((p) => p.id === id) || plots[0];
+  if (!plot) return { ok: false, reason: '没有可照料的灵田/矿脉' };
+  const now = monthOrdinal(world.date);
+  if (now >= plot.matureMonth) return { ok: false, reason: '已到收成的时候，不必再照料' };
+  const price = (MATERIAL_TIERS[plot.tier] || {}).price || 100;
+  const cost = Math.max(10, Math.round(price * 0.1));
+  if (player.spiritStones < cost) return { ok: false, reason: `灵石不足（需 ${cost}）` };
+  player.spiritStones -= cost;
+  const saved = Math.round(plot.growthMonths * 0.2);
+  plot.matureMonth = Math.max(now + 1, plot.matureMonth - saved);
+  return { ok: true, note: `【照料】你以灵石温养${plot.kind}，成熟提前约 ${Math.max(1, Math.round(saved / 12))} 年（灵石 -${cost}）。` };
+}
+
+export function harvestPlot(world, player, input) {
+  const id = String((input && input.id) || '').trim();
+  const plots = world.plots || [];
+  const plot = plots.find((p) => p.id === id) || plots[0];
+  if (!plot) return { ok: false, reason: '没有可收成的灵田/矿脉' };
+  const now = monthOrdinal(world.date);
+  if (now < plot.matureMonth) {
+    return { ok: false, reason: `尚未成熟（还差约 ${Math.max(1, Math.ceil((plot.matureMonth - now) / 12))} 年）` };
+  }
+  const qty = ['凡品', '灵品', '玄品'].includes(plot.tier) ? 2 : 1;
+  applyItemChange(world, { name: plot.material }, qty);
+  world.plots = plots.filter((p) => p !== plot);
+  return { ok: true, items: { [plot.material]: qty }, note: `【收成】${plot.kind}里的「${plot.material}」熟了，收得 ${qty} 份。` };
 }
 
 // ---------- 炼器（五行配材）----------
@@ -1970,6 +2079,9 @@ export function validateStateOutput(input) {
     trades: array(record({ action: enumeration('buy', 'sell'), item: 'name', qty: 'number' }, ['action', 'item'])),
     auctionBids: array(record({ item: 'name', bid: 'number' }, ['item', 'bid'])),
     gather: record({ kind: enumeration('采药', '挖矿', '猎妖'), days: 'number' }, ['kind']),
+    plant: record({ material: 'name' }, ['material']),
+    tendPlot: record({ id: 'string' }),
+    harvestPlot: record({ id: 'string' }),
     forge: record({ name: 'name', materials: array('string'), fire: enumeration('真火', '地火') }, ['name']),
     newRegion: record({
       name: 'name', terrain: 'string', qi: 'number', danger: 'number', desc: 'string',
@@ -2271,6 +2383,22 @@ export function applyStateUpdates(player, world, input, report = {}) {
       pillNotes.push(g.note);
     }
     delete out.gather;
+  }
+  // 灵田/矿脉：开垦、照料、收成
+  if (out.plant && typeof out.plant === 'object') {
+    const r = plantPlot(world, player, out.plant);
+    pillNotes.push(r.note || `【开垦】${r.reason}`);
+    delete out.plant;
+  }
+  if (out.tendPlot && typeof out.tendPlot === 'object') {
+    const r = tendPlot(world, player, out.tendPlot);
+    pillNotes.push(r.note || `【照料】${r.reason}`);
+    delete out.tendPlot;
+  }
+  if (out.harvestPlot && typeof out.harvestPlot === 'object') {
+    const r = harvestPlot(world, player, out.harvestPlot);
+    pillNotes.push(r.note || `【收成】${r.reason}`);
+    delete out.harvestPlot;
   }
   // 炼器：五行配材，成败由系统掷（名录外的器物炼不出来）
   if (out.forge && typeof out.forge === 'object') {
