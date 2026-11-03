@@ -139,3 +139,37 @@ export function materialBrewBonus(materials = []) {
   }
   return Math.min(0.15, Math.round(bonus * 100) / 100);
 }
+
+// ---------- 五行与炼丹 ----------
+// 火炼之法：木生火（助燃）、雷助火；水克火、阴寒压火、火克金（耗火）。
+// 地火比真火更"火"，助与压都放大一半。
+export function elementalBrewAdjust(materialNames = [], fire = '真火') {
+  const els = materialNames.map((n) => materialByName(n)).filter(Boolean).map((m) => m.element);
+  const power = fire === '地火' ? 1.5 : 1;
+  let delta = 0;
+  const notes = [];
+  for (const el of els) {
+    if (el === '木') { delta += 0.04 * power; notes.push('木助火'); }
+    else if (el === '雷') { delta += 0.03 * power; notes.push('雷助火'); }
+    else if (el === '水') { delta -= 0.05 * power; notes.push('水压火'); }
+    else if (el === '阴') { delta -= 0.04 * power; notes.push('阴寒压火'); }
+    else if (el === '金') { delta -= 0.02 * power; notes.push('火克金，耗火'); }
+  }
+  delta = Math.max(-0.2, Math.min(0.2, Math.round(delta * 100) / 100));
+  return { delta, notes: [...new Set(notes)], elements: els };
+}
+
+// ---------- 采集 ----------
+// 采药取草木灵液，挖矿取矿石灵木，猎妖取妖兽材料；境界越高，越能取到高阶之物。
+export const GATHER_KINDS = {
+  采药: ['灵草', '灵花', '灵果', '灵液'],
+  挖矿: ['矿石', '灵木', '奇物'],
+  猎妖: ['妖丹', '妖骨', '妖皮', '妖血'],
+};
+
+export function gatherPool(regionId, kind) {
+  const kinds = GATHER_KINDS[kind];
+  if (!kinds) return [];
+  return materialsInRegion(regionId).filter((m) => kinds.includes(m.kind));
+}
+
