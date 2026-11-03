@@ -33,6 +33,7 @@ const suites = [
   ['拍卖会期（每年三月/九月）', ['tests/auction-schedule.test.mjs']],
   ['完整地图（九域二十家）', ['tests/world-map-full.test.mjs']],
   ['区域生成标准（玩家开新域）', ['tests/region-generation.test.mjs']],
+  ['法宝（阶位/驱动/本命）', ['tests/treasures.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 

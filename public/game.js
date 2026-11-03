@@ -8,6 +8,7 @@
 import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn, priceMultiplier, addRegion } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
+import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES } from './treasures.js';
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
@@ -29,7 +30,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.18.0';
+export const GAME_VERSION = '1.19.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -261,9 +262,10 @@ export function affixLabels(affix) {
   const fx = affixEffects(affix);
   return fx.matched.map((k) => ({ key: k, label: AFFIX_REGISTRY[k].label, desc: AFFIX_REGISTRY[k].desc, kind: AFFIX_REGISTRY[k].kind }));
 }
-// 常驻功能法宝：法宝、无修行词条但有功能词条 → 无需装备、始终生效、不给修炼倍率
+// 常驻功能法宝：法宝、无修行词条但有功能词条 → 无需装备、始终生效、不给修炼倍率。
+// 名录法宝（有 tier）一律走阶位与槽位，不再算"功能法宝"，否则上品法宝会被当成免费常驻。
 export function isFunctionalTreasure(it) {
-  if (!it) return false;
+  if (!it || it.tier) return false;
   const kind = it.kind || kindFromText(it.name, it.desc);
   if (kind !== '法宝') return false;
   const fx = affixEffects(it.affix);
@@ -311,12 +313,15 @@ export function breakthroughRate(player, world, kind) {
   const diff = DIFFICULTIES[(world && world.settings && world.settings.difficulty) || '普通'] || DIFFICULTIES['普通'];
   rate += diff.breakBonus || 0; // 难度影响突破/渡劫成功率
   if (kind === 'major' && activeHas(world.inventory, 'breakBonus')) rate += AFFIX_REGISTRY['破障'].fx.breakBonus; // 破障词条：大境界突破 +10%
-  // 稀有度与词条的渡劫/突破加成：取单件最高，不再叠加（防堆装备刷成功率）
+  // 阶位/稀有度与词条的渡劫·突破加成：取单件最高，不再叠加（防堆装备刷成功率）
   let best = 0;
   for (const it of activeItems(world.inventory)) {
+    const tier = it.tier ? TREASURE_TIERS[it.tier] : null;
     const r = RARITIES[it.rarity] || RARITIES['凡品'];
-    const bonus = (kind === 'ascend' ? r.ascendBonus : Math.floor(r.ascendBonus / 2)) + affixEffects(it.affix).ascendBonus;
-    best = Math.max(best, bonus);
+    const base = tier
+      ? tier.ascendBonus * (treasurePower(it, player.realm) ? 1 : 0)
+      : (kind === 'ascend' ? r.ascendBonus : Math.floor(r.ascendBonus / 2));
+    best = Math.max(best, base + affixEffects(it.affix).ascendBonus);
   }
   rate += best;
   if ((world.npcs || []).some((n) => /道侣|双修|拜师|师徒/.test(n.relation || ''))) rate += 10;
@@ -492,6 +497,8 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - npcRelations：与 NPC 的长期关系变化，每项 {name, relation?, debt?, grudge?, trust?, need?}。relation 是标签（结义/拜师/道侣/结仇等）；debt/grudge/trust/need 是四个 0~100 的**增减量**（恩/怨/信/需）：救命赠礼→debt 正，伤害背叛→grudge 正/trust 负，托付守诺→trust 正，长期需要→need 正。给了数值就按数值结算，只给标签则按标签给一份种子。标签只是快照，别只换标签不结账。
 - newEvents：本回合重要事件，每项 {subject, title, desc, relation}（subject 为人物/地点/势力/目标名，relation 为关系状态）。
 - itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}（获得正、消耗负）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
+- 法宝名录：法器（青叶飞剑/铁精盾/玄铁钉/赤火珠）、下品法宝（青蛟旗/玄龟盾/定风珠/金砖）、中品法宝（银丝网/天雷竹/玄铁飞剑）、上品法宝（金蚨子母刃/元磁神山/青竹蜂云剑）、极品法宝（七焰扇/寒髓镜）、古宝（紫铖兜）、通天灵宝（虚天鼎）、玄天之宝（玄天斩灵剑/掌天瓶）。**名录里的法宝，阶位与词条由系统按名录定**，你只填名字，不要自己写 grade/rarity；名录外的法宝才用 grade/rarity。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
+- 本命法宝 refineTreasure：玩家以精血祭炼某件**已有**法宝时登记 [{name: 法宝名}]。一名修士只能有一件本命，须金丹以上，耗三成气血与灵石；祭成后威力更胜同阶、与心神相连。属性变化由系统结算，不要自己写。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
 - questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
 - factionRelations：与势力关系变化，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
@@ -851,6 +858,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - NPC 关系 npcRelations：当玩家与某个 NPC 的长期关系结下或改变时登记，每项 {name, relation, debt?, grudge?, trust?, need?}。relation 是标签（如"结义""拜师""道侣""结仇"）；四个数值是 0~100 的**增减量**——救人赠礼记 debt 正（他欠你），受恩记 debt 负（你欠他），伤害/背信记 grudge 正、trust 负，守诺/共患难记 trust 正，长期彼此需要记 need 正。有数值按数值结算；只给标签时系统按标签给种子。结为道侣这类大事件应同时给 trust+need 的正量。
 - 事迹 newEvents：本回合发生的重要事件，每项 {subject, title, desc, relation}。subject 为事件主体（人物/地点/势力/目标名），title 为短标题（如"初遇""结仇"），desc 为描述，relation 为该事件后你与该主体的关系状态（如"挚友""仇敌""师徒""结盟""敌对"，可省略）。同一主体的相关小事件会归成一条脉络，务必给准 subject。
 - 物品 itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}；获得填正 delta（如获得 3 枚疗伤丹 → delta:3），消耗填负 delta（如用掉 1 枚 → delta:-1）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
+- 法宝名录：法器（青叶飞剑/铁精盾/玄铁钉/赤火珠）、下品法宝（青蛟旗/玄龟盾/定风珠/金砖）、中品法宝（银丝网/天雷竹/玄铁飞剑）、上品法宝（金蚨子母刃/元磁神山/青竹蜂云剑）、极品法宝（七焰扇/寒髓镜）、古宝（紫铖兜）、通天灵宝（虚天鼎）、玄天之宝（玄天斩灵剑/掌天瓶）。**名录里的法宝，阶位与词条由系统按名录定**，你只填名字，不要自己写 grade/rarity；名录外的法宝才用 grade/rarity。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
+- 本命法宝 refineTreasure：玩家以精血祭炼某件**已有**法宝时登记 [{name: 法宝名}]。一名修士只能有一件本命，须金丹以上，耗三成气血与灵石；祭成后威力更胜同阶、与心神相连。属性变化由系统结算，不要自己写。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
 - 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
@@ -1162,8 +1171,15 @@ export function itemPrice(world, player, name, action = 'buy') {
   // 丹方名 = 丹名 + "方"（回春丹方 → 回春丹）
   const isRecipe = /方$/.test(raw);
   const pillSpec = isRecipe ? pillByName(raw.replace(/方$/, '')) : pillByName(raw);
-  if (!pillSpec) return null;
-  const base = isRecipe ? recipeOf(pillSpec).price : pillSpec.price;
+  const treasure = pillSpec ? null : treasureByName(raw);
+  let base;
+  if (pillSpec) {
+    base = isRecipe ? recipeOf(pillSpec).price : pillSpec.price;
+  } else if (treasure && TREASURE_TIERS[treasure.tier].tradable) {
+    base = TREASURE_TIERS[treasure.tier].price;
+  } else {
+    return null;
+  }
   const regionMult = world && world.geo ? priceMultiplier(world.geo.regionId, world.eraType) : 1;
   const rep = Number(player && player.reputation) || 0;
   const repFactor = Math.max(0.8, Math.min(1.3, 1 - (rep - 50) / 250)); // 声望 70 约让利 8%，声望 20 抬价一成
@@ -1322,18 +1338,35 @@ export function combatDeathMult(diff) {
   if (diff === 2) return 1.8;
   return 3.0;
 }
-// 装备防御：衣物/法宝（含常驻功能法宝）的品阶降低受伤（仙阶 2.5 → 受伤×0.4）
-export function equipDefenseMult(inventory) {
-  const best = activeItems(inventory)
-    .filter((it) => it && (it.kind === '衣物' || it.kind === '法宝'))
-    .reduce((m, it) => Math.max(m, gradeMult(it.grade)), 1.0);
+// 名录法宝按阶位与修为驱动；名录外的旧式装备仍按品阶×稀有度
+export function treasureCultMult(item, player) {
+  const power = treasurePower(item, player && player.realm);
+  return power === null ? gradeMult(item.grade) : power;
+}
+// 装备防御：衣物按品阶；名录法宝按阶位威力（修为不足则打折扣，驱动不了就不加分）
+export function equipDefenseMult(inventory, player = null) {
+  const realm = player && player.realm;
+  const best = activeItems(inventory).reduce((m, it) => {
+    const kind = it.kind || kindFromText(it.name, it.desc);
+    if (kind === '衣物') return Math.max(m, gradeMult(it.grade));
+    if (kind !== '法宝') return m;
+    const power = treasurePower(it, realm);
+    if (power !== null) return DEFENSE_TYPES.has(it.type) ? Math.max(m, power) : m;
+    return Math.max(m, gradeMult(it.grade));
+  }, 1.0);
   return 1 / best;
 }
 // 装备攻击：已装备武器的品阶降低致死率（仙阶 2.5 → 致死×0.4）；双持取最强一把
-export function equipAttackMult(inventory) {
-  const best = activeItems(inventory)
-    .filter((it) => it && it.kind === '武器')
-    .reduce((m, it) => Math.max(m, gradeMult(it.grade)), 1.0);
+export function equipAttackMult(inventory, player = null) {
+  const realm = player && player.realm;
+  const best = activeItems(inventory).reduce((m, it) => {
+    const kind = it.kind || kindFromText(it.name, it.desc);
+    if (kind === '武器') return Math.max(m, gradeMult(it.grade));
+    if (kind !== '法宝') return m;
+    const power = treasurePower(it, realm);
+    if (power !== null && ATTACK_TYPES.has(it.type)) return Math.max(m, power);
+    return m;
+  }, 1.0);
   return 1 / best;
 }
 // 连续闭关收益递减（第1次满额，之后递减；出游/其它行动会重置）
@@ -1375,24 +1408,35 @@ export function farmMult(streak) {
 // 数量规范化：丹药/法宝/武器/衣物必须为整数；天材地宝/材料允许半份（0.5 步进）
 function applyItemChange(world, ch, rawDelta) {
   const desc = ch.desc || '';
-  const kind = ch.kind || kindFromText(ch.name, desc);
+  const known = treasureByName(ch.name); // 名录里的法宝：品阶/词条由表定，不由模型说了算
+  const kind = known ? '法宝' : (ch.kind || kindFromText(ch.name, desc));
   if (!isSafeNumber(rawDelta)) return false;
   let delta = rawDelta;
   if (delta !== 0) {
     const step = (kind === '天材地宝' || kind === '材料') ? 0.5 : 1;
     delta = delta > 0 ? Math.max(step, Math.round(delta / step) * step) : Math.min(-step, Math.round(delta / step) * step);
   }
-  const grade = ch.grade || '';
+  const grade = known ? '' : (ch.grade || '');
   const rarity = ch.rarity || '凡品';
-  const affix = ch.affix || '';
+  const affix = known ? known.affix : (ch.affix || '');
   let inv = world.inventory.find((t) => t.name === ch.name);
   if (!isSafeNumber(delta) || !isSafeNumber((inv ? inv.qty : 0) + delta)) return false;
   if (delta > 0 && !world.items.some((t) => t.name === ch.name)) {
     world.items.push({ name: ch.name, desc, kind, rarity, affix }); // 图鉴永久记录
   }
   if (delta > 0) {
-    if (!inv) { inv = { name: ch.name, desc, qty: 0, kind, grade, rarity, affix }; world.inventory.push(inv); }
-    else { inv.desc = inv.desc || desc; inv.kind = inv.kind || kind; inv.grade = inv.grade || grade; inv.rarity = inv.rarity || rarity; inv.affix = inv.affix || affix; }
+    if (!inv) {
+      inv = { name: ch.name, desc: desc || (known ? known.desc : ''), qty: 0, kind, grade, rarity, affix };
+      if (known) { inv.tier = known.tier; inv.type = known.type; }
+      world.inventory.push(inv);
+    } else {
+      inv.desc = inv.desc || desc;
+      inv.kind = inv.kind || kind;
+      inv.grade = inv.grade || grade;
+      inv.rarity = inv.rarity || rarity;
+      inv.affix = inv.affix || affix;
+      if (known && !inv.tier) { inv.tier = known.tier; inv.type = known.type; }
+    }
     inv.qty += delta;
   } else if (inv) {
     inv.qty += delta;
@@ -1646,6 +1690,7 @@ export function validateStateOutput(input) {
     newRecipes: array(record({ name: 'name', pill: 'string', source: 'string' }, ['name'])),
     recipePieces: array(record({ name: 'name', delta: 'number' }, ['name'])),
     brewPills: array(record({ recipe: 'string', pill: 'string', fire: enumeration('真火', '地火') }, ['recipe'])),
+    refineTreasure: array(record({ name: 'name' }, ['name'])),
     trades: array(record({ action: enumeration('buy', 'sell'), item: 'name', qty: 'number' }, ['action', 'item'])),
     auctionBids: array(record({ item: 'name', bid: 'number' }, ['item', 'bid'])),
     newRegion: record({
@@ -1857,8 +1902,8 @@ export function applyStateUpdates(player, world, input, report = {}) {
   const skillMult = (world.skills || []).reduce((m, s) => Math.max(m, gradeMult(s.grade)), 1.0); // 功法品阶加成
   // 修炼倍率只取"已装备"物品（功能法宝常驻但不给修炼加成，取其最强者防叠加）
   const equippedCult = (world.inventory || []).filter((it) => it.equipped && !isFunctionalTreasure(it));
-  const treasureMult = equippedCult.reduce((m, it) => (it.grade) ? Math.max(m, gradeMult(it.grade)) : m, 1.0); // 已装备法宝/武器/衣物品阶加成
-  const rarityCultMult = equippedCult.reduce((m, it) => Math.max(m, rarityMult(it.rarity)), 1.0); // 装备稀有度修炼加成
+  const treasureMult = equippedCult.reduce((m, it) => Math.max(m, treasureCultMult(it, player)), 1.0); // 已装备法宝：名录按阶位+修为驱动，名录外按品阶
+  const rarityCultMult = equippedCult.filter((it) => !it.tier).reduce((m, it) => Math.max(m, rarityMult(it.rarity)), 1.0); // 稀有度只作用于名录外的旧式装备，避免与阶位重复计算
   const affixCultMult = equippedCult.reduce((m, it) => Math.max(m, affixEffects(it.affix).cultMult), 1.0); // 修行词条加成
   const affixDefMult = activeItems(world.inventory).reduce((m, it) => Math.min(m, affixEffects(it.affix).defMult), 1.0); // 词条减伤（含常驻法宝）
   const qiDevMult = world.flags.qiDeviation ? 0.7 : 1.0; // 走火入魔：修炼收益打折
@@ -1870,8 +1915,8 @@ export function applyStateUpdates(player, world, input, report = {}) {
   const combat = out.combat && typeof out.combat === 'object' ? out.combat : null;
   let realmDiff = (combat && combat.realm) ? combatDiff(player.realm, combat.realm) : 0;
   if (combat && realmDiff > 0 && activeHas(world.inventory, 'edge')) realmDiff -= 1; // 锋芒词条：敌人境界按低一阶计
-  const equipDef = equipDefenseMult(world.inventory); // 装备防御：衣物/法宝减伤
-  const equipAtk = equipAttackMult(world.inventory);  // 装备攻击：武器降低致死
+  const equipDef = equipDefenseMult(world.inventory, player); // 装备防御：衣物/法宝减伤
+  const equipAtk = equipAttackMult(world.inventory, player);  // 装备攻击：武器/攻击型法宝降低致死
   // 连续闭关递减：本回合是否闭关修炼（提取器在 flags.closedDoor 标记）
   const closedDoor = !!(out.flags && out.flags.closedDoor);
   if (closedDoor) world.closedStreak = (world.closedStreak || 0) + 1;
@@ -2375,6 +2420,39 @@ export function applyStateUpdates(player, world, input, report = {}) {
       if (!it) continue;
       if (ec.equipped === false) it.equipped = false;
       else equipItem(world, it); // 槽位规则统一走这里（双持/多宝/功能法宝常驻）
+    }
+  }
+
+  // 本命祭炼：只能有一件，耗三成气血与灵石，祭成后威力 ×1.25 且不必占槽
+  if (Array.isArray(out.refineTreasure)) {
+    for (const r of out.refineTreasure) {
+      if (!r || !r.name) continue;
+      const it = (world.inventory || []).find((t) => t.name === r.name);
+      const known = it ? treasureByName(it.name) : null;
+      const tier = known ? TREASURE_TIERS[known.tier] : null;
+      if (!it || !known || !tier) {
+        pillNotes.push(`【祭炼】「${r.name}」不是名录里的法宝，祭不成本命。`);
+        continue;
+      }
+      if (!canRefine(player.realm, known)) {
+        pillNotes.push(`【祭炼】修为不足，须金丹以上才能祭炼本命法宝（${known.name} 需 ${tier.minRealm}）。`);
+        continue;
+      }
+      const bonded = (world.inventory || []).filter((x) => x.bonded);
+      if (bonded.length) {
+        pillNotes.push(`【祭炼】你已有一件本命法宝「${bonded[0].name}」，本命只能有一件。`);
+        continue;
+      }
+      const cost = refineCost(known);
+      if (player.spiritStones < cost.stones) {
+        pillNotes.push(`【祭炼】灵石不足（需 ${cost.stones}）。`);
+        continue;
+      }
+      player.hp = Math.max(1, Math.round(player.hp - player.maxHp * cost.hpFraction));
+      player.spiritStones -= cost.stones;
+      it.bonded = true;
+      it.equipped = true;
+      pillNotes.push(`【祭炼】你以精血温养「${known.name}」，本命法宝成了——此后它与心神相连，威力更胜同阶（气血 -${Math.round(player.maxHp * cost.hpFraction)}，灵石 -${cost.stones}）。`);
     }
   }
 
