@@ -180,13 +180,32 @@ export function wieldFactor(realm, tierName) {
   return 0;
 }
 
-// 法宝实际威力：阶位威力 × 驱动系数 × 本命加成（1.25）
+// 法宝五行：用于炼器配材与"多宝相冲"。按器名关键字推断，认不出就记"无"。
+const ELEMENT_HINTS = [
+  ['雷', /雷|电|霆/],
+  ['火', /火|焰|炎|赤|焰/],
+  ['水', /寒|冰|水|泉|雪|霜/],
+  ['木', /木|竹|草|藤|叶|青/],
+  ['金', /金|铜|铁|银|钢|刃|剑|刀|针|钉|剪|锤/],
+  ['土', /山|石|岩|土|甲|龟|鼎|塔|钟|印|环/],
+  ['阴', /阴|鬼|幽|魂|煞/],
+];
+export function treasureElement(treasure) {
+  if (!treasure) return '无';
+  if (treasure.element) return treasure.element;
+  const name = String(treasure.name || '');
+  for (const [el, re] of ELEMENT_HINTS) if (re.test(name)) return el;
+  return '无';
+}
+
+// 法宝实际威力：阶位威力 × 驱动系数 × 本命加成（1.25） × 五行相冲折扣（0.5）
 export function treasurePower(item, realm) {
   if (!item || !item.tier || !TREASURE_TIERS[item.tier]) return null;
   const tier = TREASURE_TIERS[item.tier];
   const factor = wieldFactor(realm, item.tier);
   const bonded = item.bonded ? 1.25 : 1;
-  return Math.round(tier.mult * factor * bonded * 100) / 100;
+  const clash = item.conflict ? 0.5 : 1;
+  return Math.round(tier.mult * factor * bonded * clash * 100) / 100;
 }
 
 // 祭炼本命法宝的代价：三成气血 + 三成价（本命不流通，按阶位价折算）

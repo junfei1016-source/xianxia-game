@@ -173,3 +173,26 @@ export function gatherPool(regionId, kind) {
   return materialsInRegion(regionId).filter((m) => kinds.includes(m.kind));
 }
 
+// ---------- 五行关系 ----------
+// 相生：木→火→土→金→水→木；相克：木克土、土克水、水克火、火克金、金克木。
+export const ELEMENT_SHENG = { 木: '火', 火: '土', 土: '金', 金: '水', 水: '木' };
+export const ELEMENT_KE = { 木: '土', 土: '水', 水: '火', 火: '金', 金: '木' };
+
+// a 对 b 的关系：生 / 被生 / 克 / 被克 / 同属 / 无
+export function elementRelation(a, b) {
+  if (!a || !b || a === '无' || b === '无') return '无';
+  if (a === b) return '同属';
+  if (ELEMENT_SHENG[a] === b) return '生';
+  if (ELEMENT_SHENG[b] === a) return '被生';
+  if (ELEMENT_KE[a] === b) return '克';
+  if (ELEMENT_KE[b] === a) return '被克';
+  return '无';
+}
+
+// 两件法宝的五行是否相冲（相克即冲，无论方向）
+export function elementsClash(a, b) {
+  const rel = elementRelation(a, b);
+  return rel === '克' || rel === '被克';
+}
+
+

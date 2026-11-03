@@ -8,8 +8,8 @@
 import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, secretOf, secretFactionsIn, priceMultiplier, addRegion } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
-import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog } from './treasures.js';
-import { materialByName, materialTier, materialBrewBonus, elementalBrewAdjust, GATHER_KINDS, gatherPool, MATERIAL_TIERS } from './materials.js';
+import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
+import { materialByName, materialTier, materialBrewBonus, elementalBrewAdjust, GATHER_KINDS, gatherPool, MATERIAL_TIERS, elementRelation, elementsClash } from './materials.js';
 
 // 法宝名录目录（注入提示词：阶位定死，名字管够）
 const TREASURE_CATALOG = treasureCatalog();
@@ -34,7 +34,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.22.0';
+export const GAME_VERSION = '1.23.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -308,6 +308,23 @@ export function equipItem(world, it) {
   }
   it.equipped = true;
   if (!it.grade) it.grade = '基础';
+  refreshTreasureConflicts(world);
+}
+
+// 五行相冲：同时装备的两件名录法宝若相克，双方威力减半（多宝不是随便堆的）
+function refreshTreasureConflicts(world) {
+  const eq = (world.inventory || []).filter((it) => it && it.equipped && it.tier);
+  for (const it of eq) it.conflict = false;
+  for (let i = 0; i < eq.length; i++) {
+    for (let j = i + 1; j < eq.length; j++) {
+      const a = treasureElement(treasureByName(eq[i].name) || {});
+      const b = treasureElement(treasureByName(eq[j].name) || {});
+      if (elementsClash(a, b)) {
+        eq[i].conflict = true;
+        eq[j].conflict = true;
+      }
+    }
+  }
 }
 
 // ---------- 突破 / 渡劫 风险评估（规则引擎算，GM 只讲故事）----------
@@ -404,6 +421,7 @@ export function newWorldState() {
     traitLog: [],    // 最近登场人物的性格记录（供"性格要多元"的反重复统计）
     npcLinks: [],    // 人物之间的关系网：[{a,b,type,note,turn}]，NPC 彼此也有师承/亲眷/恩怨
     recipes: [],     // 已知丹方：{name,pill,tier,pieces,have,chance,materials,price}
+    nodes: [],       // 采集点：{id,region,kind(药圃/矿脉/妖巢),material,respawnMonths,harvestedMonth}
     knownSecrets: {}, // 势力底细的查明进度：{ 势力id: 'hinted' | 'revealed' }，没查过就没有键
     locations: [],   // [{name, desc}]
     items: [],       // 图鉴：获得过的物品（永久记录，[{name, desc}]）
@@ -504,7 +522,9 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 法宝名录（阶位：常见名字）——${TREASURE_CATALOG}。**阶位定死、名字管够**：名录里的法宝，阶位与词条由系统按表定，你只填名字，不要自写 grade/rarity；要给玩家新法宝，优先从名录里挑同阶的名字，或按"器物名+器型"另起一个（另起名的按旧规则走 grade/rarity）。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
 - 本命法宝 refineTreasure：玩家以精血祭炼某件**已有**法宝时登记 [{name: 法宝名}]。一名修士只能有一件本命，须金丹以上，耗三成气血与灵石；祭成后威力更胜同阶、与心神相连。属性变化由系统结算，不要自己写。
 - 材料：材料与天材地宝**只填名字**，不要写 grade/rarity——品质由**年份**定：十年凡品、百年灵品、五百年玄品、千年仙品、万年神品（「百年回春草」照此折算）。材料有五行（木/水/金/土/阴/雷）与用途：灵草灵花灵果灵液妖丹→炼丹，矿石妖骨妖皮灵木→炼器，灵木灵液→制符。阴煞之气、血煞石、生魂、蚀骨花一类**有毒**，炼丹损德、服之伤身。采药/挖矿/猎妖所得按所在区域的常见材料给（见世界切片「可采」），不要凭空报出产地之外的天材地宝。
-- 采集 gather：玩家在野外地界采药/挖矿/猎妖时登记 {kind: "采药"/"挖矿"/"猎妖", days: 天数 1~30}。**出什么由系统按区域与玩家境界定**（境界越高越能取高阶之物），耗时从日历扣、野外有受伤风险；你不要自己写材料产出。五行也会影响炼丹：木属助燃、水属压火、阴寒压火，地火把这些放大一半——叙事里可写"这一炉火候不稳/木性助燃"。
+- 采集 gather：玩家在野外地界采药/挖矿/猎妖时登记 {kind: "采药"/"挖矿"/"猎妖", days: 天数 1~30}。**出什么由系统按区域与玩家境界定**（境界越高越能取高阶之物），耗时从日历扣、野外有受伤风险；你不要自己写材料产出。每次采集会落到该区域的**采集点**（药圃/矿脉/妖巢）：采过会枯竭，隔几个月才恢复——叙事里可以写"药圃已被采空，得等来年"。
+- 炼器 forge：玩家开炉炼器时登记 {name: 法宝名, materials: [材料名…], fire: "真火"/"地火"}。**只有名录里的法宝炼得出来**，至少要两味材料且须在背包里；成器率看阶位与**五行配材**——材料与法宝同属/相生则加成，相克则减成，地火炼火属法宝再加一成。成败、扣料、废器由系统结算，你不要自己写。
+- 法宝相冲：同时装备两件五行相克的名录法宝，双方威力减半（多宝不是随便堆的）。火克金、金克木、木克土、土克水、水克火。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
 - questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
 - factionRelations：与势力关系变化，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
@@ -867,7 +887,9 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 法宝名录（阶位：常见名字）——${TREASURE_CATALOG}。**阶位定死、名字管够**：名录里的法宝，阶位与词条由系统按表定，你只填名字，不要自写 grade/rarity；要给玩家新法宝，优先从名录里挑同阶的名字，或按"器物名+器型"另起一个（另起名的按旧规则走 grade/rarity）。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
 - 本命法宝 refineTreasure：玩家以精血祭炼某件**已有**法宝时登记 [{name: 法宝名}]。一名修士只能有一件本命，须金丹以上，耗三成气血与灵石；祭成后威力更胜同阶、与心神相连。属性变化由系统结算，不要自己写。
 - 材料：材料与天材地宝**只填名字**，不要写 grade/rarity——品质由**年份**定：十年凡品、百年灵品、五百年玄品、千年仙品、万年神品（「百年回春草」照此折算）。材料有五行（木/水/金/土/阴/雷）与用途：灵草灵花灵果灵液妖丹→炼丹，矿石妖骨妖皮灵木→炼器，灵木灵液→制符。阴煞之气、血煞石、生魂、蚀骨花一类**有毒**，炼丹损德、服之伤身。采药/挖矿/猎妖所得按所在区域的常见材料给（见世界切片「可采」），不要凭空报出产地之外的天材地宝。
-- 采集 gather：玩家在野外地界采药/挖矿/猎妖时登记 {kind: "采药"/"挖矿"/"猎妖", days: 天数 1~30}。**出什么由系统按区域与玩家境界定**（境界越高越能取高阶之物），耗时从日历扣、野外有受伤风险；你不要自己写材料产出。五行也会影响炼丹：木属助燃、水属压火、阴寒压火，地火把这些放大一半——叙事里可写"这一炉火候不稳/木性助燃"。
+- 采集 gather：玩家在野外地界采药/挖矿/猎妖时登记 {kind: "采药"/"挖矿"/"猎妖", days: 天数 1~30}。**出什么由系统按区域与玩家境界定**（境界越高越能取高阶之物），耗时从日历扣、野外有受伤风险；你不要自己写材料产出。每次采集会落到该区域的**采集点**（药圃/矿脉/妖巢）：采过会枯竭，隔几个月才恢复——叙事里可以写"药圃已被采空，得等来年"。
+- 炼器 forge：玩家开炉炼器时登记 {name: 法宝名, materials: [材料名…], fire: "真火"/"地火"}。**只有名录里的法宝炼得出来**，至少要两味材料且须在背包里；成器率看阶位与**五行配材**——材料与法宝同属/相生则加成，相克则减成，地火炼火属法宝再加一成。成败、扣料、废器由系统结算，你不要自己写。
+- 法宝相冲：同时装备两件五行相克的名录法宝，双方威力减半（多宝不是随便堆的）。火克金、金克木、木克土、土克水、水克火。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
 - 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
@@ -1318,6 +1340,40 @@ function majorRankOf(realm) {
   return i < 0 ? 0 : i;
 }
 
+// ---------- 采集点（药圃/矿脉/妖巢）----------
+// 每个区域按采集类型生成固定几处采集点，采过会枯竭、按月份恢复；
+// 采不到点时只能野外碰运气（一份）。
+const NODE_KINDS = { 采药: '药圃', 挖矿: '矿脉', 猎妖: '妖巢' };
+const NODE_RESPAWN = { 药圃: 12, 矿脉: 8, 妖巢: 10 };
+
+function ensureRegionNodes(world, region, gatherKind, rand) {
+  if (!Array.isArray(world.nodes)) world.nodes = [];
+  const nodeKind = NODE_KINDS[gatherKind];
+  const exist = world.nodes.filter((n) => n.region === region.id && n.kind === nodeKind);
+  if (exist.length) return exist;
+  const pool = gatherPool(region.id, gatherKind);
+  if (!pool.length) return [];
+  const count = Math.min(3, pool.length);
+  const created = [];
+  for (let i = 0; i < count; i++) {
+    const m = pool[Math.floor(rand() * pool.length)];
+    created.push({
+      id: `${region.id}_${nodeKind}_${i}`,
+      region: region.id,
+      kind: nodeKind,
+      material: m.name,
+      respawnMonths: NODE_RESPAWN[nodeKind],
+      harvestedMonth: null,
+    });
+  }
+  world.nodes.push(...created);
+  return created;
+}
+
+function nodeReady(node, nowMonth) {
+  return !Number.isFinite(node.harvestedMonth) || nowMonth - node.harvestedMonth >= node.respawnMonths;
+}
+
 export function gatherMaterials(world, player, input, rand = Math.random) {
   const kind = input && input.kind;
   if (!GATHER_KINDS[kind]) return { ok: false, reason: '不知道该采什么（采药/挖矿/猎妖）' };
@@ -1334,9 +1390,25 @@ export function gatherMaterials(world, player, input, rand = Math.random) {
   if (!usable.length) return { ok: false, reason: '此地之物非你修为能取' };
 
   const times = Math.max(1, Math.round(days / 4)); // 四天一份
+  const now = monthOrdinal(world.date);
+  const nodes = ensureRegionNodes(world, region, kind, rand).filter((n) => {
+    const m = materialByName(n.material);
+    return m && tierRank(m) <= rank && nodeReady(n, now);
+  });
+
   const picks = [];
-  for (let i = 0; i < times; i++) picks.push(usable[Math.floor(rand() * usable.length)]);
-  for (const m of picks) applyItemChange(world, { name: m.name }, 1);
+  let siteNote = '';
+  if (nodes.length) {
+    const node = nodes[Math.floor(rand() * nodes.length)];
+    for (let i = 0; i < times; i++) picks.push(node.material);
+    node.harvestedMonth = now;
+    siteNote = `在${node.kind}采得「${node.material}」`;
+  } else {
+    // 采集点都枯竭了：野外只能碰运气，一份
+    picks.push(usable[Math.floor(rand() * usable.length)].name);
+    siteNote = '附近的采集点都已枯竭，只采到一点野生的';
+  }
+  for (const name of picks) applyItemChange(world, { name }, 1);
 
   let hpLoss = 0;
   let dangerNote = '';
@@ -1348,12 +1420,55 @@ export function gatherMaterials(world, player, input, rand = Math.random) {
   }
 
   const tally = {};
-  for (const m of picks) tally[m.name] = (tally[m.name] || 0) + 1;
+  for (const name of picks) tally[name] = (tally[name] || 0) + 1;
   const items = Object.entries(tally).map(([n, q]) => `${n}×${q}`).join('、');
   return {
-    ok: true, kind, days, items: tally, hpLoss,
-    note: `【采集】${kind} ${days} 日：${items}${dangerNote ? `；${dangerNote}` : ''}`,
+    ok: true, kind, days, items: tally, hpLoss, site: siteNote,
+    note: `【采集】${kind} ${days} 日：${siteNote}，${items}${dangerNote ? `；${dangerNote}` : ''}`,
   };
+}
+
+// ---------- 炼器（五行配材）----------
+// 只有名录里的法宝炼得出来；成器率随阶位递减，材料五行与法宝五行相配则加成、相克则减成。
+const FORGE_BASE = {
+  法器: 0.9, 下品法宝: 0.6, 中品法宝: 0.45, 上品法宝: 0.3,
+  极品法宝: 0.2, 古宝: 0.12, 灵宝: 0.08, 通天灵宝: 0.05, 玄天之宝: 0.02,
+};
+
+export function forgeTreasure(world, player, input, rand = Math.random) {
+  if (!world || !player || !input) return { ok: false, reason: '炼器内容不明' };
+  const name = String(input.name || '').trim();
+  const known = treasureByName(name);
+  if (!known) return { ok: false, reason: `「${name}」不在炼器谱上（名录外的器物炼不出来）` };
+  const tier = TREASURE_TIERS[known.tier];
+  if (majorRankOf(player.realm) < majorRankOf(tier.minRealm) - 1) {
+    return { ok: false, reason: `修为不足，炼不了${known.tier}` };
+  }
+  const mats = (Array.isArray(input.materials) ? input.materials : []).map((n) => materialByName(n)).filter(Boolean);
+  const owned = mats.filter((m) => (world.inventory || []).some((it) => it.name === m.name && it.qty >= 1));
+  if (owned.length < 2) return { ok: false, reason: '炼器至少要两味材料，且须在背包里' };
+
+  const elem = treasureElement(known);
+  let bonus = 0;
+  const notes = [];
+  for (const m of owned) {
+    const rel = elementRelation(m.element, elem);
+    if (rel === '同属') { bonus += 0.06; notes.push(`${m.name}同属`); }
+    else if (rel === '生') { bonus += 0.04; notes.push(`${m.name}相生`); }
+    else if (rel === '克' || rel === '被克') { bonus -= 0.08; notes.push(`${m.name}相克`); }
+  }
+  if (input.fire === '地火' && elem === '火') { bonus += 0.05; notes.push('地火助火'); }
+  bonus = Math.max(-0.2, Math.min(0.25, Math.round(bonus * 100) / 100));
+  const chance = Math.max(0.02, Math.min(0.95, Math.round(((FORGE_BASE[known.tier] || 0.1) + bonus) * 100) / 100));
+
+  for (const m of owned) applyItemChange(world, { name: m.name }, -1);
+  const detail = notes.length ? `（${notes.join('、')}）` : '';
+  if (rand() < chance) {
+    applyItemChange(world, { name: known.name }, 1);
+    return { ok: true, success: true, note: `【炼器】${detail}一炉火罢，「${known.name}」成了（成器率 ${Math.round(chance * 100)}%）。` };
+  }
+  applyItemChange(world, { name: '废器', desc: '炼废的器物坯子', kind: '材料' }, 1);
+  return { ok: true, success: false, note: `【炼器】${detail}火候差了三分，「${known.name}」只炼出一件废器。` };
 }
 
 // 亲密关系 → 修炼加成：按"信"和"需"算，不按标签。结仇的人不助你修行。
@@ -1753,6 +1868,7 @@ export function validateStateOutput(input) {
     trades: array(record({ action: enumeration('buy', 'sell'), item: 'name', qty: 'number' }, ['action', 'item'])),
     auctionBids: array(record({ item: 'name', bid: 'number' }, ['item', 'bid'])),
     gather: record({ kind: enumeration('采药', '挖矿', '猎妖'), days: 'number' }, ['kind']),
+    forge: record({ name: 'name', materials: array('string'), fire: enumeration('真火', '地火') }, ['name']),
     newRegion: record({
       name: 'name', terrain: 'string', qi: 'number', danger: 'number', desc: 'string',
       products: array(enumeration(...Object.keys(RARITIES))),
@@ -2053,6 +2169,12 @@ export function applyStateUpdates(player, world, input, report = {}) {
       pillNotes.push(g.note);
     }
     delete out.gather;
+  }
+  // 炼器：五行配材，成败由系统掷（名录外的器物炼不出来）
+  if (out.forge && typeof out.forge === 'object') {
+    const f = forgeTreasure(world, player, out.forge);
+    pillNotes.push(f.note || `【炼器】${f.reason}`);
+    delete out.forge;
   }
   // 开炉炼丹：丹方 + 材料 + 火源，成败由系统掷
   if (Array.isArray(out.brewPills)) {
@@ -2492,6 +2614,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
       if (ec.equipped === false) it.equipped = false;
       else equipItem(world, it); // 槽位规则统一走这里（双持/多宝/功能法宝常驻）
     }
+    refreshTreasureConflicts(world);
   }
 
   // 本命祭炼：只能有一件，耗三成气血与灵石，祭成后威力 ×1.25 且不必占槽
