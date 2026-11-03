@@ -34,6 +34,7 @@ const suites = [
   ['完整地图（九域二十家）', ['tests/world-map-full.test.mjs']],
   ['区域生成标准（玩家开新域）', ['tests/region-generation.test.mjs']],
   ['法宝（阶位/驱动/本命）', ['tests/treasures.test.mjs']],
+  ['材料（年份/五行/产地/毒物）', ['tests/materials.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 

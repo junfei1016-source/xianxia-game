@@ -9,6 +9,8 @@
 //  规则层（game.js）只消费这里的纯函数，不在这里写剧情判定。
 // ============================================================
 
+import { materialNamesInRegion } from './materials.js';
+
 export const WORLD_VERSION = '1.2.0';
 
 const REGIONS = [
@@ -330,6 +332,7 @@ export function buildSlice(player, world) {
     .filter(Boolean).join('、');
   const mult = priceMultiplier(region.id, world.eraType, world);
   const topRarity = region.products[region.products.length - 1];
+  const mats = materialNamesInRegion(region.id, 4);
   const overLevel = realmRank(player && player.realm) - region.danger * 2 >= 2;
 
   const lines = [
@@ -338,6 +341,7 @@ export function buildSlice(player, world) {
     unknownCount > 0 ? `此外还有 ${unknownCount} 家势力未与之打过交道。` : '',
     roads ? `可达：${roads}。` : '',
     `物价×${mult.toFixed(2)}；本地产出上限${topRarity}。`,
+    mats.length ? `可采：${mats.join('、')}。` : '',
     revealedText ? `【已查明】${revealedText}` : '',
     overLevel ? '此地已压不住你，寻常收获寥寥；要机缘须往更险处。' : '',
     '【铁律】路程按上表计日、物价按系数、势力强弱按等级；不得自行编造距离、价格或势力地位。',

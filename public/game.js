@@ -9,6 +9,7 @@ import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, fac
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog } from './treasures.js';
+import { materialByName, materialTier, materialBrewBonus } from './materials.js';
 
 // 法宝名录目录（注入提示词：阶位定死，名字管够）
 const TREASURE_CATALOG = treasureCatalog();
@@ -33,7 +34,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.20.0';
+export const GAME_VERSION = '1.21.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -502,6 +503,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}（获得正、消耗负）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
 - 法宝名录（阶位：常见名字）——${TREASURE_CATALOG}。**阶位定死、名字管够**：名录里的法宝，阶位与词条由系统按表定，你只填名字，不要自写 grade/rarity；要给玩家新法宝，优先从名录里挑同阶的名字，或按"器物名+器型"另起一个（另起名的按旧规则走 grade/rarity）。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
 - 本命法宝 refineTreasure：玩家以精血祭炼某件**已有**法宝时登记 [{name: 法宝名}]。一名修士只能有一件本命，须金丹以上，耗三成气血与灵石；祭成后威力更胜同阶、与心神相连。属性变化由系统结算，不要自己写。
+- 材料：材料与天材地宝**只填名字**，不要写 grade/rarity——品质由**年份**定：十年凡品、百年灵品、五百年玄品、千年仙品、万年神品（「百年回春草」照此折算）。材料有五行（木/水/金/土/阴/雷）与用途：灵草灵花灵果灵液妖丹→炼丹，矿石妖骨妖皮灵木→炼器，灵木灵液→制符。阴煞之气、血煞石、生魂、蚀骨花一类**有毒**，炼丹损德、服之伤身。采药/挖矿/猎妖所得按所在区域的常见材料给（见世界切片「可采」），不要凭空报出产地之外的天材地宝。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
 - questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
 - factionRelations：与势力关系变化，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
@@ -863,6 +865,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 物品 itemChanges：本回合获得/消耗的物品，每项 {name, desc, delta, kind, grade}；获得填正 delta（如获得 3 枚疗伤丹 → delta:3），消耗填负 delta（如用掉 1 枚 → delta:-1）。kind 为品类（丹药/天材地宝/法宝/武器/衣物/材料），法宝/武器/衣物带 grade 品阶（基础/玄阶/地阶/天阶/仙阶）、rarity 稀有度（凡品/灵品/玄品/仙品/神品，由**获得难度**决定：商店随手=凡品、普通掉落=灵品、秘境/任务=玄品、越级杀敌/传承=仙品、九死一生=神品）、affix 词条（只能引用注册表：${AFFIX_CATALOG}；注册表外的描述视为叙事词条，无数值效果）。当玩家**使用/服用**物品时：itemChanges 记消耗（delta -1），并在 stateUpdates 给对应效果——丹药按功效（疗伤→hp 正、聚气→cultivation 正、延寿→lifespan 正、破障→cultivation 正且降低破境难度）、天材地宝→cultivation 或 lifespan 较大正 delta。当玩家**炼丹/炼器**时：itemChanges 记消耗材料（delta 负），并记产出（丹药/法宝/武器/衣物，delta 正，带 kind 与 grade/rarity/affix）；品阶随材料品质与运气而定。当玩家**穿上/佩戴/装备/祭炼**某件已有物品时，用 equipChanges 记 [{name: 物品名, equipped: true}]；**卸下/脱下**记 [{name, equipped: false}]；系统据此装备/卸下（同类互斥）。
 - 法宝名录（阶位：常见名字）——${TREASURE_CATALOG}。**阶位定死、名字管够**：名录里的法宝，阶位与词条由系统按表定，你只填名字，不要自写 grade/rarity；要给玩家新法宝，优先从名录里挑同阶的名字，或按"器物名+器型"另起一个（另起名的按旧规则走 grade/rarity）。阶位越高越难驱动：修为差一个大境界只能发挥一半，差两个以上完全驱动不了。古宝以上不流通，买不到。
 - 本命法宝 refineTreasure：玩家以精血祭炼某件**已有**法宝时登记 [{name: 法宝名}]。一名修士只能有一件本命，须金丹以上，耗三成气血与灵石；祭成后威力更胜同阶、与心神相连。属性变化由系统结算，不要自己写。
+- 材料：材料与天材地宝**只填名字**，不要写 grade/rarity——品质由**年份**定：十年凡品、百年灵品、五百年玄品、千年仙品、万年神品（「百年回春草」照此折算）。材料有五行（木/水/金/土/阴/雷）与用途：灵草灵花灵果灵液妖丹→炼丹，矿石妖骨妖皮灵木→炼器，灵木灵液→制符。阴煞之气、血煞石、生魂、蚀骨花一类**有毒**，炼丹损德、服之伤身。采药/挖矿/猎妖所得按所在区域的常见材料给（见世界切片「可采」），不要凭空报出产地之外的天材地宝。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
 - 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
@@ -1154,7 +1157,8 @@ export function brewPill(world, player, input, rand = Math.random) {
   if (missing.length) return { ok: false, reason: `材料不足：${missing.join('、')}` };
 
   for (const m of recipe.materials || []) applyItemChange(world, { name: m.name }, -m.qty);
-  const chance = brewChance(pill, { fire: input.fire });
+  const matBonus = materialBrewBonus((recipe.materials || []).map((m) => m.name)); // 年份越足越稳
+  const chance = Math.min(0.95, Math.round((brewChance(pill, { fire: input.fire }) + matBonus) * 100) / 100);
   const success = rand() < chance;
   if (success) {
     applyItemChange(world, { name: pill.name, desc: '自炼', kind: '丹药', rarity: pill.grade }, 1);
@@ -1412,7 +1416,8 @@ export function farmMult(streak) {
 function applyItemChange(world, ch, rawDelta) {
   const desc = ch.desc || '';
   const known = treasureByName(ch.name); // 名录里的法宝：品阶/词条由表定，不由模型说了算
-  const kind = known ? '法宝' : (ch.kind || kindFromText(ch.name, desc));
+  const mat = known ? null : materialByName(ch.name); // 名录里的材料：品类与年份由表定
+  const kind = known ? '法宝' : (mat ? '材料' : (ch.kind || kindFromText(ch.name, desc)));
   if (!isSafeNumber(rawDelta)) return false;
   let delta = rawDelta;
   if (delta !== 0) {
@@ -1431,6 +1436,7 @@ function applyItemChange(world, ch, rawDelta) {
     if (!inv) {
       inv = { name: ch.name, desc: desc || (known ? known.desc : ''), qty: 0, kind, grade, rarity, affix };
       if (known) { inv.tier = known.tier; inv.type = known.type; }
+      if (mat) { inv.matKind = mat.kind; inv.matTier = materialTier(mat); inv.element = mat.element; inv.year = mat.year; }
       world.inventory.push(inv);
     } else {
       inv.desc = inv.desc || desc;
@@ -1439,6 +1445,7 @@ function applyItemChange(world, ch, rawDelta) {
       inv.rarity = inv.rarity || rarity;
       inv.affix = inv.affix || affix;
       if (known && !inv.tier) { inv.tier = known.tier; inv.type = known.type; }
+      if (mat && !inv.matTier) { inv.matKind = mat.kind; inv.matTier = materialTier(mat); inv.element = mat.element; inv.year = mat.year; }
     }
     inv.qty += delta;
   } else if (inv) {
