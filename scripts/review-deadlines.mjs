@@ -18,6 +18,7 @@ const assets = new Map([
   ['/treasures.js', ['treasures.js', 'text/javascript; charset=utf-8']],
   ['/materials.js', ['materials.js', 'text/javascript; charset=utf-8']],
   ['/formations.js', ['formations.js', 'text/javascript; charset=utf-8']],
+  ['/craft.js', ['craft.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
   ['/icon.svg', ['icon.svg', 'image/svg+xml']],
 ]);

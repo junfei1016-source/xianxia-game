@@ -46,6 +46,9 @@ export const MATERIALS = [
   { name: '妖骨粉', kind: '妖骨', tier: '灵品', year: 0, element: '无', regions: ['wanyao', 'xingyun'], desc: '妖骨磨粉，续骨与炼器都用。' },
   { name: '寒铁', kind: '矿石', tier: '玄品', year: 0, element: '水', regions: ['hanyuan'], desc: '海底寒铁，性阴寒。' },
   { name: '灵玉', kind: '矿石', tier: '灵品', year: 0, element: '土', regions: ['guixu', 'dayan'], desc: '储灵之物，制符炼器皆可。' },
+  { name: '符纸', kind: '灵木', year: 0, element: '木', regions: ['qingwu', 'luoxia', 'dayan'], desc: '以灵木纤维抄成，画符的底子（第 92 章）。' },
+  { name: '朱砂', kind: '矿石', year: 0, element: '火', regions: ['dayan', 'chisha'], desc: '画符的颜料，性阳。' },
+  { name: '灵墨', kind: '灵液', year: 0, element: '水', regions: ['luoxia', 'guixu'], desc: '掺了灵气的墨，高阶符箓要用。' },
 
   // ---- 玄品（五百年）----
   { name: '生肌草', kind: '灵草', year: 550, element: '木', regions: ['hanyuan'], desc: '生肌丹的主药。' },

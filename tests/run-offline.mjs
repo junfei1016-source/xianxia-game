@@ -42,6 +42,7 @@ const suites = [
   ['守护缠斗与灵田经营', ['tests/plots-guard.test.mjs']],
   ['阵法（九级/布阵/效果）', ['tests/formations.test.mjs']],
   ['阵法地脉·加固·破阵', ['tests/formation-leyline.test.mjs']],
+  ['四艺与符箓', ['tests/craft.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 
