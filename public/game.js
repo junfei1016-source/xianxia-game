@@ -10,9 +10,12 @@ import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js'
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
 import { materialByName, materialTier, materialBrewBonus, elementalBrewAdjust, GATHER_KINDS, gatherPool, MATERIAL_TIERS, elementRelation, elementsClash } from './materials.js';
+import { formationByName, formationCost, canSetFormation, formationEffects, FORMATION_TIERS, isPortable, FORMATIONS } from './formations.js';
 
 // 法宝名录目录（注入提示词：阶位定死，名字管够）
 const TREASURE_CATALOG = treasureCatalog();
+// 阵法名录（阶位·类型）
+const FORMATION_CATALOG = FORMATIONS.map((f) => `${f.name}（${f.tier}·${f.type}）`).join('、');
 
 // ---------- 境界阶梯（唯一事实源，世界生成和 GM 都引用它）----------
 export const REALM_LADDER = [
@@ -34,7 +37,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.26.0';
+export const GAME_VERSION = '1.27.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -423,6 +426,7 @@ export function newWorldState() {
     recipes: [],     // 已知丹方：{name,pill,tier,pieces,have,chance,materials,price}
     nodes: [],       // 采集点：{id,region,kind(药圃/矿脉/妖巢),material,respawnMonths,harvestedMonth}
     plots: [],       // 自营灵田/矿脉：{id,region,kind,material,tier,matureMonth}
+    formations: [],  // 已布阵法：{name,tier,type,region,setMonth}
     knownSecrets: {}, // 势力底细的查明进度：{ 势力id: 'hinted' | 'revealed' }，没查过就没有键
     locations: [],   // [{name, desc}]
     items: [],       // 图鉴：获得过的物品（永久记录，[{name, desc}]）
@@ -528,6 +532,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 法宝相冲：同时装备两件五行相克的名录法宝，双方威力减半（多宝不是随便堆的）。火克金、金克木、木克土、土克水、水克火。
 - 灵田/矿脉：玩家在合适地界开垦时登记 plant {material: 材料名}（消耗一份作种，最多 3 处）；照料记 tendPlot {id?}（耗灵石，缩短成熟）；收成记 harvestPlot {id?}。成熟周期按年份（凡品 2 年、灵品 10 年、玄品 50 年、仙品 200 年、神品 800 年），**收成由系统结算**，不要自己写产出。
 - 守护：高阶采集点有守护，采之前要交手（最多六合）。打不过会受伤撤退，并被它记仇半年——这半年再靠近只会被赶走。叙事里可写"它认得了你的气息"。
+- 阵法：名录——${FORMATION_CATALOG}。玩家布阵时登记 setFormation {name}，撤阵记 dismantleFormation {name}。**一级到四级可用阵旗阵盘随行布设；五级起是大阵，须借地脉**。布阵要耗灵石、对修为有要求，系统最多同时保留两座。效果（聚灵加修炼、护山减伤、杀伐降致死、幻阵压闭关打断、传送减路程）由系统结算，不要自己写数值。
 - newQuests：带明确目标+期限+奖励的支线委托，每项 {title, objective, timeNode, reward, deadlineDays}。deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）；若叙事明确绝对日期则填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。期限日当天仍有效。无法判断就只保留 timeNode，不编造日期，不输出 deadlineTurns。
 - questUpdates：任务完成/失败，每项 {title, status, note}，status 取 "completed" 或 "failed"；仅当进行中任务处于 deadlinePending 或没有合法 deadlineDate，且叙事明确约定/澄清期限时，可附 deadlineDays 或 deadlineDate（相对期限从本回合结束日起算），可省略 status。旧期限待确认的任务也用此方式补录。已有合法 deadlineDate 保持固定，不得重复登记相对/绝对期限或擅自延期，本版本不支持已确认期限改期。
 - factionRelations：与势力关系变化，每项 {name, relation}，relation 取「结盟」「敌对」「中立」。
@@ -895,6 +900,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 法宝相冲：同时装备两件五行相克的名录法宝，双方威力减半（多宝不是随便堆的）。火克金、金克木、木克土、土克水、水克火。
 - 灵田/矿脉：玩家在合适地界开垦时登记 plant {material: 材料名}（消耗一份作种，最多 3 处）；照料记 tendPlot {id?}（耗灵石，缩短成熟）；收成记 harvestPlot {id?}。成熟周期按年份（凡品 2 年、灵品 10 年、玄品 50 年、仙品 200 年、神品 800 年），**收成由系统结算**，不要自己写产出。
 - 守护：高阶采集点有守护，采之前要交手（最多六合）。打不过会受伤撤退，并被它记仇半年——这半年再靠近只会被赶走。叙事里可写"它认得了你的气息"。
+- 阵法：名录——${FORMATION_CATALOG}。玩家布阵时登记 setFormation {name}，撤阵记 dismantleFormation {name}。**一级到四级可用阵旗阵盘随行布设；五级起是大阵，须借地脉**。布阵要耗灵石、对修为有要求，系统最多同时保留两座。效果（聚灵加修炼、护山减伤、杀伐降致死、幻阵压闭关打断、传送减路程）由系统结算，不要自己写数值。
 - 越级杀敌掉落：若叙事描写玩家越级击杀强敌成功，掉落高品阶功法/法宝/武器（功法用 newSkills 记、法宝/武器用 itemChanges 记，desc 注明"高品阶/远超当前境界"），并给 reputation 正 delta。
 - 探索/任务/奇遇收益：叙事中玩家探索秘境、完成委托、获得奇遇、寻得宝藏时，收获与**凶险程度/玩家境界**相关——低境界探索普通之地有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至无，需探索更凶险的秘境/遗迹或越级挑战才掉高稀有度（玄品/仙品/神品）。有收获时用 newSkills 记功法（带 grade）、itemChanges 记丹药/天材地宝/法宝/武器/衣物/材料（带 kind、grade、rarity、affix），并可给 cultivation 正 delta（顿悟）。
 - 支线任务 newQuests：叙事中出现"委托/悬赏/寻宝/护送/解救"等可做之事，且目标明确、有期限、有奖励时，登记为 {title, desc, objective, timeNode, reward, deadlineDays}；deadlineDays 是从本回合结束日开始的非负整数天数（今日/今夜=0，明日/次日=1，三日内=3，一月内=30）。叙事给出明确年月日时可填 deadlineDate:{year,month,day}（每月30天、每年12月），合法绝对日期优先。截止当日仍有效，短对话不消耗天数；不要将回合数换算成天数，不输出 deadlineTurns。无法判断只保留原文 timeNode，不编造日期。普通闲聊或琐事不要登记。
@@ -1143,6 +1149,7 @@ export function rollSeclusionInterrupt(world, player, text, rand = Math.random) 
   const guardians = seclusionGuardians(world, text);
   world.guardiansThisTurn = guardians.map((n) => n.name);
   if (guardians.length) chance *= Math.pow(0.55, guardians.length);
+  chance *= formationEffects(world.formations || []).interruptMult; // 幻阵/护山大阵让闭关更安稳
   chance = Math.max(0.02, Math.min(0.6, chance));
 
   if (rand() >= chance) {
@@ -1639,6 +1646,45 @@ export function harvestPlot(world, player, input) {
   return { ok: true, items: { [plot.material]: qty }, note: `【收成】${plot.kind}里的「${plot.material}」熟了，收得 ${qty} 份。` };
 }
 
+// ---------- 阵法 ----------
+// 阵旗阵盘可布四级以下的小阵（可带走）；五级起是大阵，借地脉而设，撤走即废。
+export const FORMATION_LIMIT = 2;
+
+export function setFormation(world, player, input) {
+  const name = String((input && input.name) || '').trim();
+  const def = formationByName(name);
+  if (!def) return { ok: false, reason: `「${name}」不是所知阵法` };
+  const tier = FORMATION_TIERS[def.tier];
+  if (!canSetFormation(player.realm, def)) {
+    return { ok: false, reason: `修为不足，${def.tier}阵法须${tier.minRealm}起才能布` };
+  }
+  const region = world && world.geo ? regionById(world.geo.regionId, world) : null;
+  if (!region) return { ok: false, reason: '不知身在何处' };
+  if (!Array.isArray(world.formations)) world.formations = [];
+  if (world.formations.length >= FORMATION_LIMIT) return { ok: false, reason: `同时最多布 ${FORMATION_LIMIT} 座阵` };
+  if (world.formations.some((f) => f.name === def.name && f.region === region.id)) {
+    return { ok: false, reason: `此地已布「${def.name}」` };
+  }
+  const cost = formationCost(def);
+  if (player.spiritStones < cost) return { ok: false, reason: `灵石不足（需 ${cost}）` };
+  player.spiritStones -= cost;
+  world.formations.push({
+    name: def.name, tier: def.tier, type: def.type, region: region.id, setMonth: monthOrdinal(world.date),
+  });
+  const carry = isPortable(def) ? '阵旗阵盘可随行带走。' : '此阵借地脉而设，撤走即废。';
+  return { ok: true, note: `【布阵】你在${region.name}布下「${def.name}」（${def.tier}·${def.type}），灵石 -${cost}。${carry}` };
+}
+
+export function dismantleFormation(world, player, input) {
+  const name = String((input && input.name) || '').trim();
+  const list = world.formations || [];
+  const def = formationByName(name);
+  const idx = list.findIndex((f) => f.name === (def ? def.name : name));
+  if (idx < 0) return { ok: false, reason: `未布「${name}」` };
+  const [f] = list.splice(idx, 1);
+  return { ok: true, note: `【撤阵】「${f.name}」已撤${isPortable(formationByName(f.name)) ? '，阵旗阵盘收回' : ''}。` };
+}
+
 // ---------- 炼器（五行配材）----------
 // 只有名录里的法宝炼得出来；成器率随阶位递减，材料五行与法宝五行相配则加成、相克则减成。
 const FORGE_BASE = {
@@ -2082,6 +2128,8 @@ export function validateStateOutput(input) {
     plant: record({ material: 'name' }, ['material']),
     tendPlot: record({ id: 'string' }),
     harvestPlot: record({ id: 'string' }),
+    setFormation: record({ name: 'name' }, ['name']),
+    dismantleFormation: record({ name: 'name' }, ['name']),
     forge: record({ name: 'name', materials: array('string'), fire: enumeration('真火', '地火') }, ['name']),
     newRegion: record({
       name: 'name', terrain: 'string', qi: 'number', danger: 'number', desc: 'string',
@@ -2242,13 +2290,16 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const target = regionByName(out.travelTo);
     const cur = world.geo ? regionById(world.geo.regionId) : null;
     if (target && (!cur || target.id !== cur.id)) {
+      const travelFx = formationEffects((world.formations || []).filter((f) => !cur || f.region === cur.id));
       const moved = moveToRegion(world, target.id);
       if (moved) {
-        const months = Math.round((moved.days / 30) * 1000) / 1000;
+        const days = Math.max(1, Math.round(moved.days * travelFx.travelMult));
+        const months = Math.round((days / 30) * 1000) / 1000;
         const anchor = worldGameDate(world);
         if (!anchor || addGameDays(anchor, elapsedGameDays(months))) {
           out.timeMonths = months;
-          travelNote = `【行路】${moved.from.name} → ${moved.to.name}（${moved.days} 日，约 ${months.toFixed(2)} 月）`;
+          const via = travelFx.travelMult < 1 ? '，借传送阵' : '';
+          travelNote = `【行路】${moved.from.name} → ${moved.to.name}（${days} 日，约 ${months.toFixed(2)} 月${via}）`;
         }
       }
     }
@@ -2268,6 +2319,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   migrateQuestDeadlines(world);
   const s = world.settings || {};
   const god = s.godMode === true; // 言出法随（外挂模式）：不受伤害、不掷死亡骰
+  const formationFx = formationEffects(world.formations || []); // 已布之阵的合计效果（取最强不叠加）
   const diff = DIFFICULTIES[s.difficulty] || DIFFICULTIES['普通'];
   const pace = PACES[s.pace] || PACES['慢'];
   const eventTurn = (world.turn || 0) + 1;
@@ -2332,9 +2384,9 @@ export function applyStateUpdates(player, world, input, report = {}) {
     else continue;
     // 本回合服了丹：气血/修为的正增量交给系统按丹方结算，避免模型重复加一遍
     if (pillApplied && (key === 'hp' || key === 'cultivation') && delta > 0) continue;
-    if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1)); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条减伤
+    if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1) * formationFx.damageTaken); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条减伤+护山阵
     if (key === 'cultivation' && delta > 0) {
-      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm;
+      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm * formationFx.cultMult; // 再加聚灵阵
       if (closedDoor) {
         // 闭关：修为按时长结算，模型给的 delta 只当效率提示（不再 ×closeMonths，避免一次闭关灌满）
         delta = Math.round(seclusionGain(player.realm, out.timeMonths, delta) * mults * 100) / 100;
@@ -2399,6 +2451,17 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const r = harvestPlot(world, player, out.harvestPlot);
     pillNotes.push(r.note || `【收成】${r.reason}`);
     delete out.harvestPlot;
+  }
+  // 阵法：布阵 / 撤阵
+  if (out.setFormation && typeof out.setFormation === 'object') {
+    const r = setFormation(world, player, out.setFormation);
+    pillNotes.push(r.note || `【布阵】${r.reason}`);
+    delete out.setFormation;
+  }
+  if (out.dismantleFormation && typeof out.dismantleFormation === 'object') {
+    const r = dismantleFormation(world, player, out.dismantleFormation);
+    pillNotes.push(r.note || `【撤阵】${r.reason}`);
+    delete out.dismantleFormation;
   }
   // 炼器：五行配材，成败由系统掷（名录外的器物炼不出来）
   if (out.forge && typeof out.forge === 'object') {
@@ -2484,7 +2547,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   // 疾风（战斗）/隐匿（非战斗）降低概率；铁骨保底不死。濒死状态下不再重复掷骰。言出法随豁免。
   if (!god && !world.flags.deathImminent && (out.risk === 'high' || out.risk === 'lethal')) {
     const base = out.risk === 'lethal' ? diff.deathLethal : diff.deathHigh;
-    let chance = Math.min(0.95, base * (combat ? combatDeathMult(realmDiff) : 1) * (combat ? equipAtk : 1));
+    let chance = Math.min(0.95, base * (combat ? combatDeathMult(realmDiff) : 1) * (combat ? equipAtk : 1) * (formationFx.deathMult || 1));
     if (combat && activeHas(world.inventory, 'swift')) chance *= 0.8;   // 疾风
     if (!combat && activeHas(world.inventory, 'stealth')) chance *= 0.8; // 隐匿
     if (Math.random() < chance) {
