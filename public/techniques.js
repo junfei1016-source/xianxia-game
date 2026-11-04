@@ -16,6 +16,9 @@ export const TECH_GRADES = {
   中阶功法: { rank: 3, minRealm: '筑基', price: 20000, mult: 1.5 },
   高阶功法: { rank: 4, minRealm: '金丹', price: 200000, mult: 2.0 },
   顶阶功法: { rank: 5, minRealm: '元婴', price: 2000000, mult: 3.0 },
+  // 人界之上：圣阶对应化神/合体，仙阶对应大乘/渡劫（原著"圣阶"是最高一等的说法，如圣阶魔兽，第1587章）
+  圣阶功法: { rank: 6, minRealm: '化神', price: 20000000, mult: 4.0 },
+  仙阶功法: { rank: 7, minRealm: '大乘', price: 200000000, mult: 6.0 },
 };
 
 export const TECH_TYPES = ['主修', '炼体', '神识', '剑诀', '御兽', '辅助'];
@@ -39,6 +42,10 @@ export const TECHNIQUES = [
   { name: '青元剑诀', grade: '高阶功法', type: '剑诀', element: '木', desc: '以木生火、以剑载道的高阶剑诀。' },
   { name: '玄阴经', grade: '高阶功法', type: '主修', element: '水', desc: '阴煞一脉的功法，正道修士避之不及。' },
   { name: '太清剑典', grade: '顶阶功法', type: '剑诀', element: '金', desc: '太清一脉的顶阶剑典，非嫡传不可得。' },
+  // 人界之上
+  { name: '元磁神光', grade: '圣阶功法', type: '主修', element: '土', desc: '乱星海流传多年的功法，须借元磁山之力方能修成（第 408、409 章）。' },
+  { name: '梵圣真魔功', grade: '圣阶功法', type: '炼体', element: '无', desc: '韩立于下界机缘巧合修得的魔道炼体功，肉身之力惊人。' },
+  { name: '万水仙诀', grade: '仙阶功法', type: '主修', element: '水', desc: '水属性真仙功法，可修至真仙后期；与他派功法冲突不小（仙界篇第 90 章）。' },
 ];
 
 const BY_NAME = new Map(TECHNIQUES.map((t) => [t.name, t]));

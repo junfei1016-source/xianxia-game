@@ -32,13 +32,52 @@ const setup = (realm = '金丹初期') => {
   return { player, world };
 };
 
-test('功法品阶五等、类型六种，名录足数', () => {
-  assert.deepEqual(Object.keys(TECH_GRADES), ['基础功法', '低阶功法', '中阶功法', '高阶功法', '顶阶功法']);
+test('功法品阶七等（到圣阶/仙阶）、类型六种，名录足数', () => {
+  assert.deepEqual(Object.keys(TECH_GRADES), ['基础功法', '低阶功法', '中阶功法', '高阶功法', '顶阶功法', '圣阶功法', '仙阶功法']);
+  assert.equal(TECH_GRADES['圣阶功法'].minRealm, '化神');
+  assert.equal(TECH_GRADES['仙阶功法'].minRealm, '大乘');
   assert.equal(TECH_TYPES.length, 6);
-  assert.ok(TECHNIQUES.length >= 15);
+  assert.ok(TECHNIQUES.length >= 18);
   const long = techniqueByName('长春功');
   assert.equal(long.grade, '基础功法');
   assert.equal(long.element, '木');
+});
+
+test('化神/合体/大乘各有其功法：元磁神光、梵圣真魔功、万水仙诀', () => {
+  const yuanci = techniqueByName('元磁神光');
+  assert.equal(yuanci.grade, '圣阶功法');
+  assert.equal(TECH_GRADES[yuanci.grade].minRealm, '化神');
+
+  const fanSheng = techniqueByName('梵圣真魔功');
+  assert.equal(fanSheng.grade, '圣阶功法');
+
+  const wanshui = techniqueByName('万水仙诀');
+  assert.equal(wanshui.grade, '仙阶功法');
+  assert.equal(TECH_GRADES[wanshui.grade].minRealm, '大乘');
+
+  // 元婴修不了圣阶，化神可以
+  const low = setup('元婴后期');
+  assert.equal(learnTechnique(low.world, low.player, { name: '元磁神光' }).ok, false);
+  const high = setup('化神初期');
+  assert.equal(learnTechnique(high.world, high.player, { name: '元磁神光' }).ok, true);
+});
+
+test('转修相冲：属性相克的两门功法，散功更重', () => {
+  const calm = setup();
+  learnTechnique(calm.world, calm.player, { name: '玄水诀' }); // 水
+  learnTechnique(calm.world, calm.player, { name: '厚土诀' }); // 土（土克水）
+  calm.player.cultivation = 100;
+  setMainTechnique(calm.world, calm.player, { name: '厚土诀' });
+  const calmLost = 100 - calm.player.cultivation;
+
+  const plain = setup();
+  learnTechnique(plain.world, plain.player, { name: '长春功' }); // 木
+  learnTechnique(plain.world, plain.player, { name: '烈火诀' }); // 火（木生火，不相克）
+  plain.player.cultivation = 100;
+  setMainTechnique(plain.world, plain.player, { name: '烈火诀' });
+  const plainLost = 100 - plain.player.cultivation;
+
+  assert.ok(calmLost > plainLost, `相克应散得更多（${calmLost} vs ${plainLost}）`);
 });
 
 test('修为门槛：炼气修不了顶阶功法', () => {

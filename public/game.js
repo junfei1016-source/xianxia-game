@@ -43,7 +43,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.32.0';
+export const GAME_VERSION = '1.33.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -2092,11 +2092,19 @@ export function setMainTechnique(world, player, input) {
   if (player.mainTechnique === def.name) return { ok: false, reason: `「${def.name}」已是主修` };
   const prev = player.mainTechnique;
   if (prev) {
-    // 转修要散功：旧功法练出的法力要散掉一部分
-    const lost = Math.round((player.cultivation || 0) * 0.1 * 100) / 100;
+    // 转修要散功：旧功法练出的法力要散掉一部分；
+    // 若两门功法属性相克（如万水仙诀与他派功法冲突），散得更多（仙界篇第 90 章）。
+    const prevDef = techniqueByName(prev);
+    const clash = !!(prevDef && prevDef.element !== '无' && def.element !== '无'
+      && elementsClash(prevDef.element, def.element));
+    const fraction = clash ? 0.2 : 0.1;
+    const lost = Math.round((player.cultivation || 0) * fraction * 100) / 100;
     player.cultivation = Math.max(0, Math.round(((player.cultivation || 0) - lost) * 100) / 100);
     player.mainTechnique = def.name;
-    return { ok: true, note: `【转修】弃「${prev}」改修「${def.name}」，旧功散了一成修为（修为 -${lost}）。` };
+    return {
+      ok: true,
+      note: `【转修】弃「${prev}」改修「${def.name}」，${clash ? `两门功法属性相克（${prevDef.element}克${def.element}），散功更重` : '旧功散了一成修为'}（修为 -${lost}）。`,
+    };
   }
   player.mainTechnique = def.name;
   return { ok: true, note: `【主修】以「${def.name}」为主修功法。` };
