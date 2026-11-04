@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, regionQi, regionDanger, qiLabel, qiCultMult, REGION_DRIFT, allRegions } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
@@ -44,7 +44,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.36.0';
+export const GAME_VERSION = '1.37.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -1396,12 +1396,14 @@ const RARITY_YIELD_CAP = { 凡品: 99, 灵品: 99, 玄品: 2, 仙品: 1, 神品:
 const ERA_NODE_DELTA = { 盛世: 1, 秘境将启: 2, 乱世: 0, 正魔大战: -1, 末法时代: -2 };
 
 // 区域能出到的最高稀有度：灵气+危险越高越可能出高货；灵气 ≥5 的仙域可出神品；再由大势加减
-export function regionNodeCap(region, eraType = '') {
+// qi 可传入当前实际灵气（地脉漂移之后），不传则用表里的底值
+export function regionNodeCap(region, eraType = '', qi = null) {
   if (!region) return 0;
+  const q = Number.isFinite(qi) ? qi : (region.qi || 1);
   let cap;
-  if ((region.qi || 1) >= 5) cap = 4;
+  if (q >= 5) cap = 4;
   else {
-    const power = (region.qi || 1) + (region.danger || 1);
+    const power = q + (region.danger || 1);
     cap = power >= 10 ? 4 : power >= 8 ? 3 : power >= 6 ? 2 : power >= 4 ? 1 : 0;
   }
   cap += ERA_NODE_DELTA[eraType] || 0;
@@ -1429,8 +1431,8 @@ function makeGuard(rarity, rand) {
   };
 }
 
-function pickNodeRarity(region, rand, eraType = '') {
-  const cap = regionNodeCap(region, eraType);
+function pickNodeRarity(region, rand, eraType = '', qi = null) {
+  const cap = regionNodeCap(region, eraType, qi);
   const weights = [6, 4, 2, 1, 0.5].slice(0, cap + 1); // 越低越常见
   const total = weights.reduce((a, b) => a + b, 0);
   let hit = rand() * total;
@@ -1465,10 +1467,11 @@ function fightGuard(world, player, node, rand) {
   return { win: false, rounds, hpLoss };
 }
 
-function fillNode(node, region, gatherKind, rand) {
+function fillNode(node, region, gatherKind, rand, world = null) {
   const pool = gatherPool(region.id, gatherKind);
   if (!pool.length) return node;
-  const wanted = pickNodeRarity(region, rand, node.eraType || '');
+  const effQi = regionQi(region, world); // 地脉漂移后的实际灵气：枯则出不了高货
+  const wanted = pickNodeRarity(region, rand, node.eraType || '', effQi);
   let rank = NODE_RARITIES.indexOf(wanted);
   let material = null;
   while (rank >= 0 && !material) {
@@ -1512,7 +1515,7 @@ function ensureRegionNodes(world, region, gatherKind, rand) {
       region: region.id,
       kind: nodeKind,
       eraType,
-    }, region, gatherKind, rand));
+    }, region, gatherKind, rand, world));
   }
   world.nodes.push(...created);
   return created;
@@ -2925,7 +2928,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
     if (pillApplied && (key === 'hp' || key === 'cultivation') && delta > 0) continue;
     if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1) * formationFx.damageTaken * buffFx.damageTaken * (techFx.damageTaken || 1) * rootFx.damageTaken); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条+护山阵+符力+炼体+灵根
     if (key === 'cultivation' && delta > 0) {
-      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm * formationFx.cultMult * techCultMult * rootCultMult(player); // 再加聚灵阵、主修功法与灵根资质
+      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm * formationFx.cultMult * techCultMult * rootCultMult(player) * regionCultMult(world); // 再加聚灵阵、主修功法、灵根资质与所在地上灵气
       if (closedDoor) {
         // 闭关：修为按时长结算，模型给的 delta 只当效率提示（不再 ×closeMonths，避免一次闭关灌满）
         delta = Math.round(seclusionGain(player.realm, out.timeMonths, delta) * mults * 100) / 100;
@@ -3864,6 +3867,86 @@ export function expireQuestDeadlines(player, world) {
   return expired;
 }
 
+// ---------- 地脉盛衰（区域灵气随岁月漂移）----------
+// 规则在这里、数据在 world.js：灵气会涨也会枯，盛则修炼快、货好、价松，枯则反过来。
+// 漂移量记在存档 world.regionDrift，静态九域表不动；读档只补字段、不补漂移，不判罚。
+// 原文：第220章「灵脉有枯竭之日」；第172章灵药采尽即枯；第358章修士渐多、灵石渐少。
+export function ensureRegionDrift(world) {
+  if (!world || typeof world !== 'object') return null;
+  if (!world.regionDrift || typeof world.regionDrift !== 'object' || Array.isArray(world.regionDrift)) world.regionDrift = {};
+  if (!Number.isFinite(world.driftDays) || world.driftDays < 0) world.driftDays = 0;
+  if (!Number.isFinite(world.driftSteps) || world.driftSteps < 0) world.driftSteps = 0;
+  if (!Array.isArray(world.regionChronicle)) world.regionChronicle = [];
+  return world.regionDrift;
+}
+
+// 确定性伪随机：同一存档、同一步漂移必得同一结果（不靠 Math.random，测试可复现）
+function driftRoll(key, salt) {
+  let h = 2166136261 >>> 0;
+  const s = `${key}|${salt}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i) & 0xff;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return (h % 10000) / 10000;
+}
+
+// 每步只动一个地方：天下不会一夜之间齐齐变样
+function pickDriftRegion(world) {
+  const list = allRegions(world).filter((r) => r && r.id !== 'taiqing'); // 仙界与凡界不往来，不参与凡界盛衰
+  if (!list.length) return null;
+  const i = Math.floor(driftRoll('pick', world.driftSteps || 0) * list.length);
+  return list[Math.min(list.length - 1, i)];
+}
+
+// 推进 months 个月：每满 stepDays 漂一次，返回本次新生成的地脉纪事
+export function evolveRegions(world, months = 0) {
+  ensureRegionDrift(world);
+  const days = elapsedGameDays(months);
+  if (days === null || days <= 0) return [];
+  world.driftDays += days;
+  const events = [];
+  let guard = 0;
+  while (world.driftDays >= REGION_DRIFT.stepDays && guard < 240) {
+    guard += 1;
+    world.driftDays -= REGION_DRIFT.stepDays;
+    world.driftSteps += 1;
+    const region = pickDriftRegion(world);
+    if (!region) break;
+    const step = world.driftSteps;
+    const beforeQi = regionQi(region, world);
+    const roll = driftRoll(region.id, step);
+    let dq = 0;
+    if (roll < REGION_DRIFT.witherChance) dq = -1;
+    else if (roll > 1 - REGION_DRIFT.reviveChance) dq = 1;
+    if (!dq) continue; // 大半时候不动：灵气是几十上百年的尺度
+    const afterQi = Math.max(1, Math.min(6, beforeQi + dq));
+    if (afterQi === beforeQi) continue; // 已到顶或见底
+    const beforeDanger = regionDanger(region, world);
+    const dFear = driftRoll(`${region.id}d`, step) < REGION_DRIFT.dangerFollow ? (dq > 0 ? -1 : 1) : 0;
+    const delta = { qi: afterQi };
+    if (dFear) delta.danger = Math.max(1, Math.min(5, beforeDanger + dFear));
+    if (!world.regionDrift[region.id]) world.regionDrift[region.id] = {};
+    Object.assign(world.regionDrift[region.id], delta);
+    const text = dq > 0
+      ? `${region.name}地脉复苏：灵气由${qiLabel(beforeQi)}复为${qiLabel(afterQi)}${delta.danger ? '，凶险减一分' : ''}。`
+      : `${region.name}灵脉渐枯：灵气由${qiLabel(beforeQi)}落为${qiLabel(afterQi)}${delta.danger ? '，凶险增一分' : ''}。`;
+    world.regionChronicle.push({ regionId: region.id, region: region.name, month: monthOrdinal(world.date), text });
+    if (world.regionChronicle.length > REGION_DRIFT.maxChronicle) {
+      world.regionChronicle.splice(0, world.regionChronicle.length - REGION_DRIFT.maxChronicle);
+    }
+    events.push(`🌏 ${text}`);
+  }
+  world.lastDriftEvents = events;
+  return events;
+}
+
+// 当前所在地的灵气对修炼的倍率（不在任何区域时按寻常算）
+export function regionCultMult(world) {
+  const region = world && world.geo ? regionById(world.geo.regionId, world) : null;
+  return region ? qiCultMult(regionQi(region, world)) : 1;
+}
+
 // ---------- 时间流逝 & 寿元消耗 ----------
 export function advanceTime(world, player, months = 0) {
   const days = elapsedGameDays(months);
@@ -3899,6 +3982,8 @@ export function advanceTime(world, player, months = 0) {
     }
     player.pillUsageMonth = now;
   }
+  // 地脉盛衰：岁月过去，某些地方的灵气会涨会枯（不发出提示时静默推进）
+  evolveRegions(world, months);
 }
 
 // ---------- 大势时间轴（有期限的大势必须按时演变，不能无限拖延）----------

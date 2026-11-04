@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '1.2.0';
+export const WORLD_VERSION = '1.3.0';
 
 const REGIONS = [
   {
@@ -135,6 +135,71 @@ const REGION_PRICE_MULT = {
 // 大势对物价的影响（与游戏 ERA_TYPES 的收益口径分开：这里只算市价）
 const ERA_PRICE_MULT = { 盛世: 0.9, 乱世: 1.2, 末法时代: 1.5, 秘境将启: 1.1, 正魔大战: 1.25 };
 
+// ============================================================
+//  地脉盛衰：灵气不是常数
+//
+//  原文根据：
+//   · 第 220 章：灵泉有大有小，"灵脉有枯竭之日"，灵气在天地间"有的地方浓一些、有的地方淡一些"；
+//   · 第 172 章：灵药"采尽之时"便枯，"千年之期"不是无限取用；
+//   · 第 358、363 章：修士越来越多，灵石"越采越少"，一地经不起无穷索取。
+//  结论：一地的灵气随岁月涨落，盛则修炼快、出货好、物价松，枯则相反。
+//  静态九域表**不改**；涨落量记在存档 world.regionDrift 里，由 game.js 的规则推进。
+// ============================================================
+export const QI_LABELS = { 1: '枯涸', 2: '稀薄', 3: '寻常', 4: '丰沛', 5: '浓郁', 6: '灵涌' };
+
+// 漂移参数（数据层只给常量；何时、怎么变由 game.js 判定）
+export const REGION_DRIFT = {
+  stepDays: 180,      // 每半年查一次：灵气是几十上百年的尺度，不是一两天
+  witherChance: 0.28, // 枯一寸
+  reviveChance: 0.22, // 复一寸
+  dangerFollow: 0.5,  // 灵气动一分，凶险有五成跟着动
+  maxChronicle: 12,   // 存档里最多留 12 条地脉纪事
+};
+
+function clampQi(qi) {
+  return Math.max(1, Math.min(6, Math.round(Number(qi) || 1)));
+}
+function clampDanger(d) {
+  return Math.max(1, Math.min(5, Math.round(Number(d) || 1)));
+}
+
+export function qiLabel(qi) {
+  return QI_LABELS[clampQi(qi)] || '寻常';
+}
+
+// 某地当前的漂移量：{ qi, danger } 的绝对值；没漂过就返回 null
+export function driftOf(world, regionId) {
+  const d = world && world.regionDrift;
+  if (!d || typeof d !== 'object' || !regionId) return null;
+  const hit = Object.prototype.hasOwnProperty.call(d, regionId) ? d[regionId] : null;
+  if (!hit || typeof hit !== 'object') return null;
+  const out = {};
+  if (Number.isFinite(hit.qi)) out.qi = clampQi(hit.qi);
+  if (Number.isFinite(hit.danger)) out.danger = clampDanger(hit.danger);
+  return Object.keys(out).length ? out : null;
+}
+
+// 这一刻的实际灵气/凶险（漂移值优先，否则用表里的底值）
+export function regionQi(region, world = null) {
+  if (!region) return 3;
+  const drift = driftOf(world, region.id);
+  return clampQi(drift && Number.isFinite(drift.qi) ? drift.qi : region.qi);
+}
+export function regionDanger(region, world = null) {
+  if (!region) return 1;
+  const drift = driftOf(world, region.id);
+  return clampDanger(drift && Number.isFinite(drift.danger) ? drift.danger : region.danger);
+}
+
+// 灵气对修炼的影响：寻常(3) 为基准，枯涸 0.90、灵涌 1.15——差异可感，但不至于压过功法与灵根
+export function qiCultMult(qi) {
+  return Math.round((1 + (clampQi(qi) - 3) * 0.05) * 100) / 100;
+}
+// 灵气对物价的影响：灵气枯的地方什么都不长，物以稀为贵
+export function qiPriceMult(qi) {
+  return Math.round((1 + (3 - clampQi(qi)) * 0.04) * 100) / 100;
+}
+
 // 境界阶梯的粗排序（本地实现，避免与 game.js 循环依赖）
 const REALM_RANK = { 凡人: 0, 炼气: 1, 筑基: 2, 金丹: 3, 元婴: 4, 化神: 5, 炼虚: 6, 合体: 7, 大乘: 8, 渡劫: 9, 飞升: 10 };
 function realmRank(realm) {
@@ -215,7 +280,12 @@ export function priceMultiplier(regionId, eraType, world = null) {
   const region = regionById(regionId, world);
   const r = REGION_PRICE_MULT[regionId] ?? (region && region.price) ?? 1;
   const e = ERA_PRICE_MULT[eraType] ?? 1;
-  return Math.round(r * e * 100) / 100;
+  // 灵气对物价只算「漂移量」：底值差异已经由 REGION_PRICE_MULT 承担，再乘一遍是重复计价。
+  // 于是没有漂移时此系数恒为 1，旧档与旧测试的价格口径不变。
+  const q = region
+    ? Math.round((qiPriceMult(regionQi(region, world)) / qiPriceMult(region.qi)) * 100) / 100
+    : 1;
+  return Math.round(r * e * q * 100) / 100;
 }
 
 export function priceOf(rarity, regionId, eraType) {
@@ -333,10 +403,18 @@ export function buildSlice(player, world) {
   const mult = priceMultiplier(region.id, world.eraType, world);
   const topRarity = region.products[region.products.length - 1];
   const mats = materialNamesInRegion(region.id, 4);
-  const overLevel = realmRank(player && player.realm) - region.danger * 2 >= 2;
+  const eq = regionQi(region, world);
+  const ed = regionDanger(region, world);
+  const overLevel = realmRank(player && player.realm) - ed * 2 >= 2;
+  // 地脉纪事：最近三条里与本地相关的，让"这地方在变"能被叙事看见
+  const chronicle = (Array.isArray(world.regionChronicle) ? world.regionChronicle : [])
+    .filter((c) => c && c.regionId === region.id)
+    .slice(-2)
+    .map((c) => c.text);
 
   const lines = [
-    `【世界切片】区域：${region.name}（${region.desc}）灵气${region.qi}·危险${region.danger}。`,
+    `【世界切片】区域：${region.name}（${region.desc}）灵气${eq}（${qiLabel(eq)}）·危险${ed}。`,
+    chronicle.length ? `【地脉】${chronicle.join('；')}` : '',
     facText ? `已知势力：${facText}。` : '',
     unknownCount > 0 ? `此外还有 ${unknownCount} 家势力未与之打过交道。` : '',
     roads ? `可达：${roads}。` : '',

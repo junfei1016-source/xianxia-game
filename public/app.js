@@ -1405,6 +1405,7 @@ async function sendTurn(forcedText) {
       world.turn += 1;
       const months = (out && Number.isFinite(out.timeMonths) && out.timeMonths > 0) ? out.timeMonths : 0;
       advanceTime(world, player, months);
+      for (const note of world.lastDriftEvents || []) appendSystem(note, 'quest'); // 地脉涨落
       const eraNote = enforceEraTimeline(world, out); // 大势时间轴：期限到必演变
       if (eraNote) appendSystem(eraNote, 'quest');
       checkQuestDeadlines();
