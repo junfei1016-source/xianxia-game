@@ -55,6 +55,7 @@ const suites = [
   ['地理层级与路网（陆路/海路/古传送阵）', ['tests/travel-network.test.mjs']],
   ['界面上限（人界到化神，飞升仙界才算通关）', ['tests/interface-cap.test.mjs']],
   ['偷渡（空间节点九死一生）', ['tests/spirit-smuggle.test.mjs']],
+  ['黑户在灵界（灭尘丹/两色雷劫/身份牌）', ['tests/spirit-outlaw.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 
