@@ -29,6 +29,7 @@ assert('合法 JSON 内弯引号不被破坏', validWithCurlyText && validWithCu
 // applyStateUpdates：数值夹取 + 突破 + 去重 + 目标 + 标记
 const player = newPlayerState();
 const world = newWorldState();
+world.date = { year: 5, month: 1, day: 1 }; // 跨过"凡人至少 3 年"的下限，专测突破结算
 applyStateUpdates(player, world, {
   stateUpdates: { hp: { delta: -200 }, morality: { delta: -150 }, spiritStones: { delta: 50 }, cultivation: { delta: 40 } },
   realmChange: '炼气初期',
@@ -51,12 +52,15 @@ assert('剧情标记已写入', world.flags.hasSect === true);
 // 满血突破：气血保持满血（100/100 → 200/200），不留"看似掉血"的空槽
 const fullP = newPlayerState();
 const fullW = newWorldState();
+fullW.date = { year: 5, month: 1, day: 1 };
 applyStateUpdates(fullP, fullW, { realmChange: '炼气初期' });
 assert('满血突破后仍满血（200/200）', fullP.hp === 200 && fullP.maxHp === 200);
 // 半血突破：同幅恢复（50/100 → 150/200），伤势差额保留
 const halfP = newPlayerState();
 halfP.hp = 50;
-applyStateUpdates(halfP, newWorldState(), { realmChange: '炼气初期' });
+const halfW = newWorldState();
+halfW.date = { year: 5, month: 1, day: 1 };
+applyStateUpdates(halfP, halfW, { realmChange: '炼气初期' });
 assert('半血突破同幅恢复（150/200）', halfP.hp === 150 && halfP.maxHp === 200);
 
 // 目标达成 → 标记
@@ -128,9 +132,10 @@ assert('势力关系结盟', fWorld.factions.find((f) => f.name === '剑宗').re
 
 // 支线任务期限
 const dWorld = newWorldState();
-applyStateUpdates(newPlayerState(), dWorld, { newQuests: [{ title: '护送商队', objective: '护送到青州', timeNode: '三日内', reward: '30灵石', deadlineTurns: 3 }] });
+applyStateUpdates(newPlayerState(), dWorld, { newQuests: [{ title: '护送商队', objective: '护送到青州', timeNode: '三日内', reward: '30灵石', deadlineDays: 3 }] });
 const dq = dWorld.quests.find((q) => q.title === '护送商队');
-assert('任务期限记录(第1回合+3=第4回合)', dq && dq.deadlineTurn === 4);
+assert('任务期限按游戏日期记录（三日后为1年1月4日）', dq && dq.deadlineDate?.year === 1 && dq.deadlineDate?.month === 1 && dq.deadlineDate?.day === 4);
+assert('新任务不再保存回合截止字段', dq && dq.deadlineTurn === undefined);
 
 // 自动命名：身份代称→姓名，血缘同姓
 const nWorld = newWorldState();
@@ -209,7 +214,7 @@ const ctx = buildWorldContext(cwWorld);
 assert('快照不含图鉴全集', !('items' in ctx));
 assert('快照事迹截断到最近10条', ctx.events.length === 10);
 assert('快照只含活跃任务', ctx.quests.length === 1 && ctx.quests[0].title === '活跃任务');
-assert('快照记忆截断到300字', ctx.memory.length === 300);
+assert('快照记忆截断到1000字', ctx.memory.length === 1000);
 assert('快照保留背包与功法', ctx.inventory.length === 1 && ctx.skills.length === 1);
 
 // 叙事篇幅档位
@@ -236,11 +241,25 @@ assert('品类操作方式', ITEM_KINDS['丹药'].action === 'use' && ITEM_KINDS
 const iWorld = newWorldState();
 applyStateUpdates(newPlayerState(), iWorld, { itemChanges: [
   { name: '疗伤丹', desc: '恢复气血', delta: 3 },
-  { name: '紫金葫芦', desc: '天阶法宝', delta: 1, kind: '法宝', grade: '天阶' },
+  { name: '玉髓葫芦', desc: '天阶法宝', delta: 1, kind: '法宝', grade: '天阶' },
 ] });
 const iPill = iWorld.inventory.find((t) => t.name === '疗伤丹');
-const iTreasure = iWorld.inventory.find((t) => t.name === '紫金葫芦');
+const iTreasure = iWorld.inventory.find((t) => t.name === '玉髓葫芦');
 assert('物品自动标注品类', iPill.kind === '丹药' && iTreasure.kind === '法宝' && iTreasure.grade === '天阶');
+
+// 物品数量规范化：丹药/装备整数，天材地宝/材料允许半份
+const qtWorld = newWorldState();
+applyStateUpdates(newPlayerState(), qtWorld, { itemChanges: [
+  { name: '疗伤丹', desc: 'x', delta: 1.7 },
+  { name: '茯苓草', desc: 'x', delta: 1.5, kind: '天材地宝' },
+  { name: '碎骨粉', desc: 'x', delta: 1, kind: '材料' },
+] });
+applyStateUpdates(newPlayerState(), qtWorld, { itemChanges: [
+  { name: '碎骨粉', desc: 'x', delta: -0.3, kind: '材料' },
+] });
+assert('丹药数量取整（1.7→2）', qtWorld.inventory.find((t) => t.name === '疗伤丹').qty === 2);
+assert('天材地宝允许半份（1.5 保留）', qtWorld.inventory.find((t) => t.name === '茯苓草').qty === 1.5);
+assert('材料半份步进（1 - 0.3 → 0.5）', qtWorld.inventory.find((t) => t.name === '碎骨粉').qty === 0.5);
 iTreasure.equipped = true;
 const tPlayer = newPlayerState();
 applyStateUpdates(tPlayer, iWorld, { stateUpdates: { cultivation: { delta: 10 } } });
@@ -257,11 +276,11 @@ assert('文字装备生效', eqWorld.inventory.find((t) => t.name === '玄铁甲
 applyStateUpdates(newPlayerState(), eqWorld, { equipChanges: [{ name: '金丝软甲', equipped: true }] });
 assert('装备同类互斥(自动卸下旧装备)', eqWorld.inventory.find((t) => t.name === '玄铁甲').equipped === false && eqWorld.inventory.find((t) => t.name === '金丝软甲').equipped === true);
 
-// 关系/势力修炼加成
-assert('道侣关系加成(1.25x)', relationCultMult([{ relation: '结为道侣' }]) === 1.25);
-assert('师徒关系加成(1.2x)', relationCultMult([{ relation: '拜师' }]) === 1.2);
-assert('挚友关系加成(1.1x)', relationCultMult([{ relation: '结为挚友' }]) === 1.1);
-assert('关系取最高一档', relationCultMult([{ relation: '结为挚友' }, { relation: '结为道侣' }]) === 1.25);
+// 关系/势力修炼加成（v1.4.0 起按四维账本的"信/需"算，标签只决定种子）
+assert('道侣关系加成(约1.235x)', Math.abs(relationCultMult([{ relation: '结为道侣' }]) - 1.235) < 1e-9);
+assert('师徒关系加成(约1.175x)', Math.abs(relationCultMult([{ relation: '拜师' }]) - 1.16) < 1e-9);
+assert('挚友关系加成(约1.175x)', Math.abs(relationCultMult([{ relation: '结为挚友' }]) - 1.175) < 1e-9);
+assert('关系加成可叠加但有上限', relationCultMult([{ relation: '结为挚友' }, { relation: '结为道侣' }]) === 1.3);
 assert('无关系无加成', relationCultMult([]) === 1.0 && relationCultMult([{ relation: '结仇' }]) === 1.0);
 assert('势力结盟加成', factionCultMult([{ relation: '结盟' }]) === 1.05 && factionCultMult([{ relation: '结盟' }, { relation: '结盟' }, { relation: '结盟' }]) === 1.15);
 assert('势力结盟上限15%', factionCultMult([{ relation: '结盟' }, { relation: '结盟' }, { relation: '结盟' }, { relation: '结盟' }, { relation: '结盟' }]) === 1.15);
@@ -271,7 +290,7 @@ const relWorld = newWorldState();
 relWorld.npcs = [{ name: '苏瑶', relation: '结为道侣' }];
 const relPlayer = newPlayerState();
 applyStateUpdates(relPlayer, relWorld, { stateUpdates: { cultivation: { delta: 10 } } });
-assert('道侣让修炼+25%', relPlayer.cultivation === 13);
+assert('道侣让修炼+23.5%', relPlayer.cultivation === 12);
 
 // 战斗数值（轻量版）：境界差决定伤害/生还
 assert('境界差计算', combatDiff('炼气初期', '筑基初期') === 3 && combatDiff('金丹初期', '炼气初期') === -6 && combatDiff('炼气初期', '未知') === 0);
@@ -326,10 +345,10 @@ assert('闭关递减曲线', closedDoorMult(1) === 1 && closedDoorMult(2) === 0.
 const cdWorld = newWorldState();
 const cdP1 = newPlayerState();
 applyStateUpdates(cdP1, cdWorld, { flags: { closedDoor: true }, timeMonths: 1, stateUpdates: { cultivation: { delta: 10 } } });
-assert('首次闭关满额', cdP1.cultivation === 10 && cdWorld.closedStreak === 1);
+assert('首次闭关按时长结算', Math.abs(cdP1.cultivation - 2.78) < 0.01 && cdWorld.closedStreak === 1);
 const cdP2 = newPlayerState();
 applyStateUpdates(cdP2, cdWorld, { flags: { closedDoor: true }, timeMonths: 1, stateUpdates: { cultivation: { delta: 10 } } });
-assert('连续闭关第二次递减(0.85x)', cdP2.cultivation === 9 && cdWorld.closedStreak === 2);
+assert('连续闭关第二次递减(0.85x)', Math.abs(cdP2.cultivation - 2.36) < 0.02 && cdWorld.closedStreak === 2);
 applyStateUpdates(newPlayerState(), cdWorld, { stateUpdates: { cultivation: { delta: 10 } } });
 assert('非闭关行动重置连续闭关计数', cdWorld.closedStreak === 0);
 

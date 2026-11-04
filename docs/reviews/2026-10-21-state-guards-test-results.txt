@@ -1,0 +1,446 @@
+法言天地 v1.1.3 第二轮测试记录
+日期：2026-10-21 / Asia/Shanghai
+基线：0730af8（第一轮259项通过）；本轮新增47个离线防护用例。
+最终：8/8套、306项离线通过；状态防护浏览器18/18；日期浏览器8/8；HTTP7/7。
+
+方式：只运行显式离线白名单；子进程fetch禁用。浏览器为无界面新进程与隔离context，只允许本地审阅端口，未连接个人会话。
+本机已安装的Playwright与浏览器引擎供测试使用，无额外下载或包安装。3103为本轮异常状态模拟；3104为第一轮日期回归模拟。
+源目录保存的53个文本文件哈希复核不变。真实API联调、EXE构建、移动端/多浏览器全量测试未运行。
+
+开发过程发现并修复：
+- 非法根、非有限数字、set绕过、倍率/加法/日历溢出、原型/动态名称读取。
+- 终态覆盖和重复事迹；同批newEvents相反标签、冲突旁路、新任务标签伪造。
+- 缺失物品数量默认奖励、负退款取绝对值。
+- 前端事迹分类与阶段/脉络字典继承键崩溃。
+新增测试在实现过程中曾出现失败（C记录过39项中9项待实现、扩展到46项后4项旁路失败）；均定位修复后才作以下最终复跑。
+以下输出从最终执行结果直接保存，未删失败条目；所有最终命令退出码均为0。
+交付暂存检查补记：第一次 git diff --cached --check 检出本记录拼接产生的文件末尾多余空行，已移除；未改动测试输出内容，随后重新暂存并检查。
+截图补充验证：等待快模式打字机动画完成，核对屏幕全部叙事与存档日志逐条一致后重新截图及下载日志；浏览器18/18再次通过，业务源码未改动。
+
+===== npm.cmd test =====
+
+> xianxia-ai-game@1.1.3 test
+> node tests/run-offline.mjs
+
+
+[离线测试] 基础规则
+PASS - 解析代码块包裹的 JSON
+PASS - 解析夹带文字的 JSON
+PASS - 非 JSON 返回 null
+PASS - 解析弯引号 JSON
+PASS - 合法 JSON 内弯引号不被破坏
+PASS - 重伤只到濒死不致死（hp=1 + 生死一线）
+PASS - 突破时气血随上限同步充盈（1→101，伤势保留）
+PASS - 正邪夹取到 -100
+PASS - 灵石 +50
+PASS - 境界突破到炼气初期
+PASS - 突破后修为进度清零
+PASS - 境界提升自动延长寿元
+PASS - 境界提升自动提高气血上限
+PASS - 新NPC去重
+PASS - 誓愿目标已合并
+PASS - 剧情标记已写入
+PASS - 满血突破后仍满血（200/200）
+PASS - 半血突破同幅恢复（150/200）
+PASS - 目标达成写入 goalCompleted
+PASS - 平铺数字按 delta 应用
+PASS - 死亡结局
+PASS - 飞升结局且为主目标
+PASS - 堕入魔道结局
+PASS - 法言天地不死
+PASS - 法言天地不堕魔
+PASS - 法言天地仍可飞升通关
+PASS - 法言天地免伤且不掷死亡骰
+PASS - 法言天地寿元不流逝
+PASS - 凡人无成就
+PASS - 炼气解锁初窥门径
+PASS - 开宗立派成就
+PASS - 困难难度受伤加重(1.5x)
+PASS - 快节奏修为加速(2x)
+PASS - 寿元耗尽结局
+PASS - 回合上限结局
+PASS - 飞升时不受回合上限限制
+PASS - 支线任务登记
+PASS - 支线任务完成
+PASS - 任务完成记入事迹
+PASS - 目标达成记入事迹
+PASS - 势力关系结盟
+PASS - 任务期限按游戏日期记录（三日后为1年1月4日）
+PASS - 新任务不再保存回合截止字段
+PASS - 身份代称自动命名
+PASS - 血缘同姓
+PASS - 已有姓名保留
+PASS - 势力阵营从描述推断
+PASS - 势力阵营显式字段优先
+PASS - 血煞魔宫判为魔道(名字优先)
+PASS - 青州剑宗判为正道
+PASS - 事迹主体对齐姓名
+PASS - 大势从文本推断
+PASS - 大势乘数有得有失
+PASS - 末法时代修炼变慢(0.75x)
+PASS - 魔道世家出身偏魔道
+PASS - 出身从文本推断
+PASS - 世家出身推断
+PASS - 深交后揭示性格
+PASS - 闭关三月修为放大三倍
+PASS - 闭关十年修为顶满(120倍放大)
+PASS - 修为增益2x翻倍
+PASS - 修为增益解析
+PASS - 快照不含图鉴全集
+PASS - 快照事迹截断到最近10条
+PASS - 快照只含活跃任务
+PASS - 快照记忆截断到1000字
+PASS - 快照保留背包与功法
+PASS - 篇幅档位
+PASS - 天阶功法修炼加成(2x)
+PASS - 品阶倍率
+PASS - 品类推断：丹药
+PASS - 品类推断：武器
+PASS - 品类推断：法宝
+PASS - 品类推断：衣物
+PASS - 品类推断：天材地宝
+PASS - 品类推断：材料
+PASS - 品类操作方式
+PASS - 物品自动标注品类
+PASS - 丹药数量取整（1.7→2）
+PASS - 天材地宝允许半份（1.5 保留）
+PASS - 材料半份步进（1 - 0.3 → 0.5）
+PASS - 已装备天阶法宝修炼加成(2x)
+PASS - 文字装备生效
+PASS - 装备同类互斥(自动卸下旧装备)
+PASS - 道侣关系加成(1.25x)
+PASS - 师徒关系加成(1.2x)
+PASS - 挚友关系加成(1.1x)
+PASS - 关系取最高一档
+PASS - 无关系无加成
+PASS - 势力结盟加成
+PASS - 势力结盟上限15%
+PASS - 无结盟无加成
+PASS - 道侣让修炼+25%
+PASS - 境界差计算
+PASS - 受伤倍率随境界差
+PASS - 死亡倍率随境界差
+PASS - 越级战斗受伤更重
+PASS - 战斗返回半透明结算行
+PASS - 仙阶衣物减伤(0.4x)
+PASS - 无衣物无减伤
+PASS - 仙阶武器降致死(0.4x)
+PASS - 天阶战甲让受伤更轻
+PASS - 一统江湖结局
+PASS - 稀有度修炼加成
+PASS - 词条：修炼类加修炼
+PASS - 词条：护体减伤
+PASS - 词条：逆天改命免死
+PASS - 脑洞词条无机械效果
+PASS - 稀有度五档齐全
+PASS - 渡劫成功率计算(50+10+10+10=80)
+PASS - 境界不足扣30
+PASS - 突破返回结果结构
+PASS - 闭关递减曲线
+PASS - 首次闭关满额
+PASS - 连续闭关第二次递减(0.85x)
+PASS - 非闭关行动重置连续闭关计数
+PASS - 名震一方成就
+PASS - 富甲天下成就
+PASS - 神兵在手成就
+PASS - 道侣情深成就
+PASS - 凡人首破只需五成
+PASS - 炼气突破需六成
+PASS - 筑基突破需七成
+PASS - 金丹突破需八成
+PASS - 元婴突破需八成五
+PASS - 化神突破需九成
+PASS - 合体/大乘/渡劫突破需圆满
+PASS - 门槛逐阶递增
+PASS - 获得物品进背包并记图鉴
+PASS - 消耗物品减数量
+PASS - 数量归零移除背包但图鉴保留
+PASS - 事迹按主体记录
+PASS - 事迹去重
+PASS - 时间推进15个月
+PASS - 寿元消耗1.25年
+PASS - 小数月按天换算(0.6月=18天)
+PASS - 短场景时间不流逝
+PASS - 一天粒度推进(次日)
+PASS - 正道行为随正道上浮
+PASS - 掠夺行为随魔道上浮
+PASS - 魔道做正道行为打折
+PASS - 气运：正道增修为、魔道降修为
+PASS - 阵营判定三派
+
+✅ 全部规则引擎测试通过
+
+[离线测试] 大势时间轴
+PASS - 加三个月
+PASS - 跨年加月
+PASS - 日期比较
+PASS - 无期限时自动设三月之期
+PASS - 未到期不提示
+PASS - 到期后标记 eraExpired 并提示
+PASS - GM 本回合已收束 → 不强制、清标记
+PASS - 强制演变为乱世
+PASS - 强制演变提示
+PASS - eraChange 带期限设置截止日
+PASS - eraChange 无期限清除截止日
+PASS - 到期时注入【大势到期】指引
+PASS - 未到期不注入
+PASS - 乱世忽略旧期限：不提示不强制
+PASS - 转回秘境将启自动设三月之期
+
+✅ 大势时间轴测试全部通过
+
+[离线测试] 防幻觉与撤回
+PASS - 按标题撤回：假事迹被删
+PASS - 按标题撤回：其余事迹保留
+PASS - 档案已建
+PASS - 主体撤回：整条事迹脉络删除
+PASS - 主体撤回：关系档案删除
+PASS - 主体+标题：只删对应里程碑
+PASS - 撤回标记删除
+PASS - 无关标记保留
+PASS - GM 规则含「剧情真实（防幻觉）」
+PASS - GM 规则要求传闻标注
+PASS - GM 规则禁止编造经历
+PASS - 压缩提示词要求忠实输入
+PASS - 误耗后两样都扣了
+PASS - 补回被误耗的百转培元丹
+PASS - GM 规则含「物品使用（防认错）」
+PASS - 规则要求逐字一致
+
+✅ 防幻觉测试全部通过
+
+[离线测试] 长期记忆
+PASS - 档案建档（2 条里程碑）
+PASS - 当前关系更新为暧昧
+PASS - 里程碑带回合号
+PASS - 同回合同关系不重复记
+PASS - 里程碑上限 12
+PASS - 首个里程碑保留
+PASS - NPC 事件自动进档案
+PASS - 活跃关系排第一
+PASS - 档案上限 8 条
+PASS - 里程碑截取最近 6 条
+PASS - 空档案返回 undefined
+PASS - 快照含关系档案
+PASS - 无档案时字段为 undefined（JSON 序列化自动省略）
+PASS - 有档案时注入【关系档案】
+PASS - 指引要求履行约定
+PASS - 无档案不注入
+PASS - 记忆快照上限 1000 字
+PASS - 压缩提示词强调感情线进度
+PASS - 压缩提示词强调承诺
+
+✅ 长期记忆测试全部通过
+
+[离线测试] NPC 性格
+PASS - 气质字段保存
+PASS - 真实性格字段保存
+PASS - 初始阶段为陌生
+PASS - 一次互动 → 初识
+PASS - 互动次数为 1
+PASS - 同回合两次互动只计一次
+PASS - 结成道侣 → 深交揭示真实性格
+PASS - 叙事看透 → 深交揭示
+PASS - 无气质的 NPC 互动后仍为未明
+PASS - 复杂人性规则含外显气质
+PASS - 复杂人性规则含性格不漂移
+PASS - 提取器 schema 含 personalityReveals
+
+✅ 性格揭示测试全部通过
+
+[离线测试] 死亡叙事背书
+PASS - died:true → 气血归零
+PASS - died:true → 触发死亡结局
+PASS - died:true → 记录死亡标记
+PASS - 重伤血尽 → hp=1（濒死）
+PASS - 重伤血尽 → 坠入生死一线
+PASS - 重伤血尽 → 不触发死亡结局
+PASS - 濒死时再受伤仍不死
+PASS - 致命行为掷骰命中 → 坠入濒死（非死亡）
+PASS - 掷骰命中 → 不触发死亡结局
+PASS - 濒死状态下不重复掷骰
+PASS - 脱险解除濒死
+PASS - 无危险+气血恢复至25%以上自动解除
+PASS - 气血仍低不自动解除
+PASS - 涉险回合不自动解除
+PASS - 言出法随：died 被忽略
+PASS - 言出法随：不坠濒死
+PASS - 濒死注入【生死一线】指引
+PASS - 未濒死不注入
+PASS - 渡劫失败返回失败结果
+PASS - 渡劫失败后状态一致
+
+✅ 死亡叙事背书测试全部通过
+
+[离线测试] 游戏日期任务期限
+✔ 日期计算沿用每月 30 天、每年 360 天，且不修改输入 (0.9096ms)
+✔ 剩余天数可区分截止当日和已超期 (0.113ms)
+✔ 拒绝非法日期或非整数日期偏移 (0.0912ms)
+✔ 三日任务保存绝对截止日期，不生成旧回合字段 (1.8008ms)
+✔ 复现修复：同日连续 20 回合谈价不会误判三日任务失败 (1.591ms)
+✔ 截止当天保持进行中，下一游戏日才失败 (0.3958ms)
+✔ 今夜/当日的 0 天期限不被当成无期限 (0.3183ms)
+✔ 任务期限正确跨月与跨年 (0.3091ms)
+✔ 同回合明确完成优先于推进时间后的超时 (0.2691ms)
+✔ 一月旅途结束接取三日任务，截止从旅途末开始计算 (0.2133ms)
+✔ 相对期限与时间推进采用同一天数舍入 (0.1431ms)
+✔ 兼容只有年月的旧存档：首次续玩接任务同样以初一锚定 (0.1256ms)
+✔ 旧存档缺失或为空的游戏日期使用默认起点，接任务和时间推进一致 (0.1541ms)
+✔ 旧存档已有非法日期时不偷偷改为合法日期，也不据此判罚 (0.3016ms)
+✔ 合法绝对截止日期优先于相对天数 (0.1034ms)
+✔ 迁移旧期限只保留原回合数待确认，不猜测天数或立即失败 (0.1498ms)
+✔ 旧存档迁移幂等，重复加载或迁移不会顺延已知截止日期 (0.1093ms)
+✔ 真实 v1.1.0 日志的脱敏任务快照迁移保留全部 19 项状态 (0.5187ms)
+✔ 迁移绝不重新打开 completed/failed/cancelled 任务 (0.2902ms)
+✔ 剧情明确补录相对期限后，旧任务恢复日期判定 (0.1432ms)
+✔ 剧情可为待确认旧任务补录绝对日期 (0.0915ms)
+✔ 重复登记任务或非法期限更新不顺延已有合法截止日期 (0.1456ms)
+✔ 模型每月重复 questUpdates.deadlineDays 不能无限顺延已确认期限 (0.4559ms)
+✔ 合法的绝对日期更新同样不能替换已确认期限 (0.1342ms)
+✔ 已确认日期和原文期限一起固定，重复 timeNode 不能制造显示与判定冲突 (0.1849ms)
+✔ 无期限任务不会因为回合或日期增长而失败 (0.1253ms)
+✔ 旧模型仍输出 deadlineTurns 时只待确认，不恢复回合判罚 (0.0965ms)
+✔ 非法相对期限被标记待确认，不产生可判罚日期 (0.2238ms)
+✔ 非法绝对期限或旧存档坏日期不会触发误失败 (0.0787ms)
+✔ 非法时间输出不会破坏日期或寿元 (0.2482ms)
+✔ 超时只返回一次并记录截止日、判定日和唯一事迹 (0.1163ms)
+✔ 到期前迁移只归一化，不在读取存档时判罚 (0.0534ms)
+✔ 快照携带日期期限及旧期限待确认状态 (0.1679ms)
+✔ 快慢模式都向模型说明日期期限，移除三日等于三回合的示例 (0.3901ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 80.0239
+
+[离线测试] 状态输入与任务终态
+✔ 解析器拒绝合法 JSON 根数组/标量，不截取数组内部对象 (1.2158ms)
+✔ 解析器继续兼容围栏、附加说明和中文弯引号对象 (0.5426ms)
+✔ 校验器对非法根返回 null 和静态诊断 (1.4294ms)
+✔ 非法根不进入结算，不改变玩家、任务、闭关计数等状态 (1.2895ms)
+✔ 合法对象可校验，输入对象本身不被改写 (0.4081ms)
+✔ stateUpdates 非对象时拒绝该字段，独立合法内容继续应用 (0.8573ms)
+✔ 合法裸数字、delta 对象和平铺属性保持兼容 (0.2097ms)
+✔ JSON 的 1e309、NaN、Infinity 和不安全数值不能污染玩家 (0.2846ms)
+✔ 非法玩家数值逐字段拒绝，同批合法疗伤与灵石仍落地 (0.1771ms)
+✔ delta 对象形状非法时不按字符串或数组隐式转换 (0.3191ms)
+✔ set 一律拒绝，不能绕过普通/困难/快速/外挂数值规则 (0.249ms)
+✔ 拒绝 set 不影响同批独立 delta，合法外挂减伤与快速修为仍生效 (0.1057ms)
+✔ 倍率后溢出被拒绝，同批合法负伤仍可应用 (0.1119ms)
+✔ 加法后溢出被拒绝，而不是把存档中的数字写成 null (0.1112ms)
+✔ 非法时间被剔除，界面消费 report.out 不推进日期 (0.2314ms)
+✔ 字符串枚举、布尔和战斗对象不会从错误类型隐式转换 (0.1205ms)
+✔ 所有列表字段的非数组形状被拒绝，独立合法字段仍落地 (0.3935ms)
+✔ NPC 列表中的坏条目被跳过，合法人物与普通剧情继续保存 (0.2333ms)
+✔ 地点/功法/事件的坏条目不阻止合法条目登记 (0.1965ms)
+✔ 叙事 flags 只接受布尔，保留任意合法剧情名称与 closedDoor (0.4389ms)
+✔ flags 数组不会合入数字下标键 (0.0794ms)
+✔ 模型不能伪造代码保留 flags，也不能设 true 伪造濒死/走火入魔 (0.0812ms)
+✔ 明确 false 仍可解除已有濒死和走火入魔 (0.0726ms)
+✔ 撤回可删除普通剧情标记，但不能删除代码保留标记 (0.0757ms)
+✔ 原型保留键无法污染根状态或 flags，合法 delta 继续落地 (0.0808ms)
+✔ 动态实体名不能从 aliasMap 或关系档案继承原型函数 (0.5292ms)
+✔ 时间月份乘天数和当前日期加月份后仍需处于安全范围 (0.1731ms)
+✔ 物品数量缺失/非法时不凭空补一件，同批合法数量继续登记 (0.1842ms)
+✔ 退款 retract.items 同样要求明确有限数量 (0.172ms)
+✔ 负数或零退款被拒绝，不能取绝对值凭空转成正数物品 (0.0936ms)
+✔ 物品数量加法和步进取整后仍不能越过安全数值范围 (0.1033ms)
+✔ 未知更新字段不进入规范化提案，但合法叙事字符串保留 (0.05ms)
+✔ 所有诊断只含静态 code/path/message，不能保存输入值或动态字段名 (0.1263ms)
+✔ 问题日志限制最近 30 次问题回合且每次至多 10 条，合法回合不写日志 (2.0541ms)
+✔ 任务终态×后续状态矩阵：状态/期限/事迹均不能被改写 (1.294ms)
+✔ active 任务正常完成/失败并记录一次，重复相同终态安静幂等 (0.2139ms)
+✔ 同批同任务完成/失败冲突则整项拒绝，不取数组最后一项 (0.1496ms)
+✔ 同批冲突按任务隔离，不阻止另一个合法任务完成 (0.0817ms)
+✔ 同批重复完成是一次状态迁移和一条事迹 (0.0538ms)
+✔ newEvents 的系统状态标签不能与同批真实任务结算产生相反事迹 (0.3229ms)
+✔ 同批任务状态冲突不能借 newEvents 绕过拒绝 (0.0934ms)
+✔ 仅有 newEvents 系统状态标签不能伪造任务完成/失败/放弃 (0.1227ms)
+✔ 同批刚登记的新任务也不能被 newEvents 伪造为已完成 (0.1349ms)
+✔ 模型不能把 active 任务自行切换为玩家主动放弃状态 (0.0596ms)
+✔ 非法期限仍是待确认，不被校验器静默改成无期限 (0.1429ms)
+✔ 待确认旧任务合法补录日期仍可用，终态保护不阻断第一轮兼容路径 (0.1185ms)
+✔ 任务对象引用不被整包替换，调用方持有的引用保持有效 (0.1212ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 85.3226
+
+离线测试完成：8/8 套通过，耗时 678 ms。
+
+Exit code: 0
+
+===== node scripts/check-state-guards-browser.mjs (REVIEW_BASE_URL=http://127.0.0.1:3103) =====
+PASS - fast：混合提案逐项拦截，合法状态保留，真实面板与存档不误报成功
+PASS - fast：完成任务不能变失败，也不生成矛盾事迹
+PASS - fast：同批完成/失败冲突保持原任务状态
+PASS - fast：根数组拒绝，快模式兜底/慢模式提取均不结算回合和日期
+PASS - fast：倍率/加法后溢出被拒绝，存档仍为有效有限数值
+PASS - fast：正常支付继续可用
+PASS - fast：特殊名称在事迹两种视图、图鉴、背包及获得通知中安全显示
+PASS - 真实“导出日志”浏览器下载包含有限诊断，未包含原始异常字段/值或配置Key
+PASS - fast：自动存档重新加载后保留安全数值和任务终态
+PASS - slow：混合提案逐项拦截，合法状态保留，真实面板与存档不误报成功
+PASS - slow：完成任务不能变失败，也不生成矛盾事迹
+PASS - slow：同批完成/失败冲突保持原任务状态
+PASS - slow：根数组拒绝，快模式兜底/慢模式提取均不结算回合和日期
+PASS - slow：倍率/加法后溢出被拒绝，存档仍为有效有限数值
+PASS - slow：正常支付继续可用
+PASS - slow：特殊名称在事迹两种视图、图鉴、背包及获得通知中安全显示
+PASS - slow：自动存档重新加载后保留安全数值和任务终态
+PASS - 无浏览器脚本错误、无非本地网络请求
+状态校验无界面浏览器验证：18/18 通过。
+
+Exit code: 0
+
+===== node scripts/check-deadlines-browser.mjs (REVIEW_BASE_URL=http://127.0.0.1:3104; REVIEW_SCREENSHOTS=off) =====
+PASS - 真实前端读档后显示截止日期及剩余天数
+PASS - 快节奏：连续5次真实发送，同日任务保持有效
+PASS - 截止当天任务页仍显示进行中
+PASS - 跨过截止日后真实回合结算失败并解释日期原因
+PASS - 真实前端同回合完成优先，未生成超时事迹
+PASS - 旧档待确认、补录明确期限、自动存档再读入全流程通过
+PASS - 慢节奏：SSE叙事与提取两段式、旅途末接取期限正确
+PASS - 浏览器无脚本错误、未发出非本地请求
+无界面浏览器集成验证：8/8 通过。
+
+Exit code: 0
+
+===== node scripts/check-server.mjs =====
+PASS - 真实服务 / 200、内容与缓存策略正确
+PASS - 真实服务 /app.js 200、内容与缓存策略正确
+PASS - 真实服务 /game.js 200、内容与缓存策略正确
+PASS - 真实服务 /style.css 200、内容与缓存策略正确
+PASS - 真实服务 /icon.svg 200、内容与缓存策略正确
+PASS - 不存在的静态资源返回404
+PASS - 空模型请求返回400，不转发上游
+真实HTTP服务验证：7/7 通过。
+
+Exit code: 0
+
+===== 环境、10文件语法、Git差异检查、来源清单、常见密钥模式扫描 =====
+2026-10-21 11:08:48 +08:00
+v26.3.0
+11.16.0
+Syntax checks: 10/10 passed
+warning: in the working copy of 'AGENTS.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'public/app.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'public/game.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/check-deadlines-browser.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/check-server.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/review-deadlines.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/run-offline.mjs', LF will be replaced by CRLF the next time Git touches it
+Git whitespace check: passed
+Source manifest: 53 checked, 0 changed
+Secret pattern scan: no matches
+
+Exit code: 0

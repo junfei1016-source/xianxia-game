@@ -456,6 +456,7 @@ button.mini {
   cursor: pointer;
 }
 button.mini:hover { border-color: var(--gold-soft); color: var(--gold); }
+button.mini.on { border-color: var(--gold-soft); color: var(--gold); background: #222c3d; }
 
 /* ---------- 成就 ---------- */
 .ach-list { margin: 0; padding: 0; list-style: none; }
@@ -793,6 +794,8 @@ button.mini:hover { border-color: var(--gold-soft); color: var(--gold); }
 .faction-align.align-neutral { color: var(--muted); border: 1px solid var(--border); }
 .faction-type { font-size: 11px; padding: 1px 6px; border-radius: 999px; margin-left: 6px; color: #8fb8e8; border: 1px solid #4a6a8a; }
 .npc-pers { font-size: 11px; color: #d4a0c0; border: 1px solid #d4a0c0; border-radius: 999px; padding: 1px 6px; margin-left: 6px; }
+.npc-pers.temp { color: #8fc9e6; border-color: #4a6a8a; }
+.npc-pers.unknown { color: var(--muted); border-color: var(--border); }
 .skill-grade { font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 6px; margin-left: 6px; }
 .chronicle-rel { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); flex-shrink: 0; }
 .chronicle-count { font-size: 11px; color: var(--muted); }
@@ -979,6 +982,7 @@ button.ghost:hover { color: var(--gold); border-color: var(--gold-soft); }
 .ending-reopen:hover { background: rgba(34, 44, 61, 0.96); }
 .ending-export-status { margin-top: 12px; font-size: 12px; color: #8fd6a0; word-break: break-all; text-align: center; }
 .ending-export-status.err { color: #d98a8a; }
+.help-version { text-align: center; margin: 14px 0 0; }
 
 /* ---------- 本局概览（策略面板） & 事迹脉络视图 ---------- */
 .overview {

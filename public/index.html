@@ -119,10 +119,6 @@
             <div class="chips" id="lengthChips"></div>
             <p class="hint">每回合叙事字数。精简省 tokens、更快；丰富更沉浸。</p>
           </div>
-          <div class="q-group">
-            <div class="q-title">天下大势</div>
-            <div class="chips" id="eraChips"></div>
-          </div>
         </details>
 
         <button id="continueBtn" class="secondary hidden" type="button">继续上次游戏</button>
@@ -169,6 +165,21 @@
               <option value="2000">2秒</option>
               <option value="3000" selected>3秒</option>
               <option value="5000">5秒</option>
+            </select>
+          </div>
+          <div class="demo-row">
+            <span>言出法随</span>
+            <button id="godToggleBtn" class="mini" type="button" title="热切换外挂模式：随时开启/关闭，立即生效。开启后心想事成、不会失败；未开局时修改的是新游戏默认。">关</button>
+          </div>
+          <!-- 调试用：世道底子不再对玩家显示。地址栏加 ?dev=1 才出现，用于自己试各种天时 -->
+          <div class="demo-row hidden" id="devEraRow">
+            <span>世道底子（调试）</span>
+            <select id="eraSelect" title="调试用：直接换世道底子，立即生效。正常玩法不显示这一项。">
+              <option value="盛世">盛世</option>
+              <option value="乱世">乱世</option>
+              <option value="末法时代">末法时代</option>
+              <option value="秘境将启">秘境将启</option>
+              <option value="正魔大战">正魔大战</option>
             </select>
           </div>
           <button id="demoBtn" class="demo-btn" type="button" title="让 AI 自动替玩家行动，实时演示实际体验">开始自动演示</button>
@@ -264,6 +275,7 @@
           <p>结局时（或存档面板）可选<span class="gold">「导出本局日志」</span>：完整对话与状态保存为 txt 到桌面（不含 Key），方便反馈意见给开发者。</p>
         </details>
       </div>
+      <p class="hint help-version">当前版本：<span id="gameVersion">v—</span> · 新版由开发者发新 exe 替换即可，存档不受影响</p>
       <button id="helpCloseBtn" class="primary" type="button">知道了</button>
     </div>
   </div>

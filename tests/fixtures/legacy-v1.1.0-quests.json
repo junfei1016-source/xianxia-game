@@ -1,0 +1,28 @@
+{
+  "source": "2026-08-20 player log, sanitized quest-only snapshot; no config, credentials or chat history",
+  "world": {
+    "turn": 299,
+    "date": { "year": 2, "month": 8, "day": 6 },
+    "quests": [
+      { "title": "飞升成仙", "status": "active", "timeNode": "无期限" },
+      { "title": "丹房看炉火", "status": "completed", "timeNode": "明日辰时", "deadlineTurn": null },
+      { "title": "摘取紫背草", "status": "completed", "timeNode": "", "deadlineTurn": null },
+      { "title": "溪谷寻人", "status": "completed", "timeNode": "明日天亮溪谷口汇合", "deadlineTurn": null },
+      { "title": "替阚青龙送篮", "status": "failed", "timeNode": "明日卯时取篮，杏时前送到", "deadlineTurn": 33 },
+      { "title": "暮云镇药铺验货采买", "status": "failed", "timeNode": "明日辰时出发，日落前回山", "deadlineTurn": null },
+      { "title": "天机楼辨药杂役", "status": "completed", "timeNode": "今日", "deadlineTurn": null },
+      { "title": "丹房碾药差事", "status": "active", "timeNode": "无期限", "deadlineTurn": null },
+      { "title": "看守守夜香", "status": "completed", "timeNode": "明日卯时", "deadlineTurn": null },
+      { "title": "顾丹师的邀约", "status": "completed", "timeNode": "今夜子时", "deadlineTurn": 141 },
+      { "title": "替顾丹师取药", "status": "failed", "timeNode": "今夜", "deadlineTurn": 142 },
+      { "title": "镇西渡口取药", "status": "completed", "timeNode": "夜半（本夜）", "deadlineTurn": null },
+      { "title": "摸透青焰炭性", "status": "failed", "timeNode": "明日辰时", "deadlineTurn": 157 },
+      { "title": "转交青焰炭样本给掌门", "status": "completed", "timeNode": "无期限", "deadlineTurn": null },
+      { "title": "入谷采药辨材", "status": "active", "timeNode": "秘境开启前（不足两月）", "deadlineTurn": null },
+      { "title": "辨药换茯苓", "status": "completed", "timeNode": "", "deadlineTurn": null },
+      { "title": "换取千年雷击槐心木", "status": "completed", "timeNode": "无期限", "deadlineTurn": null },
+      { "title": "采集水蓼草换取老龙涎", "status": "completed", "timeNode": "无期限", "deadlineTurn": null },
+      { "title": "炼化千年雷击槐心木为本命法宝", "status": "completed", "timeNode": "秘境开启前（约三个月内）", "deadlineTurn": null }
+    ]
+  }
+}

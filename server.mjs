@@ -186,7 +186,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (content) {
-      res.writeHead(200, { 'Content-Type': MIME[extname(pathname).toLowerCase()] || 'application/octet-stream' });
+      res.writeHead(200, { 'Content-Type': MIME[extname(pathname).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' });
       res.end(content);
       return;
     }

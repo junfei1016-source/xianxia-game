@@ -17,6 +17,7 @@ import {
   kindFromText,
   gradeMult,
   ERA_LEVELS,
+  ERA_TYPES,
   eraTypeFromText,
   ORIGINS,
   originTypeFromText,
@@ -27,6 +28,10 @@ import {
   buildExtractMessages,
   applyStateUpdates,
   advanceTime,
+  migrateQuestDeadlines,
+  expireQuestDeadlines,
+  questDeadlineInfo,
+  enforceEraTimeline,
   addChronicleEvent,
   reputationMultiplier,
   factionAlignment,
@@ -35,6 +40,8 @@ import {
   realmIndex,
   realmMajor,
   relationCultMult,
+  bondOf,
+  linkIsKnown,
   factionCultMult,
   breakthroughRate,
   attemptBreakthrough,
@@ -44,14 +51,45 @@ import {
   achievementDesc,
   parseLLMJSON,
   updateFarmLog,
+  noteInvestigation,
+  rollSeclusionInterrupt,
   farmMult,
   affixLabels,
   equipItem,
   isFunctionalTreasure,
   activeHas,
+  GAME_VERSION,
+  npcInsightStage,
+  skyOf,
+  rumorsFor,
+  settleRumors,
+  perceptionTier,
+  interfaceOf,
+  realmCapFor,
+  canAscendToSpirit,
+  isOnDuty,
+  debtSummary,
+  sectOf,
+  sectCatalog,
+  sectRedeem,
+  takeTask,
+  factionBoards,
+  takeFactionTask,
+  factionShop,
+  redeemFaction,
+  redeemMerit,
 } from './game.js';
 
+import { ensureWorldGeo, lockWorldMap, startingFactions, regionById, MERIT_SHOP } from './world.js';
+
 const $ = (id) => document.getElementById(id);
+const MORTAL_CAP_TEXT = '化神后期';
+
+// 状态栏：境界 + 当前区域（区域来自世界骨架，旧档没有坐标时自动省掉）
+function statusLine() {
+  const region = world && world.geo ? regionById(world.geo.regionId) : null;
+  return '进行中 · ' + player.realm + (region ? ' · ' + region.name : '');
+}
 
 // ---------- 配置 ----------
 const CONFIG_KEY = 'xianxia_config_v1';
@@ -67,7 +105,7 @@ let config = { ...DEFAULTS };
 // ---------- 存档 ----------
 const SAVE_KEY = 'xianxia_saves_v1';
 const AUTO_SLOT = 'auto';
-const MEMORY_LIMIT = 16; // 历史消息超过此数，就把更早的压缩进长期记忆
+const MEMORY_LIMIT = 20; // 历史消息超过此数，就把更早的压缩进长期记忆
 
 let mode = 'random'; // random | questionnaire
 const answers = { origin: '随机', personality: '随机', ambition: '随机' };
@@ -398,6 +436,9 @@ function captureTurnState() {
   const quests = (world.quests || []).map((q) => ({ title: q.title, status: q.status }));
   const codexLen = (world.items || []).length + (world.skills || []).length + (world.npcs || []).length + (world.locations || []).length + (world.factions || []).length;
   return {
+    realm: player.realm,
+    goal: JSON.stringify(world.goal || {}),
+    goalCompleted: world.flags.goalCompleted === true,
     morality: player.morality,
     reputation: player.reputation,
     maxHp: player.maxHp,
@@ -417,7 +458,7 @@ function applyTurnNotices(before) {
   const EQUIP_KINDS = ['法宝', '武器', '衣物'];
 
   // 物品增减 / 装备状态变化
-  const beforeInv = {};
+  const beforeInv = Object.create(null);
   for (const it of before.inv) beforeInv[it.name] = it;
   const seen = new Set();
   for (const it of world.inventory || []) {
@@ -452,6 +493,15 @@ function applyTurnNotices(before) {
       notices.push({ text: `任务「${q.title}」${questStatusLabel(q.status)}`, cls: q.status === 'failed' ? 'lose' : 'quest' });
       dots.quest = true;
     }
+  }
+
+  // 目标提示只依据引擎实际落地的状态，不使用模型自报的 goalNote。
+  if (JSON.stringify(world.goal || {}) !== before.goal || (world.flags.goalCompleted === true) !== before.goalCompleted) {
+    const goal = world.goal || {};
+    const completed = world.flags.goalCompleted === true && !before.goalCompleted;
+    const detail = [goal.desc || goal.type, goal.status].filter(Boolean).join(' · ');
+    notices.push({ text: `【目标${completed ? '达成' : '更新'}】${detail || '目标状态已更新'}`, cls: 'quest' });
+    dots.quest = true;
   }
 
   // 新势力（AI/玩家提到或遇见的江湖势力 → 已建档进图鉴）
@@ -562,13 +612,55 @@ function overviewHtml() {
       <div class="ov-rows">${rows}</div>
     </div>`;
 }
+// 天时三行：只给征兆，不给时代名；境界越低看到越少
+function skyRowsHtml(p, world, tipFn) {
+  const sky = skyOf(p, world);
+  const tipText = sky.tier === 0
+    ? '你还看不出个子丑寅卯，只觉得有些不对——多经历些事，或等修为高些，才看得明白。'
+    : sky.tier === 1
+      ? '筑基之后，你能从天色、货价与人流里看出些门道了。'
+      : '元婴之后，天色、地气、人心在你眼里都藏不住：哪句是虚的，你一听就知道。';
+  const labels = [];
+  if (sky.sky) labels.push(['天时', sky.sky]);
+  if (sky.market) labels.push(['市面', sky.market]);
+  if (sky.people) labels.push(['人事', sky.people]);
+  if (!labels.length) labels.push(['天时', sky.vague]);
+  const rows = labels.map(([k, v]) => `<div class="stat-row" ${tipFn(tipText)}><dt>${k}</dt><dd>${esc(v)}</dd></div>`);
+  const rumors = rumorsFor(p, world).slice(-2)
+    .map((x) => `<div class="stat-row"><dt>传闻</dt><dd>${esc(x)}</dd></div>`);
+  return rows.join('') + rumors.join('');
+}
+
 function renderStatus() {
   const p = player;
   const s = world.settings || {};
   const repBonus = Math.round((reputationMultiplier(p.reputation) - 1) * 100);
   const ri = realmIndex(p.realm);
   const st = stanceProfile(p);
-  const MAJORS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '合体', '大乘', '渡劫', '飞升'];
+  const MAJORS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫', '飞升'];
+  // 人界只到化神后期：炼虚以上须飞升灵界（第 962 章：进阶化神后才有能力飞升灵界）
+  const iface = interfaceOf(world);
+  const capRealm = realmCapFor(world);
+  const canBreak = canAscendToSpirit(p, world);
+  const ifaceLabel = `${iface}${capRealm ? `（上限 ${capRealm}）` : '（无上限）'}`;
+  const outlaw = !!(world.flags && world.flags.spiritOutlaw);
+  const spiritLabel = outlaw ? '无（偷渡黑户）' : '已登记';
+  const unsuppressed = (world.outlaw && Number.isFinite(world.outlaw.unsuppressedMonths)) ? world.outlaw.unsuppressedMonths : 0;
+  const outlawYears = Math.floor(unsuppressed / 12);
+  const sect = sectOf(world);
+  const debts = debtSummary(world).slice(0, 4);
+  const onDuty = isOnDuty(world);
+  const dutyYears = (world.duty && Number.isFinite(world.duty.years)) ? world.duty.years : 0;
+  const dutyMerit = (world.duty && Number.isFinite(world.duty.merit)) ? world.duty.merit : 0;
+  const dutyLabel = world.duty && world.duty.rank === '已退役'
+    ? '已满役（可自由离开天渊城）'
+    : `${(world.duty && world.duty.rank) || '青冥卫'} · 第 ${dutyYears} 年 / 300 年 · 军功 ${dutyMerit}`;
+  const spiritTip = outlaw
+    ? '偷渡过来的，没有飞灵台的仙籍：天渊卫见了就要拿人，也进不了天渊城服役。'
+    : '经飞灵台登记在册，有仙籍，可去天渊城服役换灭尘丹（第 1316 章）。';
+  const ifaceTip = iface === '人界'
+    ? `人界之力所限，最多修到${MORTAL_CAP_TEXT}。再往上（炼虚、合体、大乘、渡劫）只有在灵界才修得——须化神后期且修为圆满，方能破界飞升灵界。${canBreak ? '你如今已可破界。' : ''}`
+    : '灵界无境界上限，可一路修到渡劫，再渡天劫飞升仙界。';
   const curMajor = p.realm === '飞升' ? '飞升' : realmMajor(p.realm);
   const ladder = MAJORS.map((m) => {
     const cls = m === curMajor ? 'cur' : (MAJORS.indexOf(m) < MAJORS.indexOf(curMajor) ? 'past' : '');
@@ -582,12 +674,19 @@ function renderStatus() {
     <div class="realm-ladder">${ladder}</div>
     <div class="stat-row" ${tip('你的名字与出身')}><dt>姓名</dt><dd>${esc(p.name)}</dd></div>
     <div class="stat-row" ${tip(`当前境界：${p.realm}（第 ${ri + 1}/${REALM_LADDER.length} 阶）。境界阶梯（大境）：${MAJORS.join(' → ')}。修为圆满后需机缘（丹药/传承/顿悟/磨砺）破境，不可一步登天。`)}><dt>境界</dt><dd>${esc(p.realm)}</dd></div>
+    <div class="stat-row" ${tip(ifaceTip)}><dt>所处</dt><dd>${ifaceLabel}</dd></div>
+    ${iface === '灵界' ? `<div class="stat-row" ${tip(spiritTip)}><dt>仙籍</dt><dd>${spiritLabel}</dd></div>` : ''}
+    ${iface === '灵界' && outlaw ? `<div class="stat-row" ${tip('灭尘丹每年服一粒才压得住下界气息；不服用的话，三百年一次的小天劫会变成必死的两色雷劫。')}><dt>劫气</dt><dd>${outlawYears} 年未服丹</dd></div>` : ''}
+    ${sect ? `<div class="stat-row" ${tip('门内辈分靠贡献与境界升；贡献可进藏经阁换功法丹药。')}><dt>宗门</dt><dd>${esc(sect.faction.name)} · ${esc(sect.rank)} · 贡献 ${sect.contribution}</dd></div>` : ''}
+    ${(world.flags && world.flags.sectTraitor) ? `<div class="stat-row" ${tip('你背着那家的赏格：在野地走动会被门人堵，销案要交还抄走的东西再赔一笔。')}><dt>赏格</dt><dd>${world.flags.sectBounty || 0} 灵石</dd></div>` : ''}
+    ${debts.length ? `<div class="stat-row" ${tip('你欠着的人情：欠着不还，人家会记恨；还上了，交情会更硬。')}><dt>人情债</dt><dd>${debts.map((x) => `${esc(x.name)} ${x.debt}`).join('、')}</dd></div>` : ''}
+    ${iface === '灵界' && onDuty ? `<div class="stat-row" ${tip('在天渊城服役：每年领一粒灭尘丹，服够三百年下界气息尽去，就可自由离开。')}><dt>服役</dt><dd>${dutyLabel}</dd></div>` : ''}
     <div class="stat-row" ${tip('当前境界的修炼进度（0~100%）。到 100% 后进入瓶颈，需机缘（丹药/传承/顿悟/磨砺）才能突破。')}><dt>修为进度</dt><dd>${bar(p.cultivation)} ${p.cultivation}%</dd></div>
     <div class="stat-row" ${tip('关系与势力的修炼加成：道侣+25%、师徒+20%、挚友/结义+10%（取最高一档）；每个结盟势力+5%（上限+15%）。')}><dt>关系·势力</dt><dd>${relBonus > 0 ? '+' + relBonus + '%' : '无加成'}</dd></div>
     <div class="stat-row" ${tip(`气血：${p.hp}/${p.maxHp}。受伤会降低气血，归零则身死道消；气血上限随境界提升。`)}><dt>气血</dt><dd>${bar(p.hp, p.maxHp)} ${p.hp}/${p.maxHp}</dd></div>
     <div class="stat-row" ${tip('剩余寿元。随境界提升而延长、随时间流逝而消耗；寿元耗尽则坐化。')}><dt>寿元</dt><dd>${Math.round(p.lifespan)} 岁</dd></div>
     <div class="stat-row" ${tip('游戏内时间（年/月/日）。短场景不流逝时间，闭关、赶路、等待会推进时间并消耗寿元。')}><dt>时间</dt><dd>第 ${esc(world.date?.year || 1)} 年 ${esc(world.date?.month || 1)} 月 ${esc(world.date?.day || 1)} 日</dd></div>
-    <div class="stat-row" ${tip(`天下大势：${esc(world.era || '')}`)}><dt>大势</dt><dd>${esc(world.eraType || '乱世')}</dd></div>
+    ${skyRowsHtml(p, world, tip)}
     <div class="stat-row" ${tip('通用货币，可购买丹药、法宝、功法等。获得收益受声望与正邪分来源加成。')}><dt>灵石</dt><dd>${p.spiritStones}</dd></div>
     <div class="stat-row" ${tip(`正邪：${p.morality}（${moralityLabel(p.morality)}）。≥30 正道、≤-30 魔道、中间中庸。正道行善收益高、机缘好但掠夺打折；魔道反之，且被正道通缉。`)}><dt>正邪</dt><dd>${p.morality > 0 ? '+' : ''}${p.morality} ${moralityLabel(p.morality)}</dd></div>
     <div class="stat-row" ${tip(`声望：${p.reputation}。越高 NPC 越敬重、收益越高（当前 ${repBonus >= 0 ? '+' : ''}${repBonus}%）。`)}><dt>声望</dt><dd>${bar(p.reputation)} ${p.reputation}（收益 ${repBonus >= 0 ? '+' : ''}${repBonus}%）</dd></div>
@@ -656,7 +755,19 @@ function questStatusLabel(s) {
   return { active: '进行中', completed: '已完成', failed: '已失败', cancelled: '已放弃' }[s] || s;
 }
 function renderQuest() {
-  const item = (q) => `
+  const item = (q) => {
+    const deadline = questDeadlineInfo(q, world);
+    let deadlineDescription = deadline.text;
+    if (q.status !== 'active') {
+      if (deadline.deadlineDate) {
+        const date = deadline.deadlineDate;
+        deadlineDescription = `${date.year}年${date.month}月${date.day}日`;
+      } else if (deadline.pending) {
+        deadlineDescription = `${deadline.text.replace('待确认', '未确认')}（任务已结束）`;
+      }
+    }
+    const deadlineText = [q.timeNode, deadlineDescription].filter(Boolean).filter((text, index, all) => all.indexOf(text) === index).join(' · ');
+    return `
     <div class="quest q-${q.status}">
       <div class="quest-head">
         <span class="quest-tag">${q.type === 'main' ? '主线' : '支线'}</span>
@@ -665,9 +776,11 @@ function renderQuest() {
         ${q.type === 'side' && q.status === 'active' ? `<button class="quest-cancel" data-cancel="${esc(q.title)}" type="button" title="放弃此任务">取消</button>` : ''}
       </div>
       ${q.objective ? `<div class="quest-line"><b>目标</b>：${esc(q.objective)}</div>` : ''}
-      ${q.timeNode ? `<div class="quest-line"><b>期限</b>：${esc(q.timeNode)}${q.deadlineTurn ? `（第${q.deadlineTurn}回合前）` : ''}</div>` : ''}
+      ${q.timeNode || deadline.deadlineDate || deadline.pending ? `<div class="quest-line"><b>期限</b>：${esc(deadlineText)}</div>` : ''}
+      ${q.failureReason ? `<div class="quest-line"><b>失败原因</b>：${esc(q.failureReason)}</div>` : ''}
       ${q.reward ? `<div class="quest-line"><b>奖励</b>：${esc(q.reward)}</div>` : ''}
     </div>`;
+  };
   const mains = world.quests.filter((q) => q.type === 'main' && q.status === 'active');
   const sides = world.quests.filter((q) => q.type === 'side' && q.status === 'active');
   const ended = world.quests.filter((q) => q.status !== 'active');
@@ -675,7 +788,36 @@ function renderQuest() {
   if (mains.length) html += '<div class="quest-group">主线</div>' + mains.map(item).join('');
   if (sides.length) html += '<div class="quest-group">支线</div>' + sides.map(item).join('');
   if (ended.length) html += `<details class="quest-ended"><summary>已结束（${ended.length}）</summary>` + ended.map(item).join('') + '</details>';
-  $('questPanel').innerHTML = html || '<div class="empty">暂无任务</div>';
+  const board = (world.taskBoard && Array.isArray(world.taskBoard.list)) ? world.taskBoard.list : [];
+  const live = Array.isArray(world.liveTasks) ? world.liveTasks : [];
+  const merit = world.merit || 0;
+  const boardHtml = board.length
+    ? board.map((t) => `<div class="quest-row"><span class="quest-title">[${esc(t.tier)}] ${esc(t.title)}</span>`
+      + `<span class="quest-meta">${esc(t.kind)} ${t.need}${esc(t.target && t.kind !== '行路' ? '' : '')} · 限 ${t.days} 日 · ${t.reward.stones} 灵石 · 功勋 ${t.reward.merit}</span>`
+      + `<button type="button" class="mini" data-take="${esc(t.id)}">接</button></div>`).join('')
+    : '<div class="empty">今日牌上空着（换期后会重挂）</div>';
+  const liveHtml = live.length
+    ? live.map((t) => `<div class="quest-row"><span class="quest-title">${esc(t.title)}</span><span class="quest-meta">进度 ${t.progress}/${t.need} · 限期 ${esc((t.dueDate && (t.dueDate.year + '年' + t.dueDate.month + '月' + t.dueDate.day + '日')) || '—')}</span></div>`).join('')
+    : '<div class="empty">手上没有接下的差事</div>';
+  const shopHtml = MERIT_SHOP.map((x) => `<div class="quest-row"><span class="quest-title">${esc(x.name)}</span><span class="quest-meta">功勋 ${x.merit}</span><button type="button" class="mini" data-redeem="${esc(x.id)}">兑</button></div>`).join('');
+  // 宗门任务殿：本地势力各挂各的牌
+  const boards = factionBoards(world);
+  const factionHtml = boards.length
+    ? boards.map((b) => `<details class="codex-group"><summary>${esc(b.faction.name)}（${esc(b.faction.type || '')}·${esc(b.faction.alignment || '中立')}）功勋 ${b.merit} · 好感 ${b.favor}</summary>`
+      + b.board.map((t) => `<div class="quest-row"><span class="quest-title">[${esc(t.tier)}] ${esc(t.title)}</span>`
+        + `<span class="quest-meta">${esc(t.kind)} ${t.need} · ${t.days} 日 · ${t.reward.stones} 灵石 · 功勋 ${t.reward.merit}</span>`
+        + `<button type="button" class="mini" data-faction="${esc(b.faction.id)}" data-fid="${esc(t.id)}">接</button></div>`).join('')
+      + factionShop(world, b.faction.id).map((x) => `<div class="quest-row"><span class="quest-title">兑·${esc(x.name)}</span><span class="quest-meta">功勋 ${x.merit}</span><button type="button" class="mini" data-fredeem="${esc(b.faction.id)}" data-fitem="${esc(x.id)}">兑</button></div>`).join('')
+      + '</details>').join('')
+    : '';
+  const sect = sectOf(world);
+  const sectShop = sect ? sectCatalog(world).map((x) => `<div class="quest-row"><span class="quest-title">${esc(x.name)}</span><span class="quest-meta">贡献 ${x.merit}</span><button type="button" class="mini" data-sect="${esc(x.id)}">换</button></div>`).join('') : '';
+  $('questPanel').innerHTML = (html || '')
+    + (sect ? `<details class="codex-group"><summary>藏经阁（${esc(sect.faction.name)} · 贡献 ${sect.contribution}）</summary>${sectShop}</details>` : '')
+    + (factionHtml ? `<details class="codex-group" open><summary>宗门任务殿</summary>${factionHtml}</details>` : '')
+    + `<details class="codex-group" open><summary>任务殿（功勋 ${merit}）</summary>${boardHtml}</details>`
+    + `<details class="codex-group" open><summary>已接 (${live.length}/3)</summary>${liveHtml}</details>`
+    + `<details class="codex-group"><summary>功勋台</summary>${shopHtml}</details>`;
 }
 function kindCls(kind) {
   return { '丹药': 'pill', '法宝': 'treasure', '武器': 'weapon', '衣物': 'cloth', '天材地宝': 'elixir', '材料': 'mat' }[kind] || 'mat';
@@ -814,12 +956,19 @@ function discardItem(name) {
 
 function subjectType(subject) {
   if (subject === player.name) return 'player';
-  const resolved = (world.aliasMap && world.aliasMap[subject]) || subject; // 身份→姓名对齐
+  const name = typeof subject === 'string' ? subject : '';
+  const unsafeNames = ['__proto__', 'constructor', 'prototype'];
+  const aliases = world.aliasMap;
+  const descriptor = aliases && typeof aliases === 'object' && !Array.isArray(aliases) && !unsafeNames.includes(name)
+    ? Object.getOwnPropertyDescriptor(aliases, name)
+    : null;
+  const alias = descriptor && descriptor.value;
+  const resolved = typeof alias === 'string' && alias.trim() && !unsafeNames.includes(alias.trim()) ? alias : name;
   if (world.npcs.some((n) => n.name === resolved)) return 'person';
   if (world.locations.some((l) => l.name === resolved)) return 'place';
   if (world.factions.some((f) => f.name === resolved)) return 'faction';
   if (world.quests && world.quests.some((q) => q.title === resolved)) return 'goal';
-  if (world.goal && (resolved === world.goal.type || resolved.includes(world.goal.type))) return 'goal';
+  if (world.goal && typeof world.goal.type === 'string' && world.goal.type && (resolved === world.goal.type || resolved.includes(world.goal.type))) return 'goal';
   return 'other';
 }
 let chronicleView = 'stage'; // 'stage'=按阶段 | 'thread'=按脉络
@@ -847,7 +996,7 @@ function renderChronicle() {
   let html = toggle;
   if (chronicleView === 'stage') {
     // 按境界阶段分组（大折叠栏）
-    const stageGroups = {};
+    const stageGroups = Object.create(null);
     for (const e of events) {
       const stage = str(e.stage) || '早期';
       if (!stageGroups[stage]) stageGroups[stage] = [];
@@ -865,7 +1014,7 @@ function renderChronicle() {
   } else {
     // 按主体脉络：人物/势力/地点/目标 → 各自时间线，读一个角色的完整故事
     const typeOrder = { player: 0, person: 1, faction: 2, place: 3, goal: 4, other: 5 };
-    const threads = {};
+    const threads = Object.create(null);
     for (const e of events) {
       const s = str(e.subject) || str(e.name) || '未名';
       if (!threads[s]) threads[s] = { subject: s, type: subjectType(s), list: [] };
@@ -925,9 +1074,35 @@ function openCodexItem(itemName) {
 
 function renderCodex() {
   const itemLine = (x, withRelation) => {
-    const rel = withRelation && x.relation ? `<span class="codex-rel">（${esc(x.relation)}）</span>` : '';
+    const rel = withRelation && x.relation
+      ? (() => {
+          const b = bondOf(x);
+          return `<span class="codex-rel" data-tip="关系：${esc(x.relation)}；恩${b.debt} · 怨${b.grudge} · 信${b.trust} · 需${b.need}">（${esc(x.relation)}）</span>`;
+        })()
+      : '';
     const desc = x.desc ? '：' + esc(x.desc) : '';
-    const pers = withRelation && x.personalityRevealed && x.personality ? `<span class="npc-pers">${esc(x.personality)}</span>` : '';
+    const stage = withRelation ? npcInsightStage(x) : '';
+    const persLabel = x.trait || x.personality;
+    const condText = x.condition && x.condition.state ? '伤情：' + x.condition.state + '（调养中）' : '';
+    const detail = [
+      x.desire ? '想要：' + x.desire : '',
+      x.taboo ? '忌讳：' + x.taboo : '',
+      x.speech ? '口吻：' + x.speech : '',
+      condText,
+    ].filter(Boolean).join('；');
+    const linkText = withRelation
+      ? (world.npcLinks || [])
+          .filter((l) => l && linkIsKnown(l) && (l.a === x.name || l.b === x.name))
+          .map((l) => `${l.a === x.name ? l.b : l.a}（${l.type}）`)
+          .join('、')
+      : '';
+    const pers = withRelation
+      ? (stage === 'insight'
+          ? `<span class="npc-pers" data-tip="真实性格（深交后揭示）：${esc(persLabel)}${detail ? '；' + esc(detail) : ''}${linkText ? '；关系网：' + esc(linkText) : ''}">${esc(persLabel)}</span>`
+          : (stage === 'acquaintance'
+              ? `<span class="npc-pers temp" data-tip="初识气质（第一印象，未必是真性情）：${esc(x.temperament)}${linkText ? '；关系网：' + esc(linkText) : ''}">${esc(x.temperament)}</span>`
+              : `<span class="npc-pers unknown" data-tip="尚未深交，真性情未明——多多往来，方能看清此人">性格未明</span>`))
+      : '';
     const gradeTag = !withRelation && x.grade ? `<span class="skill-grade">${esc(x.grade)}</span>` : '';
     const nameEl = withRelation
       ? `<b class="codex-name codex-link" data-subject="${esc(x.name)}" title="点击查看事迹">${esc(x.name)}</b>`
@@ -945,7 +1120,11 @@ function renderCodex() {
     const cls = r === '结盟' ? 'rel-ally' : (r === '敌对' ? 'rel-hostile' : 'rel-neutral');
     return `<span class="faction-rel ${cls}" title="与你的关系">${esc(r)}</span>`;
   };
-  const factionLine = (f) => `<div class="codex-item"><b class="codex-name">${esc(f.name)}</b>${alignTag(f)}${typeTag(f)}${factionTag(f.relation)}${f.desc ? '：' + esc(f.desc) : ''}</div>`;
+  const factionLine = (f) => {
+    const known = !!(world.knownSecrets && f.id && world.knownSecrets[f.id] === 'revealed');
+    const badge = known ? `<span class="faction-type" title="你已查明这家势力的底细">底细已明</span>` : '';
+    return `<div class="codex-item"><b class="codex-name">${esc(f.name)}</b>${alignTag(f)}${typeTag(f)}${factionTag(f.relation)}${badge}${f.desc ? '：' + esc(f.desc) : ''}</div>`;
+  };
   // 势力分层：重要的常驻展示；只是耳闻/久未提及的收进折叠组，避免图鉴冗杂
   const IMPORTANT_TURNS = 15;
   const factionIsImportant = (f) => {
@@ -974,7 +1153,8 @@ function renderCodex() {
     return `<details class="codex-group"${open}><summary>${title}（${arr.length}）</summary>${body}</details>`;
   };
   $('codexPanel').innerHTML = `
-    <div class="stat-row"><dt>天下大势</dt><dd>${esc(world.era || '未明')}</dd></div>
+    <div class="stat-row"><dt>世道</dt><dd>${esc(world.era || '未明')}</dd></div>
+    ${(rumorsFor(player, world).length ? `<div class="codex-item"><b class="codex-name">传闻</b>${rumorsFor(player, world).map((x) => `<div class="codex-sub">· ${esc(x)}</div>`).join('')}</div>` : '')}
     ${factionGroup()}
     ${group('相识之人', world.npcs, (x) => itemLine(x, true))}
     ${group('地点', world.locations, (x) => itemLine(x, false))}
@@ -990,6 +1170,49 @@ function renderAll() {
   renderChronicle();
   renderCodex();
   renderAchievements();
+  syncHotControls();
+}
+// ---------- 热切换：言出法随 / 大势（随时生效，引擎每回合实时读取）----------
+function syncHotControls() {
+  const g = $('godToggleBtn');
+  if (g) {
+    const on = playing ? !!(world.settings && world.settings.godMode) : !!gameOptions.godMode;
+    g.textContent = on ? '开' : '关';
+    g.classList.toggle('on', on);
+  }
+  const e = $('eraSelect');
+  if (e) {
+    const cur = playing ? (world.eraType || '乱世') : gameOptions.eraType;
+    if (ERA_LEVELS.includes(cur)) e.value = cur;
+  }
+}
+function toggleGodMode() {
+  const target = playing ? world.settings : gameOptions;
+  target.godMode = !target.godMode;
+  if (playing) {
+    saveGame(AUTO_SLOT);
+    renderAll();
+    appendSystem(target.godMode ? '✨ 言出法随已开启：心想事成，天地随你心意而动。' : '⚖ 言出法随已关闭：天道重归其常，因果自会流转。');
+  } else {
+    renderGameOptions();
+  }
+  syncHotControls();
+}
+function switchEraManually(v) {
+  if (!ERA_TYPES[v]) return;
+  if (playing) {
+    world.eraType = v;
+    world.era = ERA_TYPES[v].label;
+    world.eraDeadline = undefined; // 切走旧期限；若切到秘境将启，下回合自动按默认设期
+    saveGame(AUTO_SLOT);
+    renderAll();
+    // 调试用：不给玩家念时代名，只说天色变了
+    appendSystem('🌌 天时似有变，且看下一回合天色与市面。', 'quest');
+  } else {
+    gameOptions.eraType = v;
+    renderGameOptions();
+  }
+  syncHotControls();
 }
 function renderAchievements() {
   const el = $('achievementList');
@@ -1061,6 +1284,9 @@ function loadGame(slot) {
   if (!s) { appendSystem('该存档位为空'); return; }
   player = { ...newPlayerState(), ...s.player };
   world = { ...newWorldState(), ...s.world };
+  migrateQuestDeadlines(world); // 兼容旧回合期限；读档只迁移，不执行超时判罚
+  lockWorldMap(world); // 旧档没有地图表的，按当时的九域＋已开路补一份（幂等、不判罚）
+  ensureWorldGeo(world); // 旧档补区域坐标（幂等，不改数值、不判罚）
   history = Array.isArray(s.history) ? s.history : [];
   log = Array.isArray(s.log) ? s.log : [];
   mode = s.mode || 'random';
@@ -1076,7 +1302,7 @@ function loadGame(slot) {
   log.forEach((m) => renderMsg(m.kind, m.text, false, m.cls || ''));
   setMode(mode);
   renderAll();
-  $('topStatus').textContent = '进行中 · ' + player.realm;
+  $('topStatus').textContent = statusLine();
   setBusy(false);
 }
 function renderSaveSlots() {
@@ -1132,6 +1358,9 @@ async function startGame() {
 
     player = newPlayerState();
     world = newWorldState();
+    migrateQuestDeadlines(world);
+    // 开局第一件事：把这一局的整张地图钉死（区域、路程、物价系数），之后谁都不许改
+    lockWorldMap(world);
     world.settings = { difficulty: gameOptions.difficulty, pace: gameOptions.pace, turnLimit: gameOptions.turnLimit, cultGain: gameOptions.cultGain, godMode: gameOptions.godMode, length: gameOptions.length };
     history = [];
 
@@ -1152,6 +1381,13 @@ async function startGame() {
     world.eraType = (gameOptions.eraType !== '随机') ? gameOptions.eraType : (seed.eraType || eraTypeFromText(world.era));
     world.startingLocation = seed.startingLocation || null;
     world.factions = Array.isArray(seed.factions) ? seed.factions.map((f) => ({ ...f, alignment: f.alignment || factionAlignment(f), seeded: true, notedTurn: 0 })) : [];
+    // 世界骨架：开局落在固定世界的某个区域，势力取本地既有势力，距离与物价由规则表兜底
+    const geo = ensureWorldGeo(world, { preferredName: seed.startingLocation && seed.startingLocation.name });
+    const homeRegion = regionById(geo.regionId);
+    if (homeRegion) {
+      world.startingLocation = { name: homeRegion.name, desc: homeRegion.desc };
+      world.factions = startingFactions(homeRegion.id);
+    }
     const guide = seed.guideNpc;
     if (guide && guide.name) {
       world.npcs.push({ name: guide.name, desc: guide.desc || '', relation: guide.relation || '' });
@@ -1160,7 +1396,8 @@ async function startGame() {
     playing = true;
 
     const parts = [];
-    parts.push(`【天下大势】${world.era}`);
+    parts.push(`【世道】${world.era}`);
+    for (const line of skyOf(player, world).lines) parts.push(`【天时】${line}`);
     parts.push(`【你的出身】${player.name}，${player.origin}${player.backstory ? '。' + player.backstory : ''}`);
     if (world.startingLocation) parts.push(`【起始之地】${world.startingLocation.name}：${world.startingLocation.desc}`);
     if (guide && guide.name) parts.push(`【引路人】${guide.name}（${guide.relation || '关系未明'}）：${guide.desc}`);
@@ -1171,7 +1408,7 @@ async function startGame() {
     renderAll();
     saveGame(AUTO_SLOT);
     refreshContinue();
-    $('topStatus').textContent = '进行中 · ' + player.realm;
+    $('topStatus').textContent = statusLine();
   } catch (e) {
     appendSystem('创世失败：' + e.message);
     $('topStatus').textContent = '未开始';
@@ -1212,14 +1449,27 @@ async function generateTurn(text, onDelta) {
   return { narrative, out };
 }
 
+function showStateValidation(report) {
+  const issues = Array.isArray(report.issues) ? report.issues.slice(0, 10) : [];
+  if (report.out !== null && !issues.length) return;
+  const details = [...new Set(issues.map((issue) => issue.message).filter((message) => typeof message === 'string').map((message) => message.trim().replace(/[。；;]+$/u, '')).filter(Boolean))].join('；');
+  const result = report.out === null
+    ? '本回合状态提案被拒绝，未结算状态或推进日期'
+    : '部分状态提案已拒绝或归一化，合法内容仍按规则结算';
+  appendSystem(`⚠【状态校验】${result}。${details ? details + '。' : ''}叙事可能与实际结算有出入，请以状态面板和存档为准。`, 'quest');
+}
+
 async function sendTurn(forcedText) {
   const input = $('input');
   const text = (typeof forcedText === 'string' && forcedText.trim()) ? forcedText.trim() : input.value.trim();
   if (!text || busy || !playing) return;
   input.value = '';
   lastTurnState = snapshotState();      // 死亡回退存档点（回退到本回合行动之前）
+  const farmBefore = lastTurnState.world;
   const turnBefore = captureTurnState(); // 本回合变化提示用
   const farmStreak = updateFarmLog(world, text); // 记录本回合行动（重复刷取软墙）
+  noteInvestigation(world, text); // 玩家开始查某家势力时，才把底细的线索交给 GM
+  rollSeclusionInterrupt(world, player, text); // 闭关先掷一次：仇家/心魔会不会上门
   appendChat('player', text);
 
   busy = true;
@@ -1228,55 +1478,69 @@ async function sendTurn(forcedText) {
   try {
     const fast = (world.settings && world.settings.pace) === '快';
     let live = null;
-    let narrative, out;
+    let narrative, rawOut;
     if (!fast) {
       // 慢节奏：流式打字机渲染叙事
       live = renderMsgStream('gm');
-      ({ narrative, out } = await generateTurn(text, (d) => live.update(d)));
+      ({ narrative, out: rawOut } = await generateTurn(text, (d) => live.update(d)));
       live.finish();
     } else {
-      ({ narrative, out } = await generateTurn(text));
+      ({ narrative, out: rawOut } = await generateTurn(text));
       appendChat('gm', narrative);
     }
     history.push({ role: 'user', content: text });
     history.push({ role: 'assistant', content: narrative });
 
-    if (out) {
-      const combatNote = applyStateUpdates(player, world, out);
-      if (combatNote) appendSystem(combatNote); // 半透明战斗结算
-      if (out.goalNote) appendSystem('【目标】' + out.goalNote);
-      if (out.realmChange) {
+    const validation = {};
+    const combatNote = applyStateUpdates(player, world, rawOut, validation);
+    const out = validation.out;
+    if (combatNote) appendSystem(combatNote); // 半透明战斗结算
+    showStateValidation(validation);
+    if (out !== null) {
+      if (player.realm !== turnBefore.realm) {
         // 境界突破：全屏金光一闪 + 阶梯高亮 + 提示
         const flash = $('breakFlash');
         if (flash) { flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on'); }
         const ladder = document.querySelector('#statusPanel .realm-ladder');
         if (ladder) { ladder.classList.remove('flash-gold'); void ladder.offsetWidth; ladder.classList.add('flash-gold'); }
-        appendSystem(`✦ 境界突破：${out.realmChange} ✦`);
+        appendSystem(`✦ 境界突破：${player.realm} ✦`);
+      }
+      world.turn += 1;
+      const months = (out && Number.isFinite(out.timeMonths) && out.timeMonths > 0) ? out.timeMonths : 0;
+      advanceTime(world, player, months);
+      for (const note of world.lastRegionQiEvents || []) appendSystem(note, 'quest'); // 地脉枯荣
+      for (const note of world.lastOutlawEvents || []) appendSystem(note, 'quest');
+      for (const note of world.lastOffendNotes || []) appendSystem(note, 'quest'); // 掠夺得罪了谁 // 黑户的日子：灭尘丹/雷劫/盘查
+      const eraNote = enforceEraTimeline(world, out); // 大势时间轴：期限到必演变
+      if (eraNote) appendSystem(eraNote, 'quest');
+      checkQuestDeadlines();
+      checkAchievements();
+      settleRumors(world, player); // 传闻只会从人嘴里来（打听/初到一地），这里只让旧的到时候见分晓
+    } else {
+      // 请求前的防刷记录也属于状态；拒绝整份提案时只恢复这两个字段，保留校验诊断。
+      for (const key of ['recentActions', 'farmStreak']) {
+        if (Object.prototype.hasOwnProperty.call(farmBefore, key)) world[key] = JSON.parse(JSON.stringify(farmBefore[key]));
+        else delete world[key];
       }
     }
-    world.turn += 1;
-    const months = (out && typeof out.timeMonths === 'number' && out.timeMonths > 0) ? out.timeMonths : 0;
-    advanceTime(world, player, months);
-    checkQuestDeadlines();
     renderAll();
-    checkAchievements();
-    applyTurnNotices(turnBefore); // 小字提示：物品/任务/正邪/声望/新势力 + 右侧标签红点
-    if (farmStreak >= 2 && (world.settings && world.settings.godMode !== true)) {
+    if (out !== null) applyTurnNotices(turnBefore); // 仅依据已接受提案产生的真实差分提示
+    if (out !== null && farmStreak >= 2 && (world.settings && world.settings.godMode !== true)) {
       appendSystem(`⚠ 重复行动第 ${farmStreak} 次：本回合收益 ×${farmMult(farmStreak)}（换种玩法会恢复）`, 'lose');
     }
-    await maybeCompressMemory();
+    if (out !== null) await maybeCompressMemory();
 
-    const ending = evaluateEndings(player, world);
+    const ending = out === null ? null : evaluateEndings(player, world);
     if (ending) {
       showEnding(ending);
       return;
     }
 
     saveGame(AUTO_SLOT);
-    $('topStatus').textContent = '进行中 · ' + player.realm;
+    $('topStatus').textContent = statusLine();
   } catch (e) {
     appendSystem('出错了：' + e.message);
-    $('topStatus').textContent = '进行中 · ' + player.realm;
+    $('topStatus').textContent = statusLine();
   } finally {
     busy = false;
     setBusy(false);
@@ -1355,17 +1619,10 @@ function cancelQuest(title) {
   showNotice('已放弃任务', `你主动放弃了「${q.title}」。你的选择可能已改变故事的走向……`);
 }
 function checkQuestDeadlines() {
-  const expired = [];
-  for (const q of world.quests) {
-    if (q.status === 'active' && q.deadlineTurn && world.turn > q.deadlineTurn) {
-      q.status = 'failed';
-      expired.push(q.title);
-      addChronicleEvent(world, player, q.title, '已失败（超时）', q.objective || '', '');
-    }
-  }
+  const expired = expireQuestDeadlines(player, world);
   if (expired.length) {
-    expired.forEach((t) => appendSystem('⏰ 任务「' + t + '」已超时失败。'));
-    showNotice('任务超时', '以下任务因超过期限而失败：' + expired.join('、'));
+    expired.forEach((q) => appendSystem(`⏰ 任务「${q.title}」已超时失败。${q.failureReason || ''}`));
+    showNotice('任务超时', expired.map((q) => `「${q.title}」：${q.failureReason || questDeadlineInfo(q, world).text}`).join('\n'));
   }
 }
 
@@ -1410,6 +1667,9 @@ function rollbackOneTurn() {
   pendingEnding = null;
   player = s.player;
   world = s.world;
+  migrateQuestDeadlines(world);
+  lockWorldMap(world); // 回退档同样保证地图已钉死
+  ensureWorldGeo(world); // 回退档同样补区域坐标，保持可玩
   log = s.log;
   history = s.history;
   playing = true;
@@ -1424,7 +1684,7 @@ function rollbackOneTurn() {
   setBusy(false);
   saveGame(AUTO_SLOT);
   refreshContinue();
-  $('topStatus').textContent = '进行中 · ' + player.realm;
+  $('topStatus').textContent = statusLine();
   appendSystem(`⏪ 已回退一个回合：若未回退，此身已「${deadTitle}」。仙途未绝，换个选择再试。`);
 }
 
@@ -1437,12 +1697,17 @@ function buildLogText() {
   push('法言天地 · 本局游戏日志（玩家反馈用）');
   push('============================================');
   push('导出时间：' + new Date().toLocaleString());
+  push('游戏版本：v' + GAME_VERSION);
   push('结局：' + (pendingEnding ? pendingEnding.title + (pendingEnding.win ? '（通关）' : '（本局终章）') : '进行中'));
   push('玩家：' + player.name + (player.origin ? ' · ' + player.origin : ''));
   push('境界：' + player.realm + ' · 修为 ' + (player.cultivation || 0) + '%');
   push(`正邪 ${player.morality}（${moralityLabel(player.morality)}）· 声望 ${player.reputation} · 灵石 ${player.spiritStones} · 寿元 ${Math.round(player.lifespan)} · 气血 ${player.hp}/${player.maxHp}`);
   push(`回合 ${world.turn || 0} · 难度 ${s.difficulty || '普通'} · 节奏 ${s.pace || '慢'} · 修为增益 ${s.cultGain || '1x'} · 篇幅 ${s.length || '标准'}${s.turnLimit ? ' · 回合上限 ' + s.turnLimit : ''}${s.godMode ? ' · 言出法随' : ''}`);
-  push('天下大势：' + (world.era || '未明') + (world.eraType ? '（' + world.eraType + '）' : ''));
+  push(`游戏日期：${world.date?.year || 1}年${world.date?.month || 1}月${world.date?.day || 1}日`);
+  push('世道：' + (world.era || '未明'));
+  push('天时：' + skyOf(player, world).lines.join(' / '));
+  const _rumors = rumorsFor(player, world);
+  if (_rumors.length) push('传闻：' + _rumors.join('；'));
   push('--------------------------------------------');
   push('【完整对话记录】');
   for (const m of log) {
@@ -1457,10 +1722,25 @@ function buildLogText() {
   push('地点：' + ((world.locations || []).map((l) => l.name).join('、') || '无'));
   push('功法：' + ((world.skills || []).map((x) => `${x.name}${x.grade ? '[' + x.grade + ']' : ''}`).join('、') || '无'));
   push('背包：' + ((world.inventory || []).map((it) => `${it.name}×${it.qty || 1}${it.rarity && it.rarity !== '凡品' ? '[' + it.rarity + ']' : ''}`).join('、') || '空'));
-  push('任务：' + ((world.quests || []).map((q) => `${q.title}(${questStatusLabel(q.status)})`).join('、') || '无'));
+  push('任务：');
+  if (!(world.quests || []).length) push('  无');
+  for (const q of world.quests || []) {
+    const deadline = questDeadlineInfo(q, world);
+    push(`  ${q.title}（${questStatusLabel(q.status)}） · 期限参考（相对导出时游戏日期）：${deadline.text || '无明确截止日期'}${q.timeNode ? ' · 原期限：' + q.timeNode : ''}${q.failureReason ? ' · 失败原因：' + q.failureReason : ''}`);
+  }
   push('成就：' + ((world.achievements || []).join('、') || '无'));
   push('誓愿/目标：' + JSON.stringify(world.goal || {}));
   push('玩家效果诉求：' + ((world.effectRequests || []).map((r) => `${r.name}（${r.desc}）`).join('、') || '无'));
+  push('状态校验记录（最近30次问题回合，每次最多10项；不含模型原文或输入值）：');
+  const validationLog = Array.isArray(world.validationLog) ? world.validationLog.slice(-30) : [];
+  if (!validationLog.length) push('  无');
+  for (const entry of validationLog) {
+    const turn = Number.isSafeInteger(entry.turn) && entry.turn >= 0 ? entry.turn : '?';
+    const result = entry.result === 'rejected' ? '整份拒绝' : '部分拒绝或归一化';
+    const issues = Array.isArray(entry.issues) ? entry.issues.slice(0, 10) : [];
+    push(`  第${turn}回合 · ${result}`);
+    for (const issue of issues) push(`    ${issue.code} · ${issue.path}`);
+  }
   push('事迹：');
   for (const e of world.events || []) {
     push(`  第${e.turn || '?'}回合 ${e.date || ''} ${e.stage || ''} ${e.subject || ''} - ${e.title || ''}${e.desc ? '：' + e.desc : ''}${e.relation ? '（' + e.relation + '）' : ''}`);
@@ -1580,7 +1860,7 @@ function renderGameOptions() {
   });
   renderChips('cultGainChips', CULT_GAIN_LEVELS, gameOptions.cultGain, (v) => { gameOptions.cultGain = v; });
   renderChips('lengthChips', LENGTH_LEVELS, gameOptions.length, (v) => { gameOptions.length = v; });
-  renderChips('eraChips', ['随机', ...ERA_LEVELS], gameOptions.eraType, (v) => { gameOptions.eraType = v; });
+  // 「天下大势」已从明面撤下：时代不再由玩家选择，也不显示名字（见 skyOf / 传闻）
 }
 
 // ---------- 标签页切换 ----------
@@ -1637,6 +1917,18 @@ function bindEvents() {
     if (el) openChronicle(el.getAttribute('data-subject'));
   });
   $('questPanel').addEventListener('click', (e) => {
+    const take = e.target && e.target.getAttribute && e.target.getAttribute('data-take');
+    if (take) { const r = takeTask(world, player, take); appendSystem(r.ok ? r.note : `【接榜】不成：${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
+    const fcl = e.target && e.target.getAttribute && e.target.getAttribute('data-faction');
+    const fTask = e.target && e.target.getAttribute && e.target.getAttribute('data-fid');
+    if (fcl && fTask) { const r = takeFactionTask(world, player, fcl, fTask); appendSystem(r.ok ? r.note : `【接了】不成：${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
+    const fr = e.target && e.target.getAttribute && e.target.getAttribute('data-fredeem');
+    const fi = e.target && e.target.getAttribute && e.target.getAttribute('data-fitem');
+    if (fr && fi) { const r = redeemFaction(world, player, fr, fi); appendSystem(r.ok ? r.note : `【功勋】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
+    const sectItem = e.target && e.target.getAttribute && e.target.getAttribute('data-sect');
+    if (sectItem) { const r = sectRedeem(world, player, sectItem); appendSystem(r.ok ? r.note : `【藏经阁】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
+    const redeem = e.target && e.target.getAttribute && e.target.getAttribute('data-redeem');
+    if (redeem) { const r = redeemMerit(world, player, redeem); appendSystem(r.ok ? r.note : `【功勋】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
     const btn = e.target.closest('[data-cancel]');
     if (btn) cancelQuest(btn.getAttribute('data-cancel'));
   });
@@ -1681,6 +1973,8 @@ function bindEvents() {
     if (!playing) { appendSystem('当前没有进行中的游戏，无法导出'); return; }
     exportGameLog(null);
   };
+  $('godToggleBtn').onclick = toggleGodMode;
+  $('eraSelect').onchange = () => switchEraManually($('eraSelect').value);
 }
 
 // ---------- 标题页星点 ----------
@@ -1746,6 +2040,13 @@ function bindTooltip() {
 
 // ---------- 初始化 ----------
 function init() {
+  // 调试入口：?dev=1 才露出"世道底子"下拉（正常玩法看不到时代名）
+  try {
+    if (new URLSearchParams(location.search).get('dev') === '1') {
+      const row = $('devEraRow');
+      if (row) row.classList.remove('hidden');
+    }
+  } catch { /* 忽略 */ }
   loadConfig();
   syncConfigToUI();
   renderQuestionnaire();
@@ -1759,6 +2060,8 @@ function init() {
   setBusy(false);
   renderAll();
   spawnStars();
+  const gv = $('gameVersion');
+  if (gv) gv.textContent = 'v' + GAME_VERSION;
 }
 
 init();

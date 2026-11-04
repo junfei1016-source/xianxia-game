@@ -17,6 +17,11 @@ Write-Host '[1/4] 生成 blob ...' -ForegroundColor Cyan
 node --experimental-sea-config sea-config.json
 if ($LASTEXITCODE -ne 0) { throw 'blob 生成失败' }
 
+# 防止游戏 exe 正在运行导致文件占用
+if (Get-Process -Name '法言天地' -ErrorAction SilentlyContinue) {
+  throw '法言天地.exe 正在运行：请先关闭游戏窗口再打包，否则文件被占用无法写入。'
+}
+
 Write-Host '[2/4] 复制全新 node.exe ...' -ForegroundColor Cyan
 Copy-Item "$env:ProgramFiles\nodejs\node.exe" "$PSScriptRoot\法言天地.exe" -Force
 
