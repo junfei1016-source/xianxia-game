@@ -645,17 +645,17 @@ export const SECT_RANKS = [
 // 藏经阁：按立场的货不同，价用贡献
 export const SECT_CATALOG = {
   正道: [
-    { id: 'tech', name: '本门功法·残卷', merit: 40, qty: 1, note: '一门主修功法的前三层' },
+    { id: 'tech', name: '本门功法·残卷', merit: 40, qty: 1, secret: true, note: '一门主修功法的前三层' },
     { id: 'pill', name: '回春丹', merit: 15, qty: 3 },
-    { id: 'recipe', name: '筑基丹方', merit: 120, qty: 1 },
+    { id: 'recipe', name: '筑基丹方', merit: 120, qty: 1, secret: true },
   ],
   魔道: [
-    { id: 'tech', name: '魔门功法·残卷', merit: 40, qty: 1 },
+    { id: 'tech', name: '魔门功法·残卷', merit: 40, qty: 1, secret: true },
     { id: 'pill', name: '血煞丹', merit: 18, qty: 2 },
-    { id: 'secret', name: '禁术竹简', merit: 150, qty: 1 },
+    { id: 'secret', name: '禁术竹简', merit: 150, qty: 1, secret: true },
   ],
   中立: [
-    { id: 'tech', name: '杂学功法', merit: 35, qty: 1 },
+    { id: 'tech', name: '杂学功法', merit: 35, qty: 1, secret: true },
     { id: 'pill', name: '聚气丹', merit: 12, qty: 3 },
     { id: 'material', name: '灵玉', merit: 20, qty: 1 },
   ],

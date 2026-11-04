@@ -678,6 +678,7 @@ function renderStatus() {
     ${iface === '灵界' ? `<div class="stat-row" ${tip(spiritTip)}><dt>仙籍</dt><dd>${spiritLabel}</dd></div>` : ''}
     ${iface === '灵界' && outlaw ? `<div class="stat-row" ${tip('灭尘丹每年服一粒才压得住下界气息；不服用的话，三百年一次的小天劫会变成必死的两色雷劫。')}><dt>劫气</dt><dd>${outlawYears} 年未服丹</dd></div>` : ''}
     ${sect ? `<div class="stat-row" ${tip('门内辈分靠贡献与境界升；贡献可进藏经阁换功法丹药。')}><dt>宗门</dt><dd>${esc(sect.faction.name)} · ${esc(sect.rank)} · 贡献 ${sect.contribution}</dd></div>` : ''}
+    ${(world.flags && world.flags.sectTraitor) ? `<div class="stat-row" ${tip('你背着那家的赏格：在野地走动会被门人堵，销案要交还抄走的东西再赔一笔。')}><dt>赏格</dt><dd>${world.flags.sectBounty || 0} 灵石</dd></div>` : ''}
     ${debts.length ? `<div class="stat-row" ${tip('你欠着的人情：欠着不还，人家会记恨；还上了，交情会更硬。')}><dt>人情债</dt><dd>${debts.map((x) => `${esc(x.name)} ${x.debt}`).join('、')}</dd></div>` : ''}
     ${iface === '灵界' && onDuty ? `<div class="stat-row" ${tip('在天渊城服役：每年领一粒灭尘丹，服够三百年下界气息尽去，就可自由离开。')}><dt>服役</dt><dd>${dutyLabel}</dd></div>` : ''}
     <div class="stat-row" ${tip('当前境界的修炼进度（0~100%）。到 100% 后进入瓶颈，需机缘（丹药/传承/顿悟/磨砺）才能突破。')}><dt>修为进度</dt><dd>${bar(p.cultivation)} ${p.cultivation}%</dd></div>

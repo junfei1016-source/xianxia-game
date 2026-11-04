@@ -15,6 +15,9 @@ import {
   sectRedeem,
   leaveSect,
   addSectContribution,
+  sectBountyOf,
+  sectIntercept,
+  amendSect,
 } from '../public/game.js';
 import { startingFactions, SECT_RANKS } from '../public/world.js';
 
@@ -129,6 +132,64 @@ test('做本门任务会涨贡献（别的门派的活不算）', () => {
   assert.equal(world.sect.contribution, 7);
   addSectContribution(world, 'someone-else', 100);
   assert.equal(world.sect.contribution, 7, '别家的功勋不该算贡献');
+});
+
+
+test('正常退出：秘传要交还，不会通缉', () => {
+  const { player, world } = setup();
+  joinSect(world, player, world.factions[0].name);
+  world.sect.rank = '内门弟子';
+  world.sect.contribution = 100;
+  sectRedeem(world, player, 'tech');
+  assert.ok(world.inventory.some((it) => /本门功法|魔门功法|杂学功法/.test(it.name)), '换到了功法');
+  const r = leaveSect(world, player, {});
+  assert.equal(r.ok, true);
+  assert.match(r.note, /交还/);
+  assert.ok(!world.flags.sectTraitor, '正常退出不算叛徒');
+  assert.equal(world.flags.sectBounty || 0, 0, '没有赏格');
+  assert.ok(!world.inventory.some((it) => /本门功法|魔门功法|杂学功法/.test(it.name)), '秘传已交还');
+});
+
+test('正常退出却把秘传带走：按盗经处理，挂赏格', () => {
+  const { player, world } = setup();
+  joinSect(world, player, world.factions[0].name);
+  world.sect.rank = '内门弟子';
+  world.sect.contribution = 100;
+  sectRedeem(world, player, 'tech');
+  const r = leaveSect(world, player, { takeSecrets: true });
+  assert.match(r.note, /盗经/);
+  assert.equal(world.flags.sectTraitor, true);
+  assert.ok(world.flags.sectBounty > 0);
+  assert.ok(world.inventory.some((it) => /功法/.test(it.name)), '东西还在身上');
+});
+
+test('叛门赏格按贡献折算，门人会来寻仇', () => {
+  const { player, world } = setup();
+  joinSect(world, player, world.factions[0].name);
+  world.merit = 10;
+  leaveSect(world, player, { betray: true });
+  const bounty = sectBountyOf(world);
+  assert.ok(bounty >= 200);
+  const hit = sectIntercept(world, player, () => 0.01);
+  assert.ok(hit && hit.includes('门人寻仇'));
+  assert.ok(player.spiritStones <= 100);
+});
+
+test('没有的账不会来寻仇', () => {
+  const { player, world } = setup();
+  assert.equal(sectIntercept(world, player, () => 0.01), null);
+  assert.equal(sectBountyOf(world), 0);
+});
+
+test('销案：赔钱交东西，赏格撤了', () => {
+  const { player, world } = setup();
+  joinSect(world, player, world.factions[0].name);
+  leaveSect(world, player, { betray: true });
+  player.spiritStones = 9999;
+  const r = amendSect(world, player);
+  assert.equal(r.ok, true);
+  assert.equal(world.flags.sectTraitor, false);
+  assert.equal(sectBountyOf(world), 0);
 });
 
 test('应用层入口：joinSect 字段能入门', () => {
