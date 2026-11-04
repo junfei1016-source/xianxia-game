@@ -45,6 +45,7 @@ const suites = [
   ['四艺与符箓', ['tests/craft.test.mjs']],
   ['四艺瓶颈·师承·符阵', ['tests/craft-advanced.test.mjs']],
   ['功法（品阶/层次/主修）', ['tests/techniques.test.mjs']],
+  ['功法框架（品阶+特定要求）', ['tests/technique-framework.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 

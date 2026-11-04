@@ -12,7 +12,7 @@ import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_
 import { materialByName, materialTier, materialBrewBonus, elementalBrewAdjust, GATHER_KINDS, gatherPool, MATERIAL_TIERS, elementRelation, elementsClash } from './materials.js';
 import { formationByName, formationCost, canSetFormation, formationEffects, FORMATION_TIERS, isPortable, FORMATIONS, canSetOnLeyline, upgradeCost, FORMATION_MAX_LEVEL, leylinePhase, LEYLINE_MIN_QI } from './formations.js';
 import { CRAFT_NAMES, SKILL_LEVELS, skillLevelOf, craftBonus, practiceGain, studyGain, talismanByName, TALISMAN_TIERS, TALISMANS, drawChance, applyCraftExp, isBottlenecked, MASTER_CAP_LEVEL } from './craft.js';
-import { TECHNIQUES, TECH_GRADES, TECH_TYPES, MAX_LAYER, techniqueByName, techniqueEffect, techniqueEffects, gradeOf, layerCost, layerUpCost } from './techniques.js';
+import { TECHNIQUES, TECH_GRADES, TECH_TYPES, MAX_LAYER, techniqueByName, techniqueExact, techniqueEffect, techniqueEffects, gradeOf, layerCost, layerUpCost, normalizeTechnique, checkTechniqueRequirements, requirementText, defOf } from './techniques.js';
 
 // 法宝名录目录（注入提示词：阶位定死，名字管够）
 const TREASURE_CATALOG = treasureCatalog();
@@ -43,7 +43,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.33.0';
+export const GAME_VERSION = '1.34.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -2045,24 +2045,33 @@ function talismanBuffFx(world) {
 // ---------- 功法 ----------
 // 学到手、逐层练、择一门主修。主修吃修炼倍率，其余功法吃各自那一摊（炼体减伤、剑诀伤敌、神识助破阵）。
 export function learnTechnique(world, player, input) {
-  const def = techniqueByName(input && input.name);
-  if (!def) return { ok: false, reason: `「${(input && input.name) || ''}」不是所知功法` };
-  const grade = gradeOf(def);
+  const known = techniqueExact(input && input.name);
+  // 名录内的照名录；名录外（模型现场拟的功法）按"品阶 + 要求清单"框架收进来
+  const spec = known ? { ...known, requirements: known.requirements || [] } : normalizeTechnique(input || {});
+  if (!spec.name) return { ok: false, reason: '功法无名' };
+  const grade = gradeOf(spec);
   if (majorRankOf(player.realm) < majorRankOf(grade.minRealm)) {
-    return { ok: false, reason: `修为不足，${def.grade}须${grade.minRealm}起才能修` };
+    return { ok: false, reason: `修为不足，${spec.grade}须${grade.minRealm}起才能修` };
   }
+  const region = world && world.geo ? regionById(world.geo.regionId, world) : null;
+  const check = checkTechniqueRequirements(world, player, spec, { regionName: region ? region.name : '' });
+  if (!check.ok) return { ok: false, reason: `修习条件不足：${check.missing.join('；')}` };
   if (!Array.isArray(player.techniques)) player.techniques = [];
-  if (player.techniques.some((t) => t.name === def.name)) return { ok: false, reason: `已修「${def.name}」` };
-  player.techniques.push({ name: def.name, layer: 1, exp: 0 });
-  if (!player.mainTechnique && (def.type === '主修' || def.type === '辅助')) player.mainTechnique = def.name;
-  return { ok: true, note: `【得法】你记下了「${def.name}」（${def.grade}·${def.type}·${def.element}属），从第一层起修。` };
+  if (player.techniques.some((t) => t.name === spec.name)) return { ok: false, reason: `已修「${spec.name}」` };
+  player.techniques.push({
+    name: spec.name, layer: 1, exp: 0, grade: spec.grade, type: spec.type, element: spec.element,
+    requirements: spec.requirements || [],
+  });
+  if (!player.mainTechnique && (spec.type === '主修' || spec.type === '辅助')) player.mainTechnique = spec.name;
+  const req = (spec.requirements || []).length ? `（须：${spec.requirements.map(requirementText).join('；')}）` : '';
+  return { ok: true, note: `【得法】你记下了「${spec.name}」（${spec.grade}·${spec.type}·${spec.element}属）${req}，从第一层起修。` };
 }
 
 export function practiceTechnique(world, player, input) {
   const name = String((input && input.name) || '').trim();
-  const tech = (player.techniques || []).find((t) => t.name === (techniqueByName(name) || {}).name);
+  const tech = (player.techniques || []).find((t) => t.name === name || t.name === (techniqueByName(name) || {}).name);
   if (!tech) return { ok: false, reason: `未修「${name}」` };
-  const def = techniqueByName(tech.name);
+  const def = defOf(tech);
   const days = Math.max(1, Math.min(30, Math.floor(Number(input.days) || 5)));
   const gain = Math.max(1, Math.round(days * (2 + (tech.layer || 1) * 0.5)));
   tech.exp = (tech.exp || 0) + gain;
@@ -2085,10 +2094,11 @@ export function practiceTechnique(world, player, input) {
 }
 
 export function setMainTechnique(world, player, input) {
-  const def = techniqueByName(input && input.name);
-  if (!def) return { ok: false, reason: '没有这门功法' };
-  const tech = (player.techniques || []).find((t) => t.name === def.name);
-  if (!tech) return { ok: false, reason: `未修「${def.name}」` };
+  const want = String((input && input.name) || '').trim();
+  const tech = (player.techniques || []).find((t) => t.name === want || t.name === (techniqueByName(want) || {}).name);
+  if (!tech) return { ok: false, reason: `未修「${want}」` };
+  const def = defOf(tech);
+  if (!def) return { ok: false, reason: '这门功法无名' };
   if (player.mainTechnique === def.name) return { ok: false, reason: `「${def.name}」已是主修` };
   const prev = player.mainTechnique;
   if (prev) {
@@ -2594,7 +2604,17 @@ export function validateStateOutput(input) {
     useTalisman: record({ name: 'name' }, ['name']),
     talismanArray: record({ name: 'name' }, ['name']),
     craftInsight: record({ skill: enumeration(...CRAFT_NAMES) }, ['skill']),
-    learnTechnique: record({ name: 'name' }, ['name']),
+    learnTechnique: record({
+      name: 'name',
+      grade: enumeration(...Object.keys(TECH_GRADES)),
+      type: enumeration(...TECH_TYPES),
+      element: enumeration('金', '木', '水', '火', '土', '无'),
+      desc: 'string',
+      requirements: array(record({
+        kind: enumeration('realm', 'element', 'physique', 'place', 'item', 'mentor', 'previous', 'cost'),
+        value: 'string',
+      }, ['kind', 'value'])),
+    }, ['name']),
     practiceTechnique: record({ name: 'name', days: 'number' }, ['name']),
     setMainTechnique: record({ name: 'name' }, ['name']),
     forge: record({ name: 'name', materials: array('string'), fire: enumeration('真火', '地火') }, ['name']),

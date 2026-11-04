@@ -50,6 +50,72 @@ export const TECHNIQUES = [
 
 const BY_NAME = new Map(TECHNIQUES.map((t) => [t.name, t]));
 
+// ---------- 功法框架：品质 + 特定要求 ----------
+// 不绑死名录：模型可以提案任意功法名，但必须给"品阶"，可给"要求清单"。
+// 引擎只认品阶与要求，名字随便起。
+export const REQUIREMENT_KINDS = {
+  realm: '修为',      // {kind:'realm', value:'金丹'}
+  element: '灵根属性', // {kind:'element', value:'水'}
+  physique: '体质',    // {kind:'physique', value:'阴煞之体'}
+  place: '地利',       // {kind:'place', value:'元磁山'}
+  item: '所需之物',    // {kind:'item', value:'筑基丹'}
+  mentor: '师承',      // {kind:'mentor', value:'某师父名'}
+  previous: '前置功法', // {kind:'previous', value:'长春功'}
+  cost: '代价',        // {kind:'cost', value:'散功三成'} 只作叙事
+};
+
+const MAJORS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
+function majorRankOf(realm) {
+  const key = MAJORS.find((m) => String(realm || '').startsWith(m));
+  return key === undefined ? 0 : MAJORS.indexOf(key);
+}
+
+export function normalizeTechnique(input = {}) {
+  const name = String(input.name || '').trim();
+  const grade = TECH_GRADES[input.grade] ? input.grade : '基础功法';
+  const type = TECH_TYPES.includes(input.type) ? input.type : '主修';
+  const element = ['金', '木', '水', '火', '土', '无'].includes(input.element) ? input.element : '无';
+  const requirements = (Array.isArray(input.requirements) ? input.requirements : [])
+    .filter((r) => r && REQUIREMENT_KINDS[r.kind] && r.value)
+    .map((r) => ({ kind: r.kind, value: String(r.value) }));
+  return { name, grade, type, element, requirements, desc: String(input.desc || '') };
+}
+
+export function requirementText(req) {
+  return `${REQUIREMENT_KINDS[req.kind] || req.kind}：${req.value}`;
+}
+
+// 逐条判定：返回 {ok, missing:[说明]}
+export function checkTechniqueRequirements(world, player, tech, opts = {}) {
+  const missing = [];
+  for (const req of tech.requirements || []) {
+    if (req.kind === 'realm') {
+      if (majorRankOf(player.realm) < majorRankOf(req.value)) missing.push(`${requirementText(req)}（你${player.realm || '凡人'}）`);
+    } else if (req.kind === 'element') {
+      const roots = Array.isArray(player.spiritRoots) ? player.spiritRoots : [];
+      if (!roots.includes(req.value)) missing.push(`${requirementText(req)}（你的灵根：${roots.join('、') || '无'}）`);
+    } else if (req.kind === 'physique') {
+      if (String(player.physique || '') !== req.value) missing.push(`${requirementText(req)}（你是${player.physique || '凡体'}）`);
+    } else if (req.kind === 'place') {
+      if (String(opts.regionName || '') !== req.value) missing.push(`${requirementText(req)}（此处是${opts.regionName || '无名之地'}）`);
+    } else if (req.kind === 'item') {
+      if (!(world.inventory || []).some((it) => it.name === req.value && it.qty >= 1)) missing.push(`${requirementText(req)}（身上没有）`);
+    } else if (req.kind === 'mentor') {
+      const ok = (world.npcs || []).some((n) => n.name === req.value && /师父|拜师|师徒/.test(n.relation || ''));
+      if (!ok) missing.push(`${requirementText(req)}（未拜此人）`);
+    } else if (req.kind === 'previous') {
+      if (!(player.techniques || []).some((t) => t.name === req.value)) missing.push(`${requirementText(req)}（未修）`);
+    }
+    // cost 只作叙事，不拦
+  }
+  return { ok: missing.length === 0, missing };
+}
+
+// 精确查名录（只有完全同名才算名录功法；名字相近的自创功法走框架）
+export function techniqueExact(name) {
+  return BY_NAME.get(String(name || '').trim()) || null;
+}
+
 export function techniqueByName(name) {
   if (!name) return null;
   const raw = String(name).trim();
@@ -86,11 +152,17 @@ export function techniqueEffect(tech, layer = 1) {
   return out;
 }
 
+// 取功法定义：玩家已学的条目自带品阶/类型（名录外的自创功法也照样有效），否则查名录
+export function defOf(entry) {
+  if (entry && entry.grade) return { name: entry.name, grade: entry.grade, type: entry.type || '主修', element: entry.element || '无' };
+  return techniqueByName(entry && entry.name);
+}
+
 // 主修功法的合计效果（多门功法：主修吃修炼，其余吃各自那一摊）
 export function techniqueEffects(techniques = []) {
   const fx = { cultMult: 1, damageTaken: 1, deathMult: 1, breakForm: 0 };
   for (const t of techniques) {
-    const def = techniqueByName(t.name);
+    const def = defOf(t);
     if (!def) continue;
     const e = techniqueEffect(def, t.layer || 1);
     if (e.cultMult) fx.cultMult = Math.max(fx.cultMult, e.cultMult);
