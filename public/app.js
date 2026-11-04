@@ -62,7 +62,7 @@ import {
   npcInsightStage,
   skyOf,
   rumorsFor,
-  tickRumors,
+  settleRumors,
   perceptionTier,
 } from './game.js';
 
@@ -1436,7 +1436,7 @@ async function sendTurn(forcedText) {
       if (eraNote) appendSystem(eraNote, 'quest');
       checkQuestDeadlines();
       checkAchievements();
-      tickRumors(world, player); // 传闻：隔几回合冒一条，旧的到时候应验或被戳破
+      settleRumors(world, player); // 传闻只会从人嘴里来（打听/初到一地），这里只让旧的到时候见分晓
     } else {
       // 请求前的防刷记录也属于状态；拒绝整份提案时只恢复这两个字段，保留校验诊断。
       for (const key of ['recentActions', 'farmStreak']) {

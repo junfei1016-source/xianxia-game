@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.38.0';
+export const GAME_VERSION = '1.38.1';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -579,13 +579,55 @@ export function rumorsFor(player, world) {
   });
 }
 
-// 每回合推进：偶尔冒出一条新传闻，旧的到时候自己应验或戳破
-export function tickRumors(world, player, rand = Math.random) {
+// 每回合只做一件小事：让旧的传闻到日子了自己见分晓。
+// 新传闻**不由回合定时生成**——只有玩家开口问人、或初到一地落脚打听时才会有（见 askAround）。
+export function settleRumors(world, player) {
   ensureRumors(world);
-  const turn = world.turn || 0;
-  if (turn > 0 && turn % 3 === 0) spawnRumor(world, rand);
   resolveRumors(world, player);
   return world.rumors;
+}
+
+// 打听：玩家向人问消息时，才从"街谈"里捞一条给他。
+// 同地一个月只出一句（免得刷消息）；境界越高、声望越显，听到真话的概率越大——
+// 这也是原著里的规矩：散修听的多半是讹传，有身份的人才能从人嘴里问出实情。
+export function askAround(world, player, opts = {}) {
+  ensureRumors(world);
+  const region = opts.region || (world.geo ? regionById(world.geo.regionId, world) : null);
+  if (!region) return null;
+  const month = monthOrdinal(world.date || { year: 1, month: 1, day: 1 });
+  if (!world.rumorCool || typeof world.rumorCool !== 'object') world.rumorCool = {};
+  const last = world.rumorCool[region.id];
+  if (Number.isFinite(last) && month - last < 1) return null; // 这个月在这地方已经问过了
+  world.rumorCool[region.id] = month;
+
+  const tier = perceptionTier(player);
+  const rep = Math.max(0, Math.min(100, (player && player.reputation) || 0));
+  const pTrue = Math.min(0.9, 0.5 + rep / 400 + tier * 0.1);
+  const truth = Math.random() < pTrue;
+  const eraNow = (world && world.eraType) || '乱世';
+  const claim = truth ? eraNow : pickOtherEra(eraNow, Math.random);
+  const signs = signsOf(claim);
+  // 场景决定"谁在说"：荒原野地是樵夫散修，坊市城池是掌柜伙计
+  const wild = (region.danger || 1) >= 4 || /荒|岭|海|原/.test(region.name || '');
+  const pool = wild
+    ? ['落脚处的樵夫', '酒肆里的散修', '游方道人', '同路的行商']
+    : ['茶馆掌柜', '坊市药童', '驿馆伙计', '行商'];
+  const source = pool[Math.floor(Math.random() * pool.length)];
+  const line = signPick(signs.people, `a${world.rumorSeq}|${claim}`);
+  world.rumorSeq += 1;
+  const rumor = {
+    id: `rm-${world.rumorSeq}`,
+    text: line,
+    source,
+    claim,
+    truth,
+    turn: world.turn || 0,
+    month,
+    outcome: null,
+  };
+  world.rumors.push(rumor);
+  if (world.rumors.length > 8) world.rumors.splice(0, world.rumors.length - 8);
+  return { rumor, note: `【打听】${source}说：「${line}」` };
 }
 
 // ---------- 天道（世界规则，注入 GM 的 system prompt）----------
@@ -651,7 +693,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
   "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [], "reveals": [], "linkReveals": [],
-  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "gainType": "neutral", "eraChange": null
+  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "gainType": "neutral", "eraChange": null
 }
 字段说明：
 - narrative：必填。
@@ -696,6 +738,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 拍卖 auctionBids：玩家在**落霞坊的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
 - 新区域 newRegion：玩家**真正开辟/发现**一片新地界时才登记，每项 {name: 区域名（2~8字）, terrain: 地形（2~8字）, qi: 灵气 1~6, danger: 危险 1~5, products: 产出品阶数组, links: [{to: 已存在的区域名, days: 单程日数 1~60}], desc: 简述（≤90字）}。**新域必须至少有一条通往外界的路**，产出受地气限制：上限 = floor((灵气+危险)/2)，仙品要灵气或危险≥4，神品要灵气≥5。系统会按《区域生成标准》逐条校验，不合格的会被拒绝并说明原因——不要为了给玩家方便就报高灵气或高产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
+- 打听 askAround：玩家开口向人打听消息（问路、问行情、问某地某事、在茶馆里听人说话）时填 {about: "打听什么"}。消息由系统从"街谈"里给，可能是真的，也可能是讹传；你只负责把人话写进叙事，**不要自己编消息内容或结论**。
 - 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
 
@@ -1022,6 +1065,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "goal": null,
   "timeMonths": 1,
   "travelTo": null,
+  "askAround": null,
   "gainType": "neutral",
   "eraChange": null
 }
@@ -1031,6 +1075,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。【境界岁月】大境界突破还须在本境积累足够年数（提示里会给出"还差约 N 年"），年数不足时一律填 null，改为描写继续闭关、游历或等机缘。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
 - 闭关时长：请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）。**闭关时的修为由系统按境界与时长结算**（一个境界大致要熬满其最少在境年限才圆满），你的 cultivation delta 只填"这次闭关的效率提示"：常速 8~15，灵地/丹药好给 18~20，环境差给 5~7；不要自己算出总收益写进去。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（系统据此按时长结算并计算连续闭关的递减）。
+- 打听 askAround：叙事里玩家向人打听消息（问路、问行情、问某地某事、听人闲话）时填 {about: "打听什么"}；系统据此给他一条街谈，可能是真的也可能是讹传。你不许自己编消息内容。
 - 行路 travelTo：叙事写玩家抵达另一个区域/城池/坊市时，填该区域名（须与【世界切片】"可达"中的名字一致，或叙事里明确确认的既有区域）；只在确实发生跨区域移动时填，原地活动不填。系统按路程表结算耗时，不要用 timeMonths 代替。
 - 寿元 lifespan：岁月流逝导致的寿元减少，系统会按 timeMonths 自动扣除，所以你**不要**为"闭关/赶路/等待"等正常时间流逝再写 lifespan 负 delta（否则会重复扣）。只有叙事发生**非时间流逝**的寿元变化时才写 lifespan delta——如服用延寿丹（正）、走火入魔/被抽取寿元/燃烧寿元（负）。
 - 危险判定 risk：当叙事中玩家处于危险/濒死/作死处境（如被强敌重创、身中剧毒、跳入绝地、硬闯必死之地、自不量力挑战远超自己的存在）时，填 "high"（危险）或 "lethal"（致命/作死）；否则填 null。
@@ -2755,6 +2800,7 @@ export function validateStateOutput(input) {
     trades: array(record({ action: enumeration('buy', 'sell'), item: 'name', qty: 'number' }, ['action', 'item'])),
     auctionBids: array(record({ item: 'name', bid: 'number' }, ['item', 'bid'])),
     gather: record({ kind: enumeration('采药', '挖矿', '猎妖'), days: 'number' }, ['kind']),
+  askAround: record({ about: 'string' }),
     plant: record({ material: 'name' }, ['material']),
     tendPlot: record({ id: 'string' }),
     harvestPlot: record({ id: 'string' }),
@@ -2956,6 +3002,9 @@ export function applyStateUpdates(player, world, input, report = {}) {
           out.timeMonths = months;
           const via = travelFx.travelMult < 1 ? '，借传送阵' : '';
           travelNote = `【行路】${moved.from.name} → ${moved.to.name}（${days} 日，约 ${months.toFixed(2)} 月${via}）`;
+          // 初到一地，落脚处总会听到一两句——这是原著里的常态（先打听，再动身）
+          const heard = askAround(world, player, { region: moved.to });
+          if (heard) travelNote += `\n${heard.note}`;
         }
       }
     }
@@ -3090,6 +3139,12 @@ export function applyStateUpdates(player, world, input, report = {}) {
     player.pillUsageMonth = monthOrdinal(world.date);
     const resist = eff.factor < 0.9 ? `（抗药性 ×${eff.factor}）` : '';
     pillNotes.push(`【丹药】${name}：${bits.length ? bits.join('，') : '并无实效'}${resist}`);
+  }
+  // 打听：玩家开口问人，才有一句街谈（不按回合机械生成，见 askAround）
+  if (out.askAround && typeof out.askAround === 'object') {
+    const heard = askAround(world, player);
+    if (heard) pillNotes.push(heard.note);
+    delete out.askAround;
   }
   // 采集：采药/挖矿/猎妖，按区域与境界出货，耗时与风险由系统结算
   if (out.gather && typeof out.gather === 'object') {
