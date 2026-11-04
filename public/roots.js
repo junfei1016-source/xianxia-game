@@ -12,7 +12,18 @@
 // ============================================================
 
 export const ROOT_ELEMENTS = ['金', '木', '水', '火', '土'];
-export const MUTANT_ROOTS = ['雷', '冰', '风'];
+export const MUTANT_ROOTS = ['雷', '冰', '风', '暗'];
+
+// 异灵根各有偏长（第152章雷灵根以破坏力著称、438章冰系远胜同阶、256章暗灵根适血灵大法）
+export const MUTANT_TRAITS = {
+  雷: { label: '雷灵根', deathMult: 0.9, desc: '以破坏力著称' },
+  风: { label: '风灵根', travelMult: 0.9, desc: '身法轻快，脚程更快' },
+  冰: { label: '冰灵根', damageTaken: 0.95, desc: '冰系功法远胜同阶' },
+  暗: { label: '暗灵根', breakForm: 0.03, desc: '长于隐匿与破禁' },
+};
+
+// 出现频率（第127章）：变异灵根每二三十年一个，天根数百年才一个
+export const ROOT_RARITY = { 天灵根: '数百年一见', 变异灵根: '二三十年一个', 双灵根: '少见', 三灵根: '寻常', 四灵根: '常见', 五灵根: '常见' };
 
 // 层数上限按属性多少：伪灵根卡在三、四层，天根能到九层
 export const ROOT_TIERS = {
@@ -66,4 +77,38 @@ export function rootCultMult(player) {
 
 export function rootLayerCap(player) {
   return rootProfile(player).layerCap;
+}
+
+// 异灵根偏长（无则全为 1）
+export function rootTraits(player) {
+  const prof = rootProfile(player);
+  const out = { deathMult: 1, damageTaken: 1, travelMult: 1, breakForm: 0 };
+  for (const e of prof.roots || []) {
+    const t = MUTANT_TRAITS[e];
+    if (!t) continue;
+    if (t.deathMult) out.deathMult *= t.deathMult;
+    if (t.damageTaken) out.damageTaken *= t.damageTaken;
+    if (t.travelMult) out.travelMult *= t.travelMult;
+    if (t.breakForm) out.breakForm += t.breakForm;
+  }
+  return out;
+}
+
+// 天根结丹无瓶颈（第241章"天灵根者自然也没有这方面的苦恼"）
+export function rootNoCoreBottleneck(player) {
+  return rootProfile(player).tier === '天灵根';
+}
+
+// 伪灵根修五行道法没天赋（第242章）：画符打折
+export function rootCraftPenalty(player) {
+  return rootProfile(player).layerCap <= 5 ? 0.8 : 1;
+}
+
+// 补天丹洗炼灵根（第490、541章）：洗掉一属、资质往上走一档
+export function refineRootsOne(player) {
+  const roots = player && Array.isArray(player.spiritRoots) ? [...player.spiritRoots] : [];
+  if (roots.length <= 1) return null;
+  const removed = roots.pop();
+  player.spiritRoots = roots;
+  return removed;
 }
