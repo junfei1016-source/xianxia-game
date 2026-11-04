@@ -61,3 +61,11 @@
 - **战事不分区**：现在是全局一个 `world.war`，没有"哪一片战场、哪家参战、伤亡多少"。
 - **战场遗宝只是背包里的名字**，没接法宝/功法数据。
 - **拜师之后的实利**：师父只传一次功法，没有"每月指点""危急时护徒"这类持续效果。
+
+## 推送到 GitHub（v1.56.0）
+
+- 目标分支：`codex/sect-v1.56.0`（新分支，不改 main、不动 `codex/state-input-guards`，**不使用 --force**）。
+- 本机当前**连不上 github.com:443**（TCP 探测失败），所以这轮没能推上去；分支已在本地建好，提交在 `ae09bbd`。
+- 网络恢复后，在本仓库根目录跑：`powershell -ExecutionPolicy Bypass -File scripts\push-to-github.ps1`
+- 离线备份：`dist/xianxia-sect-v1.56.0.bundle`（git bundle，含完整历史，可 `git clone` 出来）。
+- 若报 403 / Permission denied：本机凭据是账号 `pmyxw`，它对 `junfei1016-source/xianxia-game` 没有写权限，需要仓库所有者加协作者，或换有权限的账号。
