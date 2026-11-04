@@ -136,66 +136,64 @@ const REGION_PRICE_MULT = {
 const ERA_PRICE_MULT = { 盛世: 0.9, 乱世: 1.2, 末法时代: 1.5, 秘境将启: 1.1, 正魔大战: 1.25 };
 
 // ============================================================
-//  地脉盛衰：灵气不是常数
+//  地脉枯荣：灵气被采狠了会流失，封山久了才回补
 //
-//  原文根据：
-//   · 第 220 章：灵泉有大有小，"灵脉有枯竭之日"，灵气在天地间"有的地方浓一些、有的地方淡一些"；
-//   · 第 172 章：灵药"采尽之时"便枯，"千年之期"不是无限取用；
-//   · 第 358、363 章：修士越来越多，灵石"越采越少"，一地经不起无穷索取。
-//  结论：一地的灵气随岁月涨落，盛则修炼快、出货好、物价松，枯则相反。
-//  静态九域表**不改**；涨落量记在存档 world.regionDrift 里，由 game.js 的规则推进。
+//  原文根据（逐条核对过原文，不是转述）：
+//   · 第 220 章《灵眼之泉》：天地灵气"有的地方浓郁一些，有的地方淡薄一点"，
+//     灵气浓重之地会"形成或大或小的灵脉"；灵脉一旦成形，"便会自动散发出淡淡的灵气，
+//     让当地的灵气循环不绝，不会有枯竭之日"；灵脉中灵气郁结最浓处称"灵眼"，
+//     "当然最适合修仙者打坐修炼了"。
+//     ⇒ 有灵脉的地方不会自己枯；灵气浓淡决定修炼快慢。
+//   · 第 172 章《选择》：禁地"频繁的开启，会让其内的灵气大量流失，灵药的产生和生长的速度
+//     都会减缓起来"；圈封五六十年能让灵气密度"恢复到正常的水准"，若要把灵药数量养回来
+//     "必须把圈封的时间拖延到足足千年"。七大派明知是"杀鸡取卵"仍得做，因为灵药短缺会
+//     牵动筑基丹，进而关系七大派兴亡。
+//     ⇒ **枯是采出来的**；只有停止开采才回补，而且回补远慢于流失。
+//
+//  所以本作不做"灵气随机涨落"：一地的 qi 只会被开采压下去，封山后能回到原样，
+//  上限永远是表里的底值。状态存存档 world.regionQi，静态九域表不动。
 // ============================================================
 export const QI_LABELS = { 1: '枯涸', 2: '稀薄', 3: '寻常', 4: '丰沛', 5: '浓郁', 6: '灵涌' };
 
-// 漂移参数（数据层只给常量；何时、怎么变由 game.js 判定）
-export const REGION_DRIFT = {
-  stepDays: 180,      // 每半年查一次：灵气是几十上百年的尺度，不是一两天
-  witherChance: 0.28, // 枯一寸
-  reviveChance: 0.22, // 复一寸
-  dangerFollow: 0.5,  // 灵气动一分，凶险有五成跟着动
-  maxChronicle: 12,   // 存档里最多留 12 条地脉纪事
+// 枯荣参数（数据层只给常量；何时加压、何时回补由 game.js 判定）
+export const REGION_QI_RULES = {
+  harvestCost: { 凡品: 4, 灵品: 8, 玄品: 14, 仙品: 22, 神品: 30 }, // 采一次压多少压力
+  pressurePerLevel: 30,   // 压力攒满这么多，灵气掉一寸
+  idleDecayPerMonth: 2,   // 不采时压力每月自消
+  recoverPerMonths: 24,   // 掉下去的灵气，封山两年回一寸（第 172 章：五六十年的圈封才见效）
+  maxChronicle: 12,
 };
 
 function clampQi(qi) {
   return Math.max(1, Math.min(6, Math.round(Number(qi) || 1)));
-}
-function clampDanger(d) {
-  return Math.max(1, Math.min(5, Math.round(Number(d) || 1)));
 }
 
 export function qiLabel(qi) {
   return QI_LABELS[clampQi(qi)] || '寻常';
 }
 
-// 某地当前的漂移量：{ qi, danger } 的绝对值；没漂过就返回 null
-export function driftOf(world, regionId) {
-  const d = world && world.regionDrift;
-  if (!d || typeof d !== 'object' || !regionId) return null;
-  const hit = Object.prototype.hasOwnProperty.call(d, regionId) ? d[regionId] : null;
-  if (!hit || typeof hit !== 'object') return null;
-  const out = {};
-  if (Number.isFinite(hit.qi)) out.qi = clampQi(hit.qi);
-  if (Number.isFinite(hit.danger)) out.danger = clampDanger(hit.danger);
-  return Object.keys(out).length ? out : null;
+// 某地的枯荣记录：{ qi: 当前灵气, pressure: 开采压力, idle: 连续无采月数 }
+export function regionQiState(world, regionId) {
+  const all = world && world.regionQi;
+  if (!all || typeof all !== 'object' || !regionId) return null;
+  const hit = Object.prototype.hasOwnProperty.call(all, regionId) ? all[regionId] : null;
+  return hit && typeof hit === 'object' ? hit : null;
 }
 
-// 这一刻的实际灵气/凶险（漂移值优先，否则用表里的底值）
+// 这一刻的实际灵气：以存档里的当前值为准；上限是表里的底值（灵脉会回到常态，不会更好）
 export function regionQi(region, world = null) {
   if (!region) return 3;
-  const drift = driftOf(world, region.id);
-  return clampQi(drift && Number.isFinite(drift.qi) ? drift.qi : region.qi);
-}
-export function regionDanger(region, world = null) {
-  if (!region) return 1;
-  const drift = driftOf(world, region.id);
-  return clampDanger(drift && Number.isFinite(drift.danger) ? drift.danger : region.danger);
+  const base = clampQi(region.qi);
+  const st = regionQiState(world, region.id);
+  if (!st || !Number.isFinite(st.qi)) return base;
+  return Math.max(1, Math.min(base, clampQi(st.qi)));
 }
 
-// 灵气对修炼的影响：寻常(3) 为基准，枯涸 0.90、灵涌 1.15——差异可感，但不至于压过功法与灵根
+// 灵气对修炼的影响：寻常(3) 为基准，枯涸 0.90、灵涌 1.15——差异可感，压不过功法与灵根
 export function qiCultMult(qi) {
   return Math.round((1 + (clampQi(qi) - 3) * 0.05) * 100) / 100;
 }
-// 灵气对物价的影响：灵气枯的地方什么都不长，物以稀为贵
+// 灵气对物价的影响：本地灵药被采枯了，物以稀为贵（第 172 章：灵药短缺牵动筑基丹与七大派兴亡）
 export function qiPriceMult(qi) {
   return Math.round((1 + (3 - clampQi(qi)) * 0.04) * 100) / 100;
 }
@@ -404,10 +402,10 @@ export function buildSlice(player, world) {
   const topRarity = region.products[region.products.length - 1];
   const mats = materialNamesInRegion(region.id, 4);
   const eq = regionQi(region, world);
-  const ed = regionDanger(region, world);
+  const ed = region.danger;
   const overLevel = realmRank(player && player.realm) - ed * 2 >= 2;
-  // 地脉纪事：最近三条里与本地相关的，让"这地方在变"能被叙事看见
-  const chronicle = (Array.isArray(world.regionChronicle) ? world.regionChronicle : [])
+  // 地脉纪事：本地最近两条，让"这地方被采枯过 / 正在缓过来"能被叙事看见
+  const chronicle = (Array.isArray(world.regionQiLog) ? world.regionQiLog : [])
     .filter((c) => c && c.regionId === region.id)
     .slice(-2)
     .map((c) => c.text);

@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, regionQi, regionDanger, qiLabel, qiCultMult, REGION_DRIFT, allRegions } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, regionQi, qiLabel, qiCultMult, REGION_QI_RULES } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
@@ -44,7 +44,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.37.0';
+export const GAME_VERSION = '1.37.1';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -1584,6 +1584,7 @@ export function gatherMaterials(world, player, input, rand = Math.random) {
     const got = Math.min(times, cap);
     for (let i = 0; i < got; i++) picks.push(node.material);
     node.harvestedMonth = now;
+    noteRegionHarvest(world, region, node.rarity); // 采一次，这片地的灵脉就薄一分
     siteNote = `在${node.kind}（${node.rarity}）采得「${node.material}」`;
   } else {
     // 采集点都枯竭了：野外只能碰运气，一份
@@ -3867,77 +3868,92 @@ export function expireQuestDeadlines(player, world) {
   return expired;
 }
 
-// ---------- 地脉盛衰（区域灵气随岁月漂移）----------
-// 规则在这里、数据在 world.js：灵气会涨也会枯，盛则修炼快、货好、价松，枯则反过来。
-// 漂移量记在存档 world.regionDrift，静态九域表不动；读档只补字段、不补漂移，不判罚。
-// 原文：第220章「灵脉有枯竭之日」；第172章灵药采尽即枯；第358章修士渐多、灵石渐少。
-export function ensureRegionDrift(world) {
+// ---------- 地脉枯荣（开采把灵气压枯，封山才慢慢回补）----------
+// 规则在这里、数据在 world.js。原文第 220 章：灵脉一旦成形便"灵气循环不绝，不会有枯竭之日"；
+// 第 172 章：禁地"频繁的开启"才会让灵气大量流失、灵药逐年稀少，圈封数十年才恢复密度。
+// 所以：只有采集会压枯一地——压力攒满掉一寸；长期不采，压力自消，掉下去的灵气慢慢回补，
+// 上限永远是表里的底值。读档只补字段、不补枯荣，不判罚。
+export function ensureRegionQi(world) {
   if (!world || typeof world !== 'object') return null;
-  if (!world.regionDrift || typeof world.regionDrift !== 'object' || Array.isArray(world.regionDrift)) world.regionDrift = {};
-  if (!Number.isFinite(world.driftDays) || world.driftDays < 0) world.driftDays = 0;
-  if (!Number.isFinite(world.driftSteps) || world.driftSteps < 0) world.driftSteps = 0;
-  if (!Array.isArray(world.regionChronicle)) world.regionChronicle = [];
-  return world.regionDrift;
+  if (!world.regionQi || typeof world.regionQi !== 'object' || Array.isArray(world.regionQi)) world.regionQi = {};
+  if (!Array.isArray(world.regionQiLog)) world.regionQiLog = [];
+  if (!Number.isFinite(world.qiDays) || world.qiDays < 0) world.qiDays = 0;
+  if (!Number.isFinite(world.qiMonths) || world.qiMonths < 0) world.qiMonths = 0;
+  return world.regionQi;
 }
 
-// 确定性伪随机：同一存档、同一步漂移必得同一结果（不靠 Math.random，测试可复现）
-function driftRoll(key, salt) {
-  let h = 2166136261 >>> 0;
-  const s = `${key}|${salt}`;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i) & 0xff;
-    h = Math.imul(h, 16777619) >>> 0;
+function qiBase(region) {
+  return Math.max(1, Math.min(6, Math.round(Number(region && region.qi) || 1)));
+}
+
+function qiStateFor(world, region) {
+  ensureRegionQi(world);
+  if (!world.regionQi[region.id]) {
+    world.regionQi[region.id] = { qi: qiBase(region), pressure: 0, idle: 0 };
   }
-  return (h % 10000) / 10000;
+  const st = world.regionQi[region.id];
+  if (!Number.isFinite(st.qi)) st.qi = qiBase(region);
+  if (!Number.isFinite(st.pressure) || st.pressure < 0) st.pressure = 0;
+  if (!Number.isFinite(st.idle) || st.idle < 0) st.idle = 0;
+  return st;
 }
 
-// 每步只动一个地方：天下不会一夜之间齐齐变样
-function pickDriftRegion(world) {
-  const list = allRegions(world).filter((r) => r && r.id !== 'taiqing'); // 仙界与凡界不往来，不参与凡界盛衰
-  if (!list.length) return null;
-  const i = Math.floor(driftRoll('pick', world.driftSteps || 0) * list.length);
-  return list[Math.min(list.length - 1, i)];
+function pushQiLog(world, region, text) {
+  world.regionQiLog.push({ regionId: region.id, region: region.name, month: world.qiMonths || 0, text });
+  if (world.regionQiLog.length > REGION_QI_RULES.maxChronicle) {
+    world.regionQiLog.splice(0, world.regionQiLog.length - REGION_QI_RULES.maxChronicle);
+  }
 }
 
-// 推进 months 个月：每满 stepDays 漂一次，返回本次新生成的地脉纪事
-export function evolveRegions(world, months = 0) {
-  ensureRegionDrift(world);
+// 采一次，给这片地加压力：凡品 4、灵品 8、玄品 14、仙品 22、神品 30
+export function noteRegionHarvest(world, region, rarity = '凡品') {
+  if (!world || !region) return null;
+  const st = qiStateFor(world, region);
+  st.pressure += REGION_QI_RULES.harvestCost[rarity] ?? 8;
+  st.idle = 0;
+  return st;
+}
+
+// 按月推进枯荣：压力自消、攒满掉一寸、长期闲置回补一寸；返回本次纪事
+export function evolveRegionQi(world, months = 0) {
+  ensureRegionQi(world);
   const days = elapsedGameDays(months);
   if (days === null || days <= 0) return [];
-  world.driftDays += days;
+  world.qiDays += days;
   const events = [];
   let guard = 0;
-  while (world.driftDays >= REGION_DRIFT.stepDays && guard < 240) {
+  while (world.qiDays >= 30 && guard < 2400) {
     guard += 1;
-    world.driftDays -= REGION_DRIFT.stepDays;
-    world.driftSteps += 1;
-    const region = pickDriftRegion(world);
-    if (!region) break;
-    const step = world.driftSteps;
-    const beforeQi = regionQi(region, world);
-    const roll = driftRoll(region.id, step);
-    let dq = 0;
-    if (roll < REGION_DRIFT.witherChance) dq = -1;
-    else if (roll > 1 - REGION_DRIFT.reviveChance) dq = 1;
-    if (!dq) continue; // 大半时候不动：灵气是几十上百年的尺度
-    const afterQi = Math.max(1, Math.min(6, beforeQi + dq));
-    if (afterQi === beforeQi) continue; // 已到顶或见底
-    const beforeDanger = regionDanger(region, world);
-    const dFear = driftRoll(`${region.id}d`, step) < REGION_DRIFT.dangerFollow ? (dq > 0 ? -1 : 1) : 0;
-    const delta = { qi: afterQi };
-    if (dFear) delta.danger = Math.max(1, Math.min(5, beforeDanger + dFear));
-    if (!world.regionDrift[region.id]) world.regionDrift[region.id] = {};
-    Object.assign(world.regionDrift[region.id], delta);
-    const text = dq > 0
-      ? `${region.name}地脉复苏：灵气由${qiLabel(beforeQi)}复为${qiLabel(afterQi)}${delta.danger ? '，凶险减一分' : ''}。`
-      : `${region.name}灵脉渐枯：灵气由${qiLabel(beforeQi)}落为${qiLabel(afterQi)}${delta.danger ? '，凶险增一分' : ''}。`;
-    world.regionChronicle.push({ regionId: region.id, region: region.name, month: monthOrdinal(world.date), text });
-    if (world.regionChronicle.length > REGION_DRIFT.maxChronicle) {
-      world.regionChronicle.splice(0, world.regionChronicle.length - REGION_DRIFT.maxChronicle);
+    world.qiDays -= 30;
+    world.qiMonths += 1;
+    for (const id of Object.keys(world.regionQi)) {
+      const region = regionById(id, world);
+      if (!region) continue;
+      const st = qiStateFor(world, region);
+      const base = qiBase(region);
+      st.idle += 1;
+      st.pressure = Math.max(0, st.pressure - REGION_QI_RULES.idleDecayPerMonth);
+      if (st.pressure >= REGION_QI_RULES.pressurePerLevel) {
+        st.pressure -= REGION_QI_RULES.pressurePerLevel;
+        const next = Math.max(1, st.qi - 1);
+        if (next < st.qi) {
+          const before = st.qi;
+          st.qi = next;
+          const text = `${region.name}灵脉被采薄了：灵气由${qiLabel(before)}落为${qiLabel(next)}。`;
+          pushQiLog(world, region, text);
+          events.push(`🌏 ${text}`);
+        }
+      } else if (st.qi < base && st.pressure === 0 && st.idle >= REGION_QI_RULES.recoverPerMonths) {
+        const before = st.qi;
+        st.qi = Math.min(base, st.qi + 1);
+        st.idle = 0; // 回补过一次，重新计时
+        const text = `${region.name}封山日久，灵脉缓过气来：灵气由${qiLabel(before)}复为${qiLabel(st.qi)}。`;
+        pushQiLog(world, region, text);
+        events.push(`🌿 ${text}`);
+      }
     }
-    events.push(`🌏 ${text}`);
   }
-  world.lastDriftEvents = events;
+  world.lastRegionQiEvents = events;
   return events;
 }
 
@@ -3982,8 +3998,8 @@ export function advanceTime(world, player, months = 0) {
     }
     player.pillUsageMonth = now;
   }
-  // 地脉盛衰：岁月过去，某些地方的灵气会涨会枯（不发出提示时静默推进）
-  evolveRegions(world, months);
+  // 地脉枯荣：岁月过去，被采薄的灵脉会自消压力、慢慢回补（无变化时不发提示）
+  evolveRegionQi(world, months);
 }
 
 // ---------- 大势时间轴（有期限的大势必须按时演变，不能无限拖延）----------
