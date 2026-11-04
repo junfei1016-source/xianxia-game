@@ -30,14 +30,14 @@ const setup = (region = 'qingwu', stones = 0) => {
   return { player, world };
 };
 
-test('层级：十五域分属四个大区（天南 9、乱星海 4、大晋 1、灵界 1）', () => {
+test('层级：二十域分属五个大区（天南 9、乱星海 4、大晋 1、五龙海 1、灵界 5）', () => {
   const count = {};
   for (const r of allRegions()) {
     const m = macroOf(r).macro;
     count[m] = (count[m] || 0) + 1;
     assert.ok(MACROS[m], `${r.name} 归到了未定义的大区 ${m}`);
   }
-  assert.deepEqual(count, { 天南: 9, 乱星海: 4, 大晋: 1, 灵界: 1 });
+  assert.deepEqual(count, { 天南: 9, 乱星海: 4, 大晋: 1, 五龙海: 1, 灵界: 5 });
   assert.equal(macroOf(regionById('qingwu')).macro, '天南');
   assert.equal(macroOf(regionById('hanyuan')).macro, '乱星海');
   assert.equal(macroOf(regionById('taiqing')).macro, '灵界');
@@ -74,17 +74,29 @@ test('跨大区只有古传送阵：一日可达，但要 200 灵石', () => {
   assert.equal(back.mode, '海路', '天星城与尾星岛同在外海，走海路');
   const backGate = travelPlan('hanyuan', 'qingwu');
   assert.equal(backGate.mode, '传送阵', '回建州也得靠阵');
-  assert.equal(GATES.length, 2, '两道阵：建州↔外海、天星城↔大晋');
+  assert.equal(GATES.length, 3, '三道阵：建州↔外海、天星城↔大晋、大晋↔五龙海');
   // 没有阵的组合去不了
   assert.equal(travelPlan('dayan', 'guixu'), null, '元武到天星城隔海又无阵');
   assert.equal(travelPlan('chisha', 'xingyun'), null);
 });
 
-test('灵界不能走：任何凡界区域都到不了', () => {
+test('凡界与灵界互不相通：只能飞升（灵界内部另算）', () => {
+  const ming = macroOf(regionById('qingwu')).macro;
+  assert.equal(ming, '天南');
   for (const r of allRegions()) {
-    if (r.id === 'taiqing') continue;
-    assert.equal(travelPlan(r.id, 'taiqing'), null, `${r.name} 不该有去灵界的路`);
-    assert.equal(travelPlan('taiqing', r.id), null, `灵界不该有回凡界的路`);
+    const m = macroOf(r).macro;
+    if (m === '灵界') {
+      // 灵界自己的几处：走得通
+      for (const other of allRegions()) {
+        if (macroOf(other).macro !== '灵界' || other.id === r.id) continue;
+        const plan = travelPlan(r.id, other.id);
+        assert.ok(plan && plan.mode === '界内', `灵界内部 ${r.name}→${other.name} 应可行`);
+      }
+      // 但到凡界一律不行
+      assert.equal(travelPlan(r.id, 'qingwu'), null, `${r.name} 不该有回凡界的路`);
+    } else {
+      assert.equal(travelPlan(r.id, 'taiqing'), null, `${r.name} 不该有去灵界的路`);
+    }
   }
 });
 

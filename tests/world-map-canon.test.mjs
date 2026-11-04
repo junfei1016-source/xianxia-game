@@ -31,6 +31,11 @@ const EXPECT = [
   ['guixu', '天星城'],
   ['xingyun', '奇渊岛'],
   ['dajin', '大晋·湾南州'],
+  ['wulong', '五龙海'],
+  ['feiling', '灵界·飞灵台'],
+  ['fengyuan', '灵界·风元大陆'],
+  ['leihai', '灵界·雷海'],
+  ['xuetian', '灵界·血天大陆'],
   ['taiqing', '灵界·天渊城'],
 ];
 
@@ -81,9 +86,13 @@ test('同大区内陆路互通；跨海走传送阵；灵界只能飞升', () =>
     }
   }
   for (const [id] of EXPECT) {
-    if (id === 'taiqing') continue;
-    assert.equal(travelDays(id, 'taiqing'), null, `${id} 不该有通往灵界的路`);
-    assert.equal(travelPlan(id, 'taiqing'), null);
+    const m = macroOf(regionById(id)).macro;
+    if (m === '灵界') continue;
+    for (const [other] of EXPECT) {
+      if (macroOf(regionById(other)).macro !== '灵界') continue;
+      assert.equal(travelDays(id, other), null, `${id} 不该有通往灵界的路`);
+      assert.equal(travelPlan(id, other), null);
+    }
   }
 });
 
@@ -92,6 +101,7 @@ test('地气有梯度：建州最薄，元武稍厚，天星城与奇渊岛最�
   assert.ok(qi('qingwu') < qi('dayan'), '越国灵气弱于元武国');
   assert.ok(qi('dayan') <= qi('guixu'), '元武不比乱星海中枢浓');
   assert.ok(qi('guixu') <= qi('taiqing'), '灵界最浓');
+  assert.ok(qi('dajin') >= qi('dayan'), '大晋比元武浓');
   assert.ok(qi('taiqing') <= 6);
   const danger = (id) => regionById(id).danger;
   assert.ok(danger('qingwu') < danger('chisha'), '建州安稳，天罗凶险');

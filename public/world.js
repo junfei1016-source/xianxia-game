@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '1.7.0';
+export const WORLD_VERSION = '1.8.0';
 
 // ============================================================
 //  凡界地图（按《凡人修仙传》的地理骨架搭）
@@ -115,9 +115,39 @@ const REGIONS = [
     desc: '大晋皇朝的东南海疆，修仙界真正的中枢所在。天符门、四海真院这类大宗都在这儿设了分院；坊市里卖的，是别处听都没听过的东西。',
   },
   {
+    id: 'wulong', name: '五龙海', terrain: '远洋海域', qi: 3, danger: 4,
+    products: ['玄品'],
+    travel_days: { },
+    desc: '与乱星海、大晋、天沙齐名的另一片海域。彼此隔得太远，寻常修士连对方的海域名都没听过；只有走远洋的商队与阵师知道路。',
+  },
+  {
+    id: 'feiling', name: '灵界·飞灵台', terrain: '飞升石台', qi: 6, danger: 3,
+    products: ['仙品'],
+    travel_days: { taiqing: 1, fengyuan: 5, leihai: 20, xuetian: 30 },
+    desc: '下界飞升者本该出现的地方。凡在此落脚，便由天渊卫登记名册，再拨去天渊城服役。',
+  },
+  {
+    id: 'fengyuan', name: '灵界·风元大陆', terrain: '灵界大陆', qi: 6, danger: 4,
+    products: ['仙品', '神品'],
+    travel_days: { taiqing: 8, feiling: 5, leihai: 25, xuetian: 40 },
+    desc: '灵界三块大陆之一，人族与妖族在此拉锯多年；城郭多以灵石为墙，天上常有青色罡风。',
+  },
+  {
+    id: 'leihai', name: '灵界·雷海', terrain: '雷暴海域', qi: 5, danger: 5,
+    products: ['仙品'],
+    travel_days: { taiqing: 20, feiling: 20, fengyuan: 25, xuetian: 30 },
+    desc: '灵界的一片雷暴之海，常年紫雷不断。雷海七煞与天房山在此各占一半，散修避之不及。',
+  },
+  {
+    id: 'xuetian', name: '灵界·血天大陆', terrain: '诡秘大陆', qi: 6, danger: 5,
+    products: ['神品'],
+    travel_days: { taiqing: 30, feiling: 30, fengyuan: 40, leihai: 30 },
+    desc: '灵界三块大陆里最神秘的一块，据说血蛊一类奇虫只有此处才有；去过的人极少，回来的更少。',
+  },
+  {
     id: 'taiqing', name: '灵界·天渊城', terrain: '灵界边城', qi: 6, danger: 3,
     products: ['仙品', '神品'],
-    travel_days: {  },
+    travel_days: { feiling: 1, fengyuan: 8, leihai: 20, xuetian: 30 },
     desc: '灵界边城，飞升者须在此服役百年，每年领一粒灭尘丹压下两色雷劫。凡界无路可至，唯有渡劫飞升。',
   },
 ];
@@ -155,6 +185,16 @@ const FACTIONS = [
   { id: 'wubian_watch', name: '死海哨船', type: '散修联盟', alignment: '中立', tier: 2, seat: 'wubian', desc: '几条不肯走的旧船，专在无边海边缘捞浮尸与沉货。' },
   { id: 'kuixing_lord', name: '魁星岛主府', type: '朝廷', alignment: '中立', tier: 2, seat: 'kuixing', desc: '魁星岛世袭的岛主，管着环礁的引路人与集市规矩。' },
   { id: 'dajin_patrol', name: '大晋巡海司', type: '朝廷', alignment: '正道', tier: 1, seat: 'dajin', desc: '大晋皇朝的巡海衙门，管远洋航路与外来修士的登岸凭引。' },
+  { id: 'wulong_fleet', name: '五龙船帮', type: '商会', alignment: '中立', tier: 2, seat: 'wulong', desc: '五龙海上唯一认得航路的老帮，远洋货与阵图都经它手。' },
+  { id: 'wulong_pirates', name: '沉沙帮', type: '帮派', alignment: '魔道', tier: 4, seat: 'wulong', desc: '专沉船起家的狠角色，五龙海上失事的商船多半与他们有关。' },
+  { id: 'feiling_hall', name: '接引堂', type: '宗门', alignment: '中立', tier: 2, seat: 'feiling', desc: '飞灵台下接引下界修士的执事，登记名册、发灭尘丹，都归它管。' },
+  { id: 'feiling_guards', name: '天渊卫', type: '朝廷', alignment: '正道', tier: 1, seat: 'feiling', desc: '灵界的边军，专司飞升者的甄别与押送。' },
+  { id: 'fengyuan_city', name: '风元城守', type: '朝廷', alignment: '正道', tier: 2, seat: 'fengyuan', desc: '风元大陆人族大城的守将，与妖族划界而治。' },
+  { id: 'fengyuan_sect', name: '南荒宗', type: '宗门', alignment: '中立', tier: 3, seat: 'fengyuan', desc: '风元大陆南境的宗门，靠罡风炼体，行事孤僻。' },
+  { id: 'leihai_seven', name: '雷海七煞', type: '帮派', alignment: '魔道', tier: 2, seat: 'leihai', desc: '雷海里七位煞修，各占一处雷穴，靠劫掠渡海修士为生。' },
+  { id: 'leihai_temple', name: '天房山', type: '宗门', alignment: '中立', tier: 3, seat: 'leihai', desc: '雷海边的古宗，以引雷淬器闻名，与七煞势不两立。' },
+  { id: 'xuetian_sect', name: '血天蛊宗', type: '宗门', alignment: '魔道', tier: 1, seat: 'xuetian', desc: '养蛊炼虫的诡秘宗门，血蛊虫只此一家能养。' },
+  { id: 'xuetian_city', name: '血河城', type: '帮派', alignment: '魔道', tier: 3, seat: 'xuetian', desc: '血天大陆上唯一成规模的城，进城先要看你能拿出什么。' },
 ];
 
 const RELATIONS = [
@@ -185,6 +225,9 @@ const RELATIONS = [
   { a: 'kuixing_dock', b: 'qiyao', type: '交易', note: '魁星码头收妖兽材料，妖王那边的货也走这条线。' },
   { a: 'dajin_sea', b: 'wanbao', type: '竞争', note: '万宝阁想做远洋生意，湾南船行寸步不让。' },
   { a: 'zijin_pass', b: 'shiyun', type: '交易', note: '紫金关替拾云门押过两趟矿货。' },
+  { a: 'wulong_fleet', b: 'dajin_sea', type: '竞争', note: '两条远洋线抢同一批货，谁也不让谁。' },
+  { a: 'leihai_seven', b: 'leihai_temple', type: '敌对', note: '七煞与天房山为雷穴打了三百年。' },
+  { a: 'xuetian_sect', b: 'feiling_guards', type: '敌对', note: '血天蛊宗的蛊虫越过边界，天渊卫年年清剿。' },
 ];
 
 // 价格带：以「下品灵石」为单位。稀有度由获得难度决定，与提取器口径一致。
@@ -492,6 +535,7 @@ export const MACROS = {
   天南: { id: '天南', label: '天南', note: '越国、元武、天罗这一带，陆路相连，国与国之间走上月余' },
   乱星海: { id: '乱星海', label: '乱星海', note: '海外群岛，内星海由星宫管辖，外海凶险，往来靠舟船与古传送阵' },
   大晋: { id: '大晋', label: '大晋', note: '皇朝海疆，修仙界中枢；与乱星海有海路可通，离天南极远' },
+  五龙海: { id: '五龙海', label: '五龙海', note: '另一片远洋海域，与大晋、乱星海、天沙并列；彼此远得连名字都没听过' },
   灵界: { id: '灵界', label: '灵界', note: '上界，凡界无路可至' },
 };
 
@@ -511,6 +555,11 @@ export const REGION_META = {
   wubian: { macro: '天南', kind: '海域' },
   kuixing: { macro: '乱星海', kind: '岛' },
   dajin: { macro: '大晋', kind: '国' },
+  wulong: { macro: '五龙海', kind: '海域' },
+  feiling: { macro: '灵界', kind: '界台' },
+  fengyuan: { macro: '灵界', kind: '大陆' },
+  leihai: { macro: '灵界', kind: '海域' },
+  xuetian: { macro: '灵界', kind: '大陆' },
   taiqing: { macro: '灵界', kind: '边城' },
 };
 
@@ -519,6 +568,7 @@ export const GATES = [
   { a: 'qingwu', b: 'hanyuan', days: 1, cost: 200, name: '古传送阵', note: '建州太岳山脉深处的古阵，另一头在外海' },
   // 第 583、589 章：大晋修士能到乱星海来走动——两地之间有跨海的大阵（这里按"远洋传送阵"计）
   { a: 'guixu', b: 'dajin', days: 3, cost: 300, name: '远洋传送阵', note: '天星城外的远洋古阵，通大晋湾南州' },
+  { a: 'dajin', b: 'wulong', days: 4, cost: 400, name: '跨洋大阵', note: '湾南州外的跨洋大阵，另一头在五龙海' },
 ];
 
 export function macroOf(region) {
@@ -538,12 +588,13 @@ export function travelPlan(fromId, toId, world = null) {
   if (fromId === toId) return { days: 0, mode: '原地', cost: 0, note: '' };
   const mf = macroOf(from).macro;
   const mt = macroOf(to).macro;
-  if (mf === '灵界' || mt === '灵界') return null; // 凡界无路可至，只能飞升
+  if (mf !== mt && (mf === '灵界' || mt === '灵界')) return null; // 凡界与灵界之间无路，只能飞升
   if (mf === mt) {
     const days = travelDays(fromId, toId, world);
     if (days === null) return null;
-    const mode = mf === '乱星海' ? '海路' : '陆路';
-    return { days, mode, cost: 0, note: mode === '海路' ? '租舟出海' : '' };
+    const mode = mf === '灵界' ? '界内' : (mf === '乱星海' || mf === '五龙海' ? '海路' : '陆路');
+    const note = mf === '灵界' ? '灵界境内' : (mode === '海路' ? '租舟出海' : '');
+    return { days, mode, cost: 0, note };
   }
   const gate = gateBetween(fromId, toId);
   if (!gate) return null; // 隔海又无传送阵：去不了

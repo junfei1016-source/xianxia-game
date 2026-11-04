@@ -13,9 +13,9 @@ import {
 } from '../public/world.js';
 import { isBlackMarket, newPlayerState, newWorldState } from '../public/game.js';
 
-test('地图完整：十五域三十三家，每域都有本地势力与当家人', () => {
-  assert.equal(allRegions().length, 15);
-  assert.equal(allFactions().length, 32);
+test('地图完整：二十域四十二家，每域都有本地势力与当家人', () => {
+  assert.equal(allRegions().length, 20);
+  assert.equal(allFactions().length, 42);
   for (const r of allRegions()) {
     const local = factionsIn(r.id);
     assert.ok(local.length >= 2, `${r.id} 势力不足`);
@@ -45,7 +45,7 @@ test('凡界四通八达：同大区有陆路/海路，跨大区有传送阵', (
 
 test('灵界·天渊城不与凡界连通：只能飞升', () => {
   const taiqing = regionById('taiqing');
-  assert.equal(Object.keys(taiqing.travel_days || {}).length, 0);
+  assert.ok(Object.keys(taiqing.travel_days || {}).length > 0, '灵界诸地之间本来就能走动');
   assert.equal(travelDays('qingwu', 'taiqing'), null);
   assert.equal(travelDays('taiqing', 'qingwu'), null);
   // 但仙域自己有两家势力
@@ -87,11 +87,14 @@ test('奇渊岛的切片能正确讲当地势力与出路', () => {
   assert.ok(slice.length < 420);
 });
 
-test('仙域的切片不列任何道路', () => {
+test('灵界的切片只列灵界内部的路，不列凡界', () => {
   const player = newPlayerState();
   const world = newWorldState();
   world.geo = { regionId: 'taiqing', sinceTurn: 0, migrated: false };
   const slice = buildSlice(player, world);
   assert.ok(slice.includes('灵界·天渊城'));
-  assert.ok(!slice.includes('可达：'), '仙界无路，不该写可达');
+  assert.ok(slice.includes('灵界·飞灵台'), '灵界诸地之间走得通');
+  for (const mortal of ['越国·建州', '元武国', '天罗国', '乱星海·尾星岛']) {
+    assert.ok(!slice.includes(mortal), `不该把凡界的地界列进灵界切片：${mortal}`);
+  }
 });

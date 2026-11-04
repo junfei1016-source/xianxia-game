@@ -58,7 +58,7 @@ test('定图之后不能再开辟新域', () => {
   });
   assert.equal(res.ok, false);
   assert.match((res.issues || []).join(''), /开局定死/);
-  assert.equal(worldMapOf(world).regions.length, 15, '地图没被改动');
+  assert.equal(worldMapOf(world).regions.length, 20, '地图没被改动');
 });
 
 test('模型再提 newRegion 会被拒并记进诊断', () => {
@@ -68,7 +68,7 @@ test('模型再提 newRegion 会被拒并记进诊断', () => {
   applyStateUpdates(player, world, {
     newRegion: { name: '新荒原', terrain: '戈壁', qi: 3, danger: 3, products: ['灵品'], desc: '测试', links: [{ to: '越国·建州', days: 5 }] },
   });
-  assert.equal(worldMapOf(world).regions.length, 15);
+  assert.equal(worldMapOf(world).regions.length, 20);
   const logged = JSON.stringify(world.validationLog || []);
   assert.match(logged, /开局定死|新域不合标准/, '应留下诊断');
 });
@@ -78,7 +78,7 @@ test('旧档迁移：已有的动态区域与路程一起并进地图', () => {
   world.dynamicRegions = [{ id: 'dyn_test', name: '旧游之地', terrain: '山谷', qi: 3, danger: 2, products: ['灵品'], travel_days: { qingwu: 6 }, desc: '旧档里开出来的', dynamic: true }];
   world.dynamicTravel = { 'dyn_test|qingwu': 6, 'qingwu|dyn_test': 6 };
   const map = lockWorldMap(world);
-  assert.equal(map.regions.length, 16, '十五域 + 旧档新域');
+  assert.equal(map.regions.length, 21, '二十域 + 旧档新域');
   assert.ok(map.regions.some((r) => r.id === 'dyn_test'));
   assert.equal(map.travel['dyn_test|qingwu'], 6, '动态路程要保留');
   assert.equal(regionByName('旧游之地', world).id, 'dyn_test', '名字还能查到');
@@ -104,7 +104,7 @@ test('没有地图表的旧世界仍按老路走（不破坏兼容）', () => {
   assert.equal(worldMapOf(world), null);
   assert.equal(regionById('luoxia', world).name, '黄枫谷坊市');
   assert.ok(travelDays('qingwu', 'luoxia', world) > 0);
-  assert.equal(allRegions(world).length, 15);
+  assert.equal(allRegions(world).length, 20);
 });
 
 test('开局定图与开局区域不冲突：ensureWorldGeo 仍能给起始地', () => {

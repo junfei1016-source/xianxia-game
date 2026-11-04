@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.42.0';
+export const GAME_VERSION = '1.43.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
