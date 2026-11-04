@@ -2,6 +2,7 @@
 // 目的只有一个——回答"页面脚本到底会不会一进来就崩"，不替代真实浏览器验证。
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const renders = new Map(); // id -> 最后一次 innerHTML 赋值
 const listeners = new Map();
@@ -90,8 +91,12 @@ const errors = [];
 process.on('uncaughtException', (e) => errors.push(String(e && e.message || e)));
 process.on('unhandledRejection', (e) => errors.push(String(e && e.message || e)));
 
-const here = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\//, '')), '../public/app.js');
-await import('file:///' + here.replace(/\\/g, '/'));
+const here = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public/app.js');
+try {
+  await import('file:///' + here.replace(/\\/g, '/'));
+} catch (e) {
+  errors.push('IMPORT FAIL: ' + (e && e.message));
+}
 await new Promise((r) => setTimeout(r, 300));
 
 const chips = ['difficultyChips', 'paceChips', 'turnLimitChips', 'cultGainChips', 'modeChips', 'lengthChips', 'eraChips'];

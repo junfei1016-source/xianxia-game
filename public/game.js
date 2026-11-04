@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, regionQi, qiLabel, qiCultMult, REGION_QI_RULES } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, regionQi, qiLabel, qiCultMult, REGION_QI_RULES, signsOf, RUMOR_SOURCES } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.37.2';
+export const GAME_VERSION = '1.38.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -475,6 +475,119 @@ export function newWorldState() {
   };
 }
 
+// ---------- 天时：世道不报名，只露征兆（分层可见）----------
+// 原文从没有"天下大势：某世"这种说法给玩家；韩立只知道米价、溃兵、封山、灵气变薄。
+// 所以内部五种世道照旧管收益/危险/修炼/期限/稀有度，但对玩家只说三层征兆，
+// 并按境界分层：凡人只觉"不对劲"，筑基能说清，元婴才看得出灵气与劫气。
+export function perceptionTier(player) {
+  const i = realmIndex(player && player.realm);
+  if (i >= realmIndex('元婴初期')) return 2;
+  if (i >= realmIndex('筑基初期')) return 1;
+  return 0;
+}
+
+// 同一世道、同一回合内取同一句（渲染多次不会闪）
+function signPick(list, seed) {
+  if (!Array.isArray(list) || !list.length) return '';
+  const s = String(seed);
+  let h = 2166136261 >>> 0;
+  for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k) & 0xff; h = Math.imul(h, 16777619) >>> 0; }
+  return list[h % list.length];
+}
+
+// 玩家此刻能读到的天时。永远不含时代名
+export function skyOf(player, world) {
+  const era = (world && world.eraType) || '乱世';
+  const signs = signsOf(era);
+  const seed = `${era}|${(world && world.turn) || 0}|${(world && world.date && world.date.year) || 1}`;
+  const tier = perceptionTier(player);
+  const sky = signPick(signs.sky, `${seed}|s`);
+  const market = signPick(signs.market, `${seed}|m`);
+  const people = signPick(signs.people, `${seed}|p`);
+  if (tier === 0) {
+    const vague = era === '盛世'
+      ? '今年似比往年顺遂，说不上为什么。'
+      : era === '末法时代'
+        ? '打坐时总觉得灵气比从前薄，旁人也这么说。'
+        : '近来总觉得不大对劲，却说不上来。';
+    return { tier, vague, sky: '', market: '', people: '', lines: [vague] };
+  }
+  if (tier === 1) return { tier, vague: '', sky, market, people: '', lines: [sky, market] };
+  return { tier, vague: '', sky, market, people, lines: [sky, market, people] };
+}
+
+// ---------- 传闻：真假参半，由人嘴里说出来 ----------
+export function ensureRumors(world) {
+  if (!world || typeof world !== 'object') return [];
+  if (!Array.isArray(world.rumors)) world.rumors = [];
+  if (!Number.isFinite(world.rumorSeq) || world.rumorSeq < 0) world.rumorSeq = 0;
+  return world.rumors;
+}
+
+function pickOtherEra(eraNow, rand) {
+  const others = Object.keys(ERA_TYPES).filter((x) => x !== eraNow);
+  return others[Math.floor(rand() * others.length)] || '乱世';
+}
+
+// 一条传闻：多半是真的（照着当前世道的征兆说），少数掺了假（拿别个世道的征兆冒充）
+export function spawnRumor(world, rand = Math.random) {
+  ensureRumors(world);
+  const eraNow = (world && world.eraType) || '乱世';
+  const truth = rand() < 0.6;
+  const pool = truth ? eraNow : pickOtherEra(eraNow, rand);
+  const line = signPick(signsOf(pool).people, `r${world.rumorSeq}|${pool}`);
+  const source = RUMOR_SOURCES[Math.floor(rand() * RUMOR_SOURCES.length)] || '行商';
+  world.rumorSeq += 1;
+  const rumor = {
+    id: `rm-${world.rumorSeq}`,
+    text: line,
+    source,
+    claim: pool,       // 它其实在说哪一种世道（内部字段，永不展示）
+    truth,
+    turn: world.turn || 0,
+    month: monthOrdinal(world.date || { year: 1, month: 1, day: 1 }),
+    outcome: null,
+  };
+  world.rumors.push(rumor);
+  if (world.rumors.length > 8) world.rumors.splice(0, world.rumors.length - 8);
+  return rumor;
+}
+
+// 过三回合，传闻自己水落石出：真话被事实印证，假话被戳破
+export function resolveRumors(world, player) {
+  ensureRumors(world);
+  const nowTurn = world.turn || 0;
+  for (const r of world.rumors) {
+    if (r.outcome) continue;
+    if (nowTurn - (r.turn || 0) < 3) continue;
+    r.outcome = r.truth ? 'true' : 'false';
+    if (r.outcome === 'true') addChronicleEvent(world, player, '传闻', '应验', `「${r.text}」——后来果然如此（${r.source}说的）。`, '');
+    else addChronicleEvent(world, player, '传闻', '是虚的', `「${r.text}」——后来并没这回事（${r.source}满口胡柴）。`, '');
+  }
+  return world.rumors;
+}
+
+// 玩家能看到的传闻：元婴以上带"听着不像实话"的底（境界带来的好处）
+export function rumorsFor(player, world) {
+  ensureRumors(world);
+  const tier = perceptionTier(player);
+  return world.rumors.slice(-4).map((r) => {
+    if (r.outcome === 'true') return `后来果然如此：「${r.text}」`;
+    if (r.outcome === 'false') return `${r.source}那话是虚的：「${r.text}」`;
+    const doubt = tier >= 2 && !r.truth ? '（你听着不像实话）' : '';
+    return `${r.source}说：「${r.text}」${doubt}`;
+  });
+}
+
+// 每回合推进：偶尔冒出一条新传闻，旧的到时候自己应验或戳破
+export function tickRumors(world, player, rand = Math.random) {
+  ensureRumors(world);
+  const turn = world.turn || 0;
+  if (turn > 0 && turn % 3 === 0) spawnRumor(world, rand);
+  resolveRumors(world, player);
+  return world.rumors;
+}
+
 // ---------- 天道（世界规则，注入 GM 的 system prompt）----------
 const RULES_CORE = `你是一个沉浸式"武侠·修仙"开放世界文字游戏的主持人（Game Master）。你要陪玩家现场共创一局独一无二的修仙人生。
 
@@ -499,7 +612,7 @@ const RULES_CORE = `你是一个沉浸式"武侠·修仙"开放世界文字游�
 8. 声望与正邪的实际影响：声望越高，NPC 越敬重信任，越愿意帮助、降价、赠礼、给更好的任务与奖励；声望低则被轻视、抬价甚至拒之门外。这些差异必须在每一次 NPC 互动中可见：声望 ≥70 者交易至少让利一成、常获赠礼相送；声望 ≤20 者被抬价一至三成、甚至遭拒见冷眼。正邪分三派：正值（≥30）为「正道」、负值（≤-30）为「魔道」、其余为「中庸」。正道受正道势力亲近、机缘趋善，却被魔道敌视（谨防暗害）；魔道受魔道同门欢迎、黑市开放、掠夺更强，却被正道通缉敌视——正道城池对其盘查刁难、物价抬升，魔道地盘对正道玩家亦然；中庸两不相帮、也两不讨好。这些要在叙事与奖励中体现。
 9. 越级杀敌：击杀境界高于自己的敌人是高风险高回报的壮举——成功可获得高于当前境界的功法、法宝、武器（品阶更高，能大幅加速修炼与突破），且声名大噪；但失败极可能身死道消。玩家主动挑战越级强敌时，要如实演绎凶险与收益。
 10. 成长路径多样：变强不只有闭关修炼——完成任务、探索秘境、奇遇、寻宝、越级杀敌等，同样能获得高价值物品（功法、丹药、法宝、天材地宝）或顿悟机缘，可加速修炼、助你突破。让这些玩法都有实打实的成长收益，避免"只能闭关才能变强"的枯燥。探索、寻宝、秘境、委托的收获与**凶险程度/玩家境界**相关：低境界时普通探索即有收获（凡品/灵品/玄品）；境界越高，普通之地收获越少甚至空手，必须前往更凶险的秘境、遗迹、绝地，或越级挑战，才能获得更高稀有度（玄品/仙品/神品）的物品。让玩家有"变强→闯更危险之地"的推进感，避免高境界轻松刷宝。
-11. 大势类型：天下大势有类型之分（盛世/乱世/末法时代/秘境将启/正魔大战），各有得失——盛世交易好且最安全；乱世战利品多但危险；末法时代灵气枯竭、修炼慢、资源少，但高阶妖邪罕见、最为安全；秘境将启奇遇机缘最多；正魔大战战利品最高但极危险。大势可因重大剧情演变，叙事要与当前大势相符。同一大势下的机缘要多样，从各自的花样池里轮换取材：盛世——商机、拍卖会、朝廷征召、祥瑞、江湖聚会、达官显贵的委托；乱世——流民、溃兵、山寨、割据势力、军功、趁乱而起的黑市；末法时代——古修遗府、灵气枯竭之谜、凡俗势力崛起、寿元交易、伪仙诈骗；秘境将启——夺宝者、守境人、秘境争夺、假秘境、预兆；正魔大战——两派拉拢、征召、逃兵、战场遗宝、屠城救援、细作。不要连续取同一池子的同类。
+11. 世道只以征兆示人：本界的世道有五种底子（太平、兵祸、灵气枯竭、秘境将启、正魔相争），但**绝不能给时代报名**。玩家能听到看到的只有具体的天象、物价、人事——每回合提示里的【天时】三行就是当前征兆，你的叙事必须与之一致：市面紧则货贵、路上乱则盘查多、灵气薄则修炼难。同一底子下的机缘要多样，别连着抛同一类：太平——商机、拍卖会、朝廷征召、祥瑞、江湖聚会、达官显贵的委托；兵祸——流民、溃兵、山寨、割据势力、军功、趁乱而起的黑市；灵气枯竭——古修遗府、灵气枯竭之谜、凡俗势力崛起、寿元交易、伪仙诈骗；秘境将启——夺宝者、守境人、秘境争夺、假秘境、预兆；正魔相争——两派拉拢、征召、逃兵、战场遗宝、屠城救援、细作。**严禁在叙事里出现「盛世」「乱世」「末法时代」「秘境将启」「正魔大战」这些词，也不许写"这是一个乱世""如今是太平盛世"这类总结**——让读者自己从米价和人流里看出来。
 12. 主动造事：你不应被动等玩家提问。(a) 玩家连续闭关多回合时，进境渐缓，要提醒并抛出机缘钩子（任务/奇遇/人物上门/秘境异动）；(b) 同一天内的剧情推进中，偶尔（约每 3~4 回合）可有小事件发生，但绝不打断玩家正在做的事，且给玩家"接或不接"的选择权；(c) 立场相关遭遇：若剧情平静，可安排一次与玩家正邪/声望立场相符的遭遇——正道者遇求救、拜帖、正派前辈垂青；魔道者遇黑市来客、魔修邀请、正道追杀者；高声望者慕名求见者众，低声望者遭冷眼刁难。同样给玩家"接或不接"的选择权。(d) 机缘多样：同一大势下机缘必须多样——「秘境将启」不只是秘境（还有夺宝者、守境人、秘境争夺、假秘境、预兆等），其余大势同理；任何主题的机缘连续抛出不超过一次。玩家明确拒绝的钩子必须尊重——不纠缠、不立刻再抛同类，换新主题（拒绝可带来自然后果如错过机缘、他人捷足先登，但不可报复性惩罚）。
 13. 死亡叙事：玩家的死亡必须由你在叙事中**明确写出**（殒命、气绝、身死道消、形神俱灭等），不得含糊带过——只有叙事写死，系统才会判定身死道消。只写"重伤""濒死""命悬一线"时，玩家不会死，而是进入濒死状态，等待下一回合的生死抉择。
 14. 剧情真实（防幻觉）：玩家的经历以世界快照中的事迹、关系档案与对话历史为准。**绝对禁止编造玩家未曾经历的事件、人物、关系或功绩**——需要背景信息时，只能以"传闻""据说""镇上都说"引入，并明确标注为传闻，不得写成玩家亲历。若玩家质疑剧情真实性，立即承认并收回；被收回的内容，后续剧情一律不得再引用。
@@ -680,7 +793,9 @@ export function buildWorldContext(world, player = null) {
   const geoRegion = world.geo ? regionById(world.geo.regionId) : null;
   return {
     era: world.era,
-    eraType: world.eraType,
+    // 不给模型"现在是什么世"的标签：它只该照征兆写（见 sky）
+    sky: player ? skyOf(player, world) : undefined,
+    rumors: player ? rumorsFor(player, world) : undefined,
     date: world.date,
     region: geoRegion ? { name: geoRegion.name, qi: geoRegion.qi, danger: geoRegion.danger } : undefined,
     worldSlice: player ? buildSlice(player, world) : undefined,
@@ -813,7 +928,7 @@ function buildGMBase(player, world, history, userInput, rulesPrompt) {
     guide += `${fast ? ' ' : '\n'}【关系档案】世界快照里记录了你与这些人物的关系脉络：${names}。必须延续既有的情感进度与人物性格，记住并履行与他们的约定/承诺/未了之事，不得遗忘、跳戏或前后矛盾。`;
   }
   if (world.flags && world.flags.eraExpired && s.godMode !== true) {
-    guide += `${fast ? ' ' : '\n'}【大势到期】大势的期限已至。你必须在叙事中让大势如期演变（如秘境开启、天下易势），并在输出中用 eraChange 登记新大势——若本回合仍不推动，系统将强制改变大势。`;
+    guide += `${fast ? ' ' : '\n'}【天时该变了】先前那股气象已经到了头。你要让世道自然转过去（如秘境现身、兵祸收拾了、灵气又续上），可以用 eraChange 登记新的底子——但**叙事里只写征兆**：天象变了、货价变了、人流变了，不许写"世道变了""如今是某世"。若不推动，系统会强制翻篇。`;
   }
   if (s.godMode === true) {
     guide += `${fast ? ' ' : '\n'}【言出法随（外挂模式）】玩家心想事成：任何要求都无条件立即满足——索要灵石/法宝/境界/寿元等逆天之物都如实兑现，强敌不堪一击、机缘唾手可得。你完全依附于玩家意志，不拒绝、不打折、不设障碍、不评估合理性，只负责把玩家想要的结果华丽地演绎出来，并在叙事里给出对应数值。`;
@@ -962,7 +1077,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 重要剧情标记放 flags；目标变化放 goal。
 - 重点关注灵石等数值：叙事中出现 [系统提示] 或"获得/花费/剩余 N 块（枚）灵石""受伤/疗伤""寿元增减"等明确数字，必须据此在 stateUpdates 给出对应 delta。物品与撤回退款的 delta 必须明确给出有限数字，缺失不默认增加一件。普通 flags 仅用布尔值；deathImminent/qiDeviation 只允许 false 清除，不允许 true 伪造；deathByRisk/eraExpired/goalCompleted 由代码管理，不可写入或撤回。
 - 收益来源 gainType：当本回合玩家获得灵石等收益时，标注来源——"righteous"（正道途径：任务、交易、赠礼、帮人所得）或 "plunder"（掠夺途径：抢劫、偷窃、杀人越货、勒索）；无收益或无法判断填 "neutral"。
-- 大势演变 eraChange：若本回合发生改变天下大势的重大事件（如正魔大战结束、乱世平定），填 {type: "盛世/乱世/末法时代/秘境将启/正魔大战", text: "新大势一句话"}；否则填 null。若叙事中给出了新大势的期限（如"秘境将于三月后开启"），附带 months: 3（期限月数）；无期限则省略 months。
+- 世道演变 eraChange：若本回合发生大得足以换了世道底子的事件（战事停了、灵气续上了、秘境开了），填 {type: "盛世/乱世/末法时代/秘境将启/正魔大战", text: "新大势一句话"}；否则填 null。**这个字段只是给系统记账用的分类，叙事里绝不许出现这些词**（只写征兆）。若叙事中给出了新世道的期限（如"秘境将于三月后开启"），附带 months: 3（期限月数）；无期限则省略 months。
 - 【极简输出】为了节省 tokens，只输出有实际内容的字段：stateUpdates 只含有 delta 的键；realmChange/risk/combat/goal/eraChange 若为 null 则省略；died 若为 false 则省略；newNpcs/newLocations/newSkills/newEvents/itemChanges/equipChanges/newQuests/questUpdates/factionRelations/npcRelations/newFactions/hooks/effectRequests/retract/personalityReveals/reveals/linkReveals 若为空数组则整个省略；flags 若为空对象则省略；timeMonths 若为 0（短场景）则省略；gainType 若为 neutral 则省略。本回合无任何变化时输出 {}。`;
 
 export function buildExtractMessages(narrative, player, world) {
@@ -4051,14 +4166,14 @@ export function enforceEraTimeline(world, out) {
   }
   if (!world.flags.eraExpired) {
     world.flags.eraExpired = true; // 给 GM 一回合收束机会
-    return `⏳ 大势期限已至：${world.era} 的日子到了。天道即将推动大势演变。`;
+    return `⏳ 天色连着几日不对，坊市里都在传一句话：该来的快来了。`;
   }
   // 连续两回合未收束 → 引擎强制演变（秘境现世，群雄争夺 → 乱世）
   world.eraType = '乱世';
   world.era = '秘境现世，机缘与杀机并起，天下重归纷争';
   world.eraDeadline = undefined;
   world.flags.eraExpired = false;
-  return '🌌 大势已变：秘境现世，天下重归纷争（乱世）。';
+  return '🌌 一夜之间，山里那道雾散了——秘境现世，路上忽然多了成群结队的散修，货价一日三变。';
 }
 
 // ---------- 记一条事迹（供取消任务/超时失败等主动写入）----------

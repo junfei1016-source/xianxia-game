@@ -119,10 +119,6 @@
             <div class="chips" id="lengthChips"></div>
             <p class="hint">每回合叙事字数。精简省 tokens、更快；丰富更沉浸。</p>
           </div>
-          <div class="q-group">
-            <div class="q-title">天下大势</div>
-            <div class="chips" id="eraChips"></div>
-          </div>
         </details>
 
         <button id="continueBtn" class="secondary hidden" type="button">继续上次游戏</button>
@@ -175,9 +171,10 @@
             <span>言出法随</span>
             <button id="godToggleBtn" class="mini" type="button" title="热切换外挂模式：随时开启/关闭，立即生效。开启后心想事成、不会失败；未开局时修改的是新游戏默认。">关</button>
           </div>
-          <div class="demo-row">
-            <span>大势（手动切换）</span>
-            <select id="eraSelect" title="手动切换天下大势，立即生效；GM 会按新大势演绎世界。剧情也可自动演变大势。">
+          <!-- 调试用：世道底子不再对玩家显示。地址栏加 ?dev=1 才出现，用于自己试各种天时 -->
+          <div class="demo-row hidden" id="devEraRow">
+            <span>世道底子（调试）</span>
+            <select id="eraSelect" title="调试用：直接换世道底子，立即生效。正常玩法不显示这一项。">
               <option value="盛世">盛世</option>
               <option value="乱世">乱世</option>
               <option value="末法时代">末法时代</option>

@@ -60,6 +60,10 @@ import {
   activeHas,
   GAME_VERSION,
   npcInsightStage,
+  skyOf,
+  rumorsFor,
+  tickRumors,
+  perceptionTier,
 } from './game.js';
 
 import { ensureWorldGeo, startingFactions, regionById } from './world.js';
@@ -593,6 +597,25 @@ function overviewHtml() {
       <div class="ov-rows">${rows}</div>
     </div>`;
 }
+// 天时三行：只给征兆，不给时代名；境界越低看到越少
+function skyRowsHtml(p, world, tipFn) {
+  const sky = skyOf(p, world);
+  const tipText = sky.tier === 0
+    ? '你还看不出个子丑寅卯，只觉得有些不对——多经历些事，或等修为高些，才看得明白。'
+    : sky.tier === 1
+      ? '筑基之后，你能从天色、货价与人流里看出些门道了。'
+      : '元婴之后，天色、地气、人心在你眼里都藏不住：哪句是虚的，你一听就知道。';
+  const labels = [];
+  if (sky.sky) labels.push(['天时', sky.sky]);
+  if (sky.market) labels.push(['市面', sky.market]);
+  if (sky.people) labels.push(['人事', sky.people]);
+  if (!labels.length) labels.push(['天时', sky.vague]);
+  const rows = labels.map(([k, v]) => `<div class="stat-row" ${tipFn(tipText)}><dt>${k}</dt><dd>${esc(v)}</dd></div>`);
+  const rumors = rumorsFor(p, world).slice(-2)
+    .map((x) => `<div class="stat-row"><dt>传闻</dt><dd>${esc(x)}</dd></div>`);
+  return rows.join('') + rumors.join('');
+}
+
 function renderStatus() {
   const p = player;
   const s = world.settings || {};
@@ -618,7 +641,7 @@ function renderStatus() {
     <div class="stat-row" ${tip(`气血：${p.hp}/${p.maxHp}。受伤会降低气血，归零则身死道消；气血上限随境界提升。`)}><dt>气血</dt><dd>${bar(p.hp, p.maxHp)} ${p.hp}/${p.maxHp}</dd></div>
     <div class="stat-row" ${tip('剩余寿元。随境界提升而延长、随时间流逝而消耗；寿元耗尽则坐化。')}><dt>寿元</dt><dd>${Math.round(p.lifespan)} 岁</dd></div>
     <div class="stat-row" ${tip('游戏内时间（年/月/日）。短场景不流逝时间，闭关、赶路、等待会推进时间并消耗寿元。')}><dt>时间</dt><dd>第 ${esc(world.date?.year || 1)} 年 ${esc(world.date?.month || 1)} 月 ${esc(world.date?.day || 1)} 日</dd></div>
-    <div class="stat-row" ${tip(`天下大势：${esc(world.era || '')}`)}><dt>大势</dt><dd>${esc(world.eraType || '乱世')}</dd></div>
+    ${skyRowsHtml(p, world, tip)}
     <div class="stat-row" ${tip('通用货币，可购买丹药、法宝、功法等。获得收益受声望与正邪分来源加成。')}><dt>灵石</dt><dd>${p.spiritStones}</dd></div>
     <div class="stat-row" ${tip(`正邪：${p.morality}（${moralityLabel(p.morality)}）。≥30 正道、≤-30 魔道、中间中庸。正道行善收益高、机缘好但掠夺打折；魔道反之，且被正道通缉。`)}><dt>正邪</dt><dd>${p.morality > 0 ? '+' : ''}${p.morality} ${moralityLabel(p.morality)}</dd></div>
     <div class="stat-row" ${tip(`声望：${p.reputation}。越高 NPC 越敬重、收益越高（当前 ${repBonus >= 0 ? '+' : ''}${repBonus}%）。`)}><dt>声望</dt><dd>${bar(p.reputation)} ${p.reputation}（收益 ${repBonus >= 0 ? '+' : ''}${repBonus}%）</dd></div>
@@ -1056,7 +1079,8 @@ function renderCodex() {
     return `<details class="codex-group"${open}><summary>${title}（${arr.length}）</summary>${body}</details>`;
   };
   $('codexPanel').innerHTML = `
-    <div class="stat-row"><dt>天下大势</dt><dd>${esc(world.era || '未明')}</dd></div>
+    <div class="stat-row"><dt>世道</dt><dd>${esc(world.era || '未明')}</dd></div>
+    ${(rumorsFor(player, world).length ? `<div class="codex-item"><b class="codex-name">传闻</b>${rumorsFor(player, world).map((x) => `<div class="codex-sub">· ${esc(x)}</div>`).join('')}</div>` : '')}
     ${factionGroup()}
     ${group('相识之人', world.npcs, (x) => itemLine(x, true))}
     ${group('地点', world.locations, (x) => itemLine(x, false))}
@@ -1108,7 +1132,8 @@ function switchEraManually(v) {
     world.eraDeadline = undefined; // 切走旧期限；若切到秘境将启，下回合自动按默认设期
     saveGame(AUTO_SLOT);
     renderAll();
-    appendSystem(`🌌 大势已改：${ERA_TYPES[v].label}。天地随之而变，且看下一回合如何演绎。`, 'quest');
+    // 调试用：不给玩家念时代名，只说天色变了
+    appendSystem('🌌 天时似有变，且看下一回合天色与市面。', 'quest');
   } else {
     gameOptions.eraType = v;
     renderGameOptions();
@@ -1294,7 +1319,8 @@ async function startGame() {
     playing = true;
 
     const parts = [];
-    parts.push(`【天下大势】${world.era}`);
+    parts.push(`【世道】${world.era}`);
+    for (const line of skyOf(player, world).lines) parts.push(`【天时】${line}`);
     parts.push(`【你的出身】${player.name}，${player.origin}${player.backstory ? '。' + player.backstory : ''}`);
     if (world.startingLocation) parts.push(`【起始之地】${world.startingLocation.name}：${world.startingLocation.desc}`);
     if (guide && guide.name) parts.push(`【引路人】${guide.name}（${guide.relation || '关系未明'}）：${guide.desc}`);
@@ -1410,6 +1436,7 @@ async function sendTurn(forcedText) {
       if (eraNote) appendSystem(eraNote, 'quest');
       checkQuestDeadlines();
       checkAchievements();
+      tickRumors(world, player); // 传闻：隔几回合冒一条，旧的到时候应验或被戳破
     } else {
       // 请求前的防刷记录也属于状态；拒绝整份提案时只恢复这两个字段，保留校验诊断。
       for (const key of ['recentActions', 'farmStreak']) {
@@ -1597,7 +1624,10 @@ function buildLogText() {
   push(`正邪 ${player.morality}（${moralityLabel(player.morality)}）· 声望 ${player.reputation} · 灵石 ${player.spiritStones} · 寿元 ${Math.round(player.lifespan)} · 气血 ${player.hp}/${player.maxHp}`);
   push(`回合 ${world.turn || 0} · 难度 ${s.difficulty || '普通'} · 节奏 ${s.pace || '慢'} · 修为增益 ${s.cultGain || '1x'} · 篇幅 ${s.length || '标准'}${s.turnLimit ? ' · 回合上限 ' + s.turnLimit : ''}${s.godMode ? ' · 言出法随' : ''}`);
   push(`游戏日期：${world.date?.year || 1}年${world.date?.month || 1}月${world.date?.day || 1}日`);
-  push('天下大势：' + (world.era || '未明') + (world.eraType ? '（' + world.eraType + '）' : ''));
+  push('世道：' + (world.era || '未明'));
+  push('天时：' + skyOf(player, world).lines.join(' / '));
+  const _rumors = rumorsFor(player, world);
+  if (_rumors.length) push('传闻：' + _rumors.join('；'));
   push('--------------------------------------------');
   push('【完整对话记录】');
   for (const m of log) {
@@ -1750,7 +1780,7 @@ function renderGameOptions() {
   });
   renderChips('cultGainChips', CULT_GAIN_LEVELS, gameOptions.cultGain, (v) => { gameOptions.cultGain = v; });
   renderChips('lengthChips', LENGTH_LEVELS, gameOptions.length, (v) => { gameOptions.length = v; });
-  renderChips('eraChips', ['随机', ...ERA_LEVELS], gameOptions.eraType, (v) => { gameOptions.eraType = v; });
+  // 「天下大势」已从明面撤下：时代不再由玩家选择，也不显示名字（见 skyOf / 传闻）
 }
 
 // ---------- 标签页切换 ----------
@@ -1918,6 +1948,13 @@ function bindTooltip() {
 
 // ---------- 初始化 ----------
 function init() {
+  // 调试入口：?dev=1 才露出"世道底子"下拉（正常玩法看不到时代名）
+  try {
+    if (new URLSearchParams(location.search).get('dev') === '1') {
+      const row = $('devEraRow');
+      if (row) row.classList.remove('hidden');
+    }
+  } catch { /* 忽略 */ }
   loadConfig();
   syncConfigToUI();
   renderQuestionnaire();
