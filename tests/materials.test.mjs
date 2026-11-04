@@ -62,7 +62,7 @@ test('价目随品阶递增', () => {
   assert.ok(materialPrice(materialByName('百年灵草')) > materialPrice(materialByName('灵草')));
 });
 
-test('产地：寒渊海出寒铁与灵乳，星陨荒原出星砂与陨铁', () => {
+test('产地：乱星海·尾星岛出寒铁与灵乳，奇渊岛出星砂与陨铁', () => {
   const han = materialsInRegion('hanyuan').map((m) => m.name);
   assert.ok(han.includes('寒铁'));
   assert.ok(han.includes('万年灵乳'));

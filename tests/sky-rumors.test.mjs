@@ -147,7 +147,7 @@ test('初到一地，落脚处会听到一句（原著里的先打听再动身�
   const { player, world } = setup('乱世', '筑基初期', 'qingwu');
   world.rumors = [];
   world.rumorSeq = 0;
-  applyStateUpdates(player, world, { travelTo: '落霞坊' });
+  applyStateUpdates(player, world, { travelTo: '黄枫谷坊市' });
   assert.equal(world.rumors.length, 1, '换个地方该听到一句');
   assert.ok(world.rumors[0].text.length > 0);
 });

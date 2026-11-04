@@ -73,7 +73,7 @@ test('此地无此物：仙域的灵液不能"挖矿"', () => {
 });
 
 test('野外有风险：险地猎妖可能挨打', () => {
-  const { player, world } = setup('wanyao', '金丹初期'); // 万妖岭危险 5，且有得猎
+  const { player, world } = setup('wanyao', '金丹初期'); // 慕兰草原危险 5，且有得猎
   const hp0 = player.hp;
   const res = gatherMaterials(world, player, { kind: '猎妖', days: 4 }, () => 0.01);
   assert.equal(res.ok, true);

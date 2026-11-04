@@ -32,7 +32,7 @@ import {
 const setup = (geo = 'qingwu') => {
   const player = newPlayerState();
   const world = newWorldState();
-  world.era = '青芜国风调雨顺';
+  world.era = '越国·建州风调雨顺';
   world.eraType = '盛世';
   world.geo = { regionId: geo, sinceTurn: 0, migrated: false };
   return { player, world };
@@ -151,14 +151,14 @@ test('切片写进当前灵气与本地地脉纪事', () => {
   const { player, world } = setup();
   world.regionQi = { qingwu: { qi: 1, pressure: 0, idle: 0 } };
   world.regionQiLog = [
-    { regionId: 'dayan', region: '大衍王朝', month: 3, text: '大衍王朝灵脉被采薄了：灵气由丰沛落为寻常。' },
-    { regionId: 'qingwu', region: '青芜国', month: 9, text: '青芜国灵脉被采薄了：灵气由稀薄落为枯涸。' },
+    { regionId: 'dayan', region: '元武国', month: 3, text: '元武国灵脉被采薄了：灵气由丰沛落为寻常。' },
+    { regionId: 'qingwu', region: '越国·建州', month: 9, text: '越国·建州灵脉被采薄了：灵气由稀薄落为枯涸。' },
   ];
   const slice = buildSlice(player, world);
   assert.match(slice, /灵气1（枯涸）/, '切片用当前灵气并带中文档位');
   assert.match(slice, /【地脉】/);
-  assert.match(slice, /青芜国灵脉被采薄了/, '只带本地纪事');
-  assert.doesNotMatch(slice, /大衍王朝灵脉/, '别把别处的地脉纪事搬进来');
+  assert.match(slice, /越国·建州灵脉被采薄了/, '只带本地纪事');
+  assert.doesNotMatch(slice, /元武国灵脉/, '别把别处的地脉纪事搬进来');
   assert.equal(qiLabel(1), '枯涸');
   assert.equal(qiLabel(99), '灵涌');
 });

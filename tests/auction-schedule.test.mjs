@@ -49,25 +49,25 @@ test('会期内照常成交', () => {
   assert.ok(res.reason === undefined);
 });
 
-test('不在落霞坊，连会期也没用', () => {
+test('不在黄枫谷坊市，连会期也没用', () => {
   const { player, world } = setup(3, 'qingwu');
   const res = auctionBid(world, player, { item: '回春丹', bid: 50 });
   assert.equal(res.ok, false);
-  assert.ok(res.reason.includes('落霞坊'));
+  assert.ok(res.reason.includes('黄枫谷坊市'));
 });
 
 test('提示词报排期：会期说"本月开拍"，非会期说"还有几个月"', () => {
   const open = setup(3);
   const openText = buildGMMessages(open.player, open.world, [], '去坊市').map((m) => m.content).join('\n');
   assert.ok(openText.includes('【拍卖排期】'));
-  assert.ok(openText.includes('本月正是落霞坊的拍卖会'));
+  assert.ok(openText.includes('本月正是黄枫谷坊市的拍卖会'));
 
   const closed = setup(4);
   const closedText = buildGMMessages(closed.player, closed.world, [], '去坊市').map((m) => m.content).join('\n');
   assert.ok(closedText.includes('下一场拍卖在'));
 });
 
-test('不在落霞坊时不报拍卖排期', () => {
+test('不在黄枫谷坊市时不报拍卖排期', () => {
   const { player, world } = setup(3, 'qingwu');
   const text = buildGMMessages(player, world, [], '走走').map((m) => m.content).join('\n');
   assert.ok(!text.includes('【拍卖排期】'));

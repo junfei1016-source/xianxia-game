@@ -23,15 +23,15 @@ const setup = (regionId, realm = '元婴初期') => {
 const seq = (vals) => { let i = 0; return () => vals[i++ % vals.length]; };
 
 test('区域稀有度上限：按灵气+危险排，仙域最高', () => {
-  assert.equal(regionNodeCap(regionById('qingwu')), 0, '青芜只出凡品');
-  assert.equal(regionNodeCap(regionById('luoxia')), 1);
-  assert.equal(regionNodeCap(regionById('dayan')), 2);
-  assert.equal(regionNodeCap(regionById('chisha')), 1);
-  assert.equal(regionNodeCap(regionById('hanyuan')), 3);
-  assert.equal(regionNodeCap(regionById('guixu')), 2);
-  assert.equal(regionNodeCap(regionById('wanyao')), 3);
-  assert.equal(regionNodeCap(regionById('xingyun')), 3);
-  assert.equal(regionNodeCap(regionById('taiqing')), 4, '灵气 6 的仙域可出神品');
+  assert.equal(regionNodeCap(regionById('qingwu')), 0, '越国·建州只出凡品');
+  assert.equal(regionNodeCap(regionById('luoxia')), 0, '坊市同在建州，也是凡品');
+  assert.equal(regionNodeCap(regionById('dayan')), 1, '元武国：灵气3+危险2');
+  assert.equal(regionNodeCap(regionById('chisha')), 2, '天罗国：3+4');
+  assert.equal(regionNodeCap(regionById('hanyuan')), 2, '尾星岛：3+4');
+  assert.equal(regionNodeCap(regionById('guixu')), 2, '天星城：4+2');
+  assert.equal(regionNodeCap(regionById('wanyao')), 2, '慕兰草原：3+4');
+  assert.equal(regionNodeCap(regionById('xingyun')), 3, '奇渊岛：4+5');
+  assert.equal(regionNodeCap(regionById('taiqing')), 4, '灵气 6 的灵界可出神品');
 });
 
 test('恢复周期按稀有度：凡品半年，神品八年', () => {
@@ -52,7 +52,7 @@ test('青芜的采集点只能是凡品，材料也对得上', () => {
   }
 });
 
-test('星陨荒原能出到仙品，但出不了神品', () => {
+test('奇渊岛能出到仙品，但出不了神品', () => {
   const seen = new Set();
   for (let i = 0; i < 30; i++) {
     const { player, world } = setup('xingyun', '元婴初期');
@@ -65,7 +65,7 @@ test('星陨荒原能出到仙品，但出不了神品', () => {
   assert.ok(seen.has('仙品'), `应出现仙品：${[...seen].join('、')}`);
 });
 
-test('太清仙域能出神品', () => {
+test('灵界·天渊城能出神品', () => {
   const seen = new Set();
   for (let i = 0; i < 40; i++) {
     const { player, world } = setup('taiqing', '化神初期');

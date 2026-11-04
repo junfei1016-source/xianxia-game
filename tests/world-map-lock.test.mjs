@@ -54,7 +54,7 @@ test('定图之后不能再开辟新域', () => {
   lockWorldMap(world);
   const res = addRegion(world, {
     name: '新荒原', terrain: '戈壁', qi: 3, danger: 3,
-    products: ['灵品'], desc: '测试用', links: [{ to: '青芜国', days: 5 }],
+    products: ['灵品'], desc: '测试用', links: [{ to: '越国·建州', days: 5 }],
   });
   assert.equal(res.ok, false);
   assert.match((res.issues || []).join(''), /开局定死/);
@@ -66,7 +66,7 @@ test('模型再提 newRegion 会被拒并记进诊断', () => {
   const player = newPlayerState();
   lockWorldMap(world);
   applyStateUpdates(player, world, {
-    newRegion: { name: '新荒原', terrain: '戈壁', qi: 3, danger: 3, products: ['灵品'], desc: '测试', links: [{ to: '青芜国', days: 5 }] },
+    newRegion: { name: '新荒原', terrain: '戈壁', qi: 3, danger: 3, products: ['灵品'], desc: '测试', links: [{ to: '越国·建州', days: 5 }] },
   });
   assert.equal(worldMapOf(world).regions.length, 9);
   const logged = JSON.stringify(world.validationLog || []);
@@ -102,7 +102,7 @@ test('地图定死之后，路程与物价都只认存档那份', () => {
 test('没有地图表的旧世界仍按老路走（不破坏兼容）', () => {
   const world = fresh();
   assert.equal(worldMapOf(world), null);
-  assert.equal(regionById('luoxia', world).name, '落霞坊');
+  assert.equal(regionById('luoxia', world).name, '黄枫谷坊市');
   assert.ok(travelDays('qingwu', 'luoxia', world) > 0);
   assert.equal(allRegions(world).length, 9);
 });

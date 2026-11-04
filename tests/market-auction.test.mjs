@@ -80,11 +80,11 @@ test('拍卖：低于起拍价直接拒', () => {
   assert.ok(res.reason.includes('起拍价'));
 });
 
-test('拍卖只有落霞坊有', () => {
+test('拍卖只有黄枫谷坊市有', () => {
   const { player, world } = setup('qingwu');
   const res = auctionBid(world, player, { item: '回春丹', bid: 100 }, () => 0);
   assert.equal(res.ok, false);
-  assert.ok(res.reason.includes('落霞坊'));
+  assert.ok(res.reason.includes('黄枫谷坊市'));
 });
 
 test('拍卖丹方：拍下后进已知丹方', () => {

@@ -24,14 +24,14 @@ test('地图完整：九域二十家，每域都有本地势力与当家人', ()
   }
 });
 
-test('凡界四通八达：归墟、万妖岭、星陨荒原都能走到', () => {
+test('凡界四通八达：归墟、慕兰草原、奇渊岛都能走到', () => {
   for (const id of ['guixu', 'wanyao', 'xingyun']) {
     const days = travelDays('qingwu', id);
     assert.ok(Number.isFinite(days) && days > 0, `青芜到 ${id} 应可通行`);
   }
 });
 
-test('太清仙域不与凡界连通：只能飞升', () => {
+test('灵界·天渊城不与凡界连通：只能飞升', () => {
   const taiqing = regionById('taiqing');
   assert.equal(Object.keys(taiqing.travel_days || {}).length, 0);
   assert.equal(travelDays('qingwu', 'taiqing'), null);
@@ -47,11 +47,11 @@ test('除仙域外，每个区域都至少有一条对外道路', () => {
   }
 });
 
-test('黑市只有赤沙与星陨：危险度 5 的寒渊海不算', () => {
+test('黑市只有赤沙与星陨：危险度 5 的乱星海·尾星岛不算', () => {
   const world = (id) => { const w = newWorldState(); w.geo = { regionId: id, sinceTurn: 0, migrated: false }; return w; };
   assert.equal(isBlackMarket(world('chisha')), true);
   assert.equal(isBlackMarket(world('xingyun')), true);
-  assert.equal(isBlackMarket(world('hanyuan')), false, '寒渊海危险但不能当黑市');
+  assert.equal(isBlackMarket(world('hanyuan')), false, '乱星海·尾星岛危险但不能当黑市');
   assert.equal(isBlackMarket(world('qingwu')), false);
 });
 
@@ -63,12 +63,12 @@ test('物价系数覆盖新区域，仙界最贵', () => {
   assert.ok(priceMultiplier('xingyun') > 1);
 });
 
-test('星陨荒原的切片能正确讲当地势力与出路', () => {
+test('奇渊岛的切片能正确讲当地势力与出路', () => {
   const player = newPlayerState();
   const world = newWorldState();
   world.geo = { regionId: 'xingyun', sinceTurn: 0, migrated: false };
   const slice = buildSlice(player, world);
-  assert.ok(slice.includes('星陨荒原'));
+  assert.ok(slice.includes('奇渊岛'));
   assert.ok(slice.includes('可达'));
   assert.ok(slice.length < 420);
 });
@@ -78,6 +78,6 @@ test('仙域的切片不列任何道路', () => {
   const world = newWorldState();
   world.geo = { regionId: 'taiqing', sinceTurn: 0, migrated: false };
   const slice = buildSlice(player, world);
-  assert.ok(slice.includes('太清仙域'));
+  assert.ok(slice.includes('灵界·天渊城'));
   assert.ok(!slice.includes('可达：'), '仙界无路，不该写可达');
 });

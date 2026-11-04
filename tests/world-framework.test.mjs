@@ -28,7 +28,7 @@ import {
 const setup = (geo = 'qingwu') => {
   const player = newPlayerState();
   const world = newWorldState();
-  world.era = '青芜国风调雨顺';
+  world.era = '越国·建州风调雨顺';
   world.eraType = '盛世';
   world.geo = { regionId: geo, sinceTurn: 0, migrated: false };
   return { player, world };
@@ -93,7 +93,7 @@ test('ensureWorldGeo 幂等：重复调用不改变任何字段', () => {
 
 test('旧档按起始地名匹配区域，不匹配则给一个合法默认', () => {
   const named = newWorldState();
-  named.startingLocation = { name: '落霞坊', desc: '' };
+  named.startingLocation = { name: '黄枫谷坊市', desc: '' };
   ensureWorldGeo(named);
   assert.equal(named.geo.regionId, 'luoxia');
 
@@ -106,7 +106,7 @@ test('旧档按起始地名匹配区域，不匹配则给一个合法默认', ()
 test('moveToRegion 返回真实天数并切换区域', () => {
   const { world } = setup('qingwu');
   const moved = moveToRegion(world, 'luoxia');
-  assert.equal(moved.days, 3);
+  assert.equal(moved.days, 2, '越国·建州到黄枫谷坊市：同在建州，2 日');
   assert.equal(world.geo.regionId, 'luoxia');
   assert.equal(moveToRegion(world, 'luoxia'), null, '原地不动不产生移动');
   assert.equal(moveToRegion(world, '不存在'), null);
@@ -115,10 +115,10 @@ test('moveToRegion 返回真实天数并切换区域', () => {
 test('切片只讲当前区域，短且带铁律', () => {
   const { player, world } = setup('chisha');
   const slice = buildSlice(player, world);
-  assert.ok(slice.includes('赤沙荒原'));
+  assert.ok(slice.includes('天罗国'));
   assert.ok(slice.includes('物价×'));
   assert.ok(slice.includes('【铁律】'));
-  assert.ok(!slice.includes('寒渊海（'), '不应展开别的区域描述');
+  assert.ok(!slice.includes('乱星海·尾星岛（'), '不应展开别的区域描述');
   assert.ok(slice.length < 400, `切片过长：${slice.length}`);
 
   const noGeo = newWorldState();
@@ -136,13 +136,13 @@ test('高境界回到安全区会收到“此地已压不住你”的提示', ()
 test('行路：提取器给 travelTo 时，耗时由路程表决定，模型自报时间被覆盖', () => {
   const { player, world } = setup('qingwu');
   const report = {};
-  const note = applyStateUpdates(player, world, { travelTo: '落霞坊', timeMonths: 3 }, report);
+  const note = applyStateUpdates(player, world, { travelTo: '黄枫谷坊市', timeMonths: 3 }, report);
   assert.equal(world.geo.regionId, 'luoxia');
   assert.ok(note.includes('行路'));
-  // 青芜→落霞 3 日 = 0.1 月，而不是模型自报的 3 月
-  assert.equal(report.out.timeMonths, 0.1);
+  // 越国·建州→黄枫谷坊市 2 日 ≈ 0.067 月，而不是模型自报的 3 月
+  assert.equal(report.out.timeMonths, 0.067);
   advanceTime(world, player, report.out.timeMonths);
-  assert.deepEqual(world.date, { year: 1, month: 1, day: 4 });
+  assert.deepEqual(world.date, { year: 1, month: 1, day: 3 });
 });
 
 test('行路：未知区域名被忽略，时间保持原样且不落错误区域', () => {
@@ -154,22 +154,22 @@ test('行路：未知区域名被忽略，时间保持原样且不落错误区�
 test('提取器输出里的 travelTo 通过校验并进入结算', () => {
   const { player, world } = setup('qingwu');
   const report = {};
-  applyStateUpdates(player, world, { travelTo: '大衍王朝' }, report);
+  applyStateUpdates(player, world, { travelTo: '元武国' }, report);
   assert.equal(report.out.travelTo, undefined, 'travelTo 只用于结算，不落到前端');
   assert.equal(world.geo.regionId, 'dayan');
 });
 
 test('回合提示词带世界切片，且切片在快照里也是同一份', () => {
   const { player, world } = setup('luoxia');
-  const messages = buildGMMessages(player, world, [], '去落霞坊转转');
+  const messages = buildGMMessages(player, world, [], '去黄枫谷坊市转转');
   const all = messages.map((m) => m.content).join('\n');
   assert.ok(all.includes('【世界切片】'));
-  assert.ok(all.includes('落霞坊'));
+  assert.ok(all.includes('黄枫谷坊市'));
   const ctx = buildWorldContext(world, player);
-  assert.equal(ctx.region.name, '落霞坊');
+  assert.equal(ctx.region.name, '黄枫谷坊市');
   assert.ok(ctx.worldSlice.includes('物价×'));
 
-  const fast = buildGMCombinedMessages(player, world, [], '去落霞坊转转');
+  const fast = buildGMCombinedMessages(player, world, [], '去黄枫谷坊市转转');
   assert.ok(fast.map((m) => m.content).join('\n').includes('travelTo'));
 });
 

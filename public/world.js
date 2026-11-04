@@ -11,86 +11,102 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '1.4.0';
+export const WORLD_VERSION = '1.5.0';
 
+// ============================================================
+//  凡界地图（按《凡人修仙传》的地理骨架搭）
+//
+//  原文依据（逐条核过原文）：
+//   · 第 127 章：越国修仙门派大小七个——掩月宗、黄枫谷、灵兽山、清虚门、化刀坞、天阙堡、巨剑门。
+//   · 第 144 章：建州位于越国北部，与元武国交界；太岳山脉在建州西部，连绵数千里，多妖兽传闻。
+//   · 第 161 章：黄枫谷坊市颇有名气，元武国修士常来此交易。
+//   · 第 221 章：元武国、越国是中等国；大国是天罗国与风都国；姜国、刹云国是小国。
+//   · 第 253、255 章：天罗国魔道六宗入侵越国，中间隔着姜国、车骑国。
+//   · 第 358 章：越国南面穿过紫金国等五六个国家是"九国盟"，为抗慕兰族法士而设；慕兰大草原与之相邻。
+//   · 第 365、366 章：乱星海西南角有尾星岛、魁星岛、桑星岛三座大岛；海上三大天灾有鬼雾。
+//   · 第 389 章：乱星海由"星宫"管辖，星宫在天星城；内星海、外星海之分。
+//   · 第 531 章：深渊海域上万妖兽涌出，围困奇渊岛黑石城。
+//   · 第 1315 章：飞升灵界者须在天渊城服役（飞灵台、灭尘丹）。
+//  九域 id 不变（存档、材料产地、阵法地脉都按 id 挂），只把名字、地气、路程按原著立起来。
+// ============================================================
 const REGIONS = [
   {
-    id: 'qingwu', name: '青芜国', terrain: '丘陵水乡', qi: 2, danger: 1,
+    id: 'qingwu', name: '越国·建州', terrain: '丘陵山林', qi: 2, danger: 1,
     products: ['凡品', '灵品'],
-    travel_days: { luoxia: 3, dayan: 8, chisha: 12, hanyuan: 15, guixu: 18, wanyao: 25, xingyun: 20 },
-    desc: '新手立足之地。三小派互相牵制，王朝只管凡人，不管修士。',
+    travel_days: { luoxia: 2, dayan: 20, chisha: 60, hanyuan: 120, guixu: 130, wanyao: 90, xingyun: 125 },
+    desc: '越国十三州之一，北接元武国。太岳山脉横在州西，连绵数千里，野兽猛禽层出不穷，山里有黄枫谷。七派共护此地，凡人王朝只管凡俗事。',
   },
   {
-    id: 'luoxia', name: '落霞坊', terrain: '河谷集市', qi: 2, danger: 2,
+    id: 'luoxia', name: '黄枫谷坊市', terrain: '山谷集市', qi: 2, danger: 1,
     products: ['凡品', '灵品'],
-    travel_days: { qingwu: 3, dayan: 8, chisha: 10, hanyuan: 14, guixu: 10, wanyao: 22, xingyun: 18 },
-    desc: '中立坊市，万宝阁在此设分号。价格公道，但坊内禁斗，杀人者遭全坊通缉。',
+    travel_days: { qingwu: 2, dayan: 18, chisha: 55, hanyuan: 120, guixu: 130, wanyao: 85, xingyun: 125 },
+    desc: '太岳山脉脚下由黄枫谷开的坊市，在越国颇有名气——一因靠近元武国，邻国修士常来换货；二因坊内禁斗，杀人者遭全坊通缉。',
   },
   {
-    id: 'dayan', name: '大衍王朝', terrain: '平原都城', qi: 3, danger: 3,
+    id: 'dayan', name: '元武国', terrain: '山川丘陵', qi: 3, danger: 2,
     products: ['灵品', '玄品'],
-    travel_days: { qingwu: 8, luoxia: 8, chisha: 9, hanyuan: 11, guixu: 15, wanyao: 12, xingyun: 16 },
-    desc: '凡俗最强王朝，镇魔司专缉魔修。世家与朝廷共治，宗门在此须低头。',
+    travel_days: { qingwu: 20, luoxia: 18, chisha: 45, hanyuan: 100, guixu: 110, wanyao: 70, xingyun: 105 },
+    desc: '与越国交界的中等国家，修仙界与越国不敌对。矿产与灵药都从这儿过路，坊市里能见着越国没有的稀罕货。',
   },
   {
-    id: 'chisha', name: '赤沙荒原', terrain: '荒漠戈壁', qi: 1, danger: 4,
+    id: 'chisha', name: '天罗国', terrain: '荒漠戈壁', qi: 3, danger: 4,
     products: ['灵品', '玄品'],
-    travel_days: { qingwu: 12, luoxia: 10, dayan: 9, hanyuan: 18, guixu: 20, wanyao: 15, xingyun: 8 },
-    desc: '灵气枯竭，正道不管。血刀寨与散修混居，价格翻倍但什么都能买到。',
+    travel_days: { qingwu: 60, luoxia: 55, dayan: 45, hanyuan: 80, guixu: 90, wanyao: 40, xingyun: 85 },
+    desc: '这一带的大国，魔道六宗盘踞其中。正道不过来，黑市倒是日夜开着——只认钱，不问来路。',
   },
   {
-    id: 'hanyuan', name: '寒渊海', terrain: '群岛深海', qi: 3, danger: 5,
+    id: 'hanyuan', name: '乱星海·尾星岛', terrain: '群岛深海', qi: 3, danger: 4,
     products: ['玄品', '仙品'],
-    travel_days: { qingwu: 15, luoxia: 14, dayan: 11, chisha: 18, guixu: 16, wanyao: 9, xingyun: 11 },
-    desc: '海外群岛，鲛人族盘踞。深海遗迹出仙品材料，但十去九不回。',
+    travel_days: { qingwu: 120, luoxia: 120, dayan: 100, chisha: 80, guixu: 25, wanyao: 70, xingyun: 15 },
+    desc: '乱星海西南角的大岛之一。附近还有魁星岛、桑星岛与几十座中小岛；海上三大天灾里最神秘的就是鬼雾，遇上了十死无生。',
   },
   {
-    id: 'guixu', name: '归墟城', terrain: '悬空巨城', qi: 4, danger: 3,
+    id: 'guixu', name: '天星城', terrain: '海岛巨城', qi: 4, danger: 2,
     products: ['玄品'],
-    travel_days: { qingwu: 18, luoxia: 10, dayan: 15, chisha: 20, hanyuan: 16, wanyao: 14, xingyun: 13 },
-    desc: '悬于云海之上的中立巨城，靠星舟与传送阵进出。万族在此议价，规矩只有一条：城里不许见血。',
+    travel_days: { qingwu: 130, luoxia: 130, dayan: 110, chisha: 90, hanyuan: 25, wanyao: 75, xingyun: 20 },
+    desc: '乱星海的中枢，星宫的驻地。内星海、外星海的修士都来此议价，城里规矩只有一条：不许见血。',
   },
   {
-    id: 'wanyao', name: '万妖岭', terrain: '妖山', qi: 4, danger: 5,
-    products: ['仙品'],
-    travel_days: { qingwu: 25, luoxia: 22, dayan: 12, chisha: 15, hanyuan: 9, guixu: 14, xingyun: 10 },
-    desc: '妖族世居的绵延妖山，七妖王各据一岭。人族入山须持妖王信物，否则视作血食。',
+    id: 'wanyao', name: '慕兰草原', terrain: '游牧草原', qi: 3, danger: 4,
+    products: ['玄品', '仙品'],
+    travel_days: { qingwu: 90, luoxia: 85, dayan: 70, chisha: 40, hanyuan: 70, guixu: 75, xingyun: 65 },
+    desc: '慕兰族世代游牧之地，部落大小不一；法士以血祭催动法术，与九国盟打了许多年。草原上兽群成群，一般人不敢独自过境。',
   },
   {
-    id: 'xingyun', name: '星陨荒原', terrain: '陨坑荒原', qi: 3, danger: 5,
-    products: ['仙品'],
-    travel_days: { qingwu: 20, luoxia: 18, dayan: 16, chisha: 8, hanyuan: 11, guixu: 13, wanyao: 10 },
-    desc: '上古天星坠地之处，陨铁与星砂遍地，遗族与陨铁盟为矿脉争了千年。',
+    id: 'xingyun', name: '奇渊岛', terrain: '深渊海城', qi: 4, danger: 5,
+    products: ['玄品', '仙品'],
+    travel_days: { qingwu: 125, luoxia: 125, dayan: 105, chisha: 85, hanyuan: 15, guixu: 20, wanyao: 65 },
+    desc: '深渊海域上的孤岛，黑石城在此。二十多年前上万妖兽自深渊涌出，把城围了个水泄不通；如今岛上矿脉与兽巢都还在，敢来的都是不要命的。',
   },
   {
-    id: 'taiqing', name: '太清仙域', terrain: '仙山云海', qi: 6, danger: 3,
+    id: 'taiqing', name: '灵界·天渊城', terrain: '灵界边城', qi: 6, danger: 3,
     products: ['仙品', '神品'],
-    travel_days: {}, // 仙界不与凡界通paths：只能飞升
-    desc: '传说中的仙界一角，灵气浓得化作云海。凡界无路可至，唯有飞升。',
+    travel_days: {}, // 凡人界无路可至：只能飞升
+    desc: '灵界边城，飞升者须在此服役百年，每年领一粒灭尘丹压下两色雷劫。凡界无路可至，唯有渡劫飞升。',
   },
 ];
 
 const FACTIONS = [
-  { id: 'shiyun', name: '拾云门', type: '宗门', alignment: '正道', tier: 2, seat: 'qingwu', desc: '青芜国第一大宗，收徒看灵根，与白鹿观表面和睦。' },
+  { id: 'shiyun', name: '拾云门', type: '宗门', alignment: '正道', tier: 2, seat: 'qingwu', desc: '建州第一大宗，七派之外最盛；收徒看灵根，与白鹿观表面和睦。' },
   { id: 'bailu', name: '白鹿观', type: '宗门', alignment: '中立', tier: 3, seat: 'qingwu', desc: '专精符箓的道观，向散修卖符。实为血刀寨暗桩，替其销赃。', hidden: '血刀寨暗桩' },
   { id: 'tieshan', name: '铁山帮', type: '帮派', alignment: '魔道', tier: 4, seat: 'qingwu', desc: '收保护费、劫商队的凡俗帮派，是血刀寨的眼线。' },
-  { id: 'qingwu_court', name: '青芜王朝', type: '朝廷', alignment: '中立', tier: 5, seat: 'qingwu', desc: '只管凡人，对修士恭顺，暗地向拾云门纳贡换庇护。' },
+  { id: 'qingwu_court', name: '青芜王朝', type: '朝廷', alignment: '中立', tier: 5, seat: 'qingwu', desc: '建州本地的凡俗王朝，只管凡人；年年向拾云门纳贡换庇护。' },
   { id: 'wanbao', name: '万宝阁', type: '商会', alignment: '中立', tier: 2, seat: 'luoxia', desc: '跨区域商会，只认钱不认人。拍卖会与消息都归它管。' },
   { id: 'sanxiu', name: '散修盟', type: '散修联盟', alignment: '中立', tier: 4, seat: 'luoxia', desc: '散修互助组织，管挂牌、接活、通气，盟主一年一换。' },
-  { id: 'cui', name: '崔氏世家', type: '世家', alignment: '中立', tier: 2, seat: 'dayan', desc: '大衍王朝第一世家，掌丹药贡路，与拾云门联姻。' },
-  { id: 'zhenmo', name: '镇魔司', type: '朝廷', alignment: '正道', tier: 1, seat: 'dayan', desc: '大衍王朝的修士衙门，专缉魔修，对中立修士盘查。' },
-  { id: 'xuedao', name: '血刀寨', type: '帮派', alignment: '魔道', tier: 2, seat: 'chisha', desc: '赤沙荒原的马匪修士，靠劫掠与黑市为生，与正道有世仇。' },
-  { id: 'huishi', name: '灰市', type: '商会', alignment: '中立', tier: 3, seat: 'chisha', desc: '赤沙荒原的黑市组织，只做买卖不问来路。' },
+  { id: 'cui', name: '崔氏世家', type: '世家', alignment: '中立', tier: 2, seat: 'dayan', desc: '元武国第一世家，掌丹药贡路，与拾云门联姻。' },
+  { id: 'zhenmo', name: '镇魔司', type: '朝廷', alignment: '正道', tier: 1, seat: 'dayan', desc: '元武国的修士衙门，专缉魔修，对中立修士盘查。' },
+  { id: 'xuedao', name: '血刀寨', type: '帮派', alignment: '魔道', tier: 2, seat: 'chisha', desc: '天罗国的马匪修士，靠劫掠与黑市为生，与正道有世仇。' },
+  { id: 'huishi', name: '灰市', type: '商会', alignment: '中立', tier: 3, seat: 'chisha', desc: '天罗国的黑市组织，只做买卖不问来路。' },
   { id: 'jiaoren', name: '鲛人族', type: '妖族', alignment: '中立', tier: 2, seat: 'hanyuan', desc: '深海妖族，控潮汐与沉船。入海须持鳞符，否则视为猎物。' },
   { id: 'xingluo', name: '星罗岛', type: '宗门', alignment: '正道', tier: 3, seat: 'hanyuan', desc: '海外散修结社，靠打捞沉船遗宝维生，与鲛人族有旧约。' },
-  { id: 'guixufu', name: '归墟府', type: '朝廷', alignment: '正道', tier: 1, seat: 'guixu', desc: '归墟城的秩序掌控者，城中禁斗之规由它执行，靠星舟税养城。' },
+  { id: 'guixufu', name: '归墟府', type: '朝廷', alignment: '正道', tier: 1, seat: 'guixu', desc: '天星城的秩序掌控者，城中禁斗之规由它执行，靠星舟税养城。' },
   { id: 'xingzhou', name: '星舟行会', type: '商会', alignment: '中立', tier: 2, seat: 'guixu', desc: '垄断跨界星舟与传送阵，票价说一不二，万宝阁也让它三分。' },
-  { id: 'qiyao', name: '七妖王', type: '妖族', alignment: '中立', tier: 1, seat: 'wanyao', desc: '万妖岭七位妖王共治，各自划界，人族的"信物"就是它们的牙印。' },
+  { id: 'qiyao', name: '七妖王', type: '妖族', alignment: '中立', tier: 1, seat: 'wanyao', desc: '草原深处七位妖王各据巢穴，与人族互不侵犯；过境者须持它们的"信物"。' },
   { id: 'qingqiu', name: '青丘', type: '妖族', alignment: '中立', tier: 2, seat: 'wanyao', desc: '狐族一脉，善幻术与丹药，与七妖王面和心不和。' },
-  { id: 'xingyun_clan', name: '星陨遗族', type: '散修联盟', alignment: '中立', tier: 2, seat: 'xingyun', desc: '自称上古星官后裔，守着陨坑里的星砂矿，与陨铁盟世代争矿。' },
+  { id: 'xingyun_clan', name: '星陨遗族', type: '散修联盟', alignment: '中立', tier: 2, seat: 'xingyun', desc: '奇渊岛上的遗族，守着深海的星砂与陨铁，与陨铁盟世代争矿。' },
   { id: 'yuntie', name: '陨铁盟', type: '帮派', alignment: '魔道', tier: 3, seat: 'xingyun', desc: '以陨铁锻兵起家的矿帮，强征遗族矿洞，血债累累。' },
-  { id: 'taiqing_gong', name: '太清仙宫', type: '朝廷', alignment: '正道', tier: 1, seat: 'taiqing', desc: '仙界秩序的执掌者，凡人飞升在此登记，仙籍与凡籍一刀两断。' },
-  { id: 'taishu', name: '太清书院', type: '宗门', alignment: '中立', tier: 2, seat: 'taiqing', desc: '仙域里的讲道之所，藏有天书残卷，对凡界飞升者既不亲也不拒。' },
+  { id: 'taiqing_gong', name: '太清仙宫', type: '朝廷', alignment: '正道', tier: 1, seat: 'taiqing', desc: '灵界秩序的执掌者，飞升者在此登记服役，仙籍与凡籍一刀两断。' },
+  { id: 'taishu', name: '太清书院', type: '宗门', alignment: '中立', tier: 2, seat: 'taiqing', desc: '天渊城里的讲道之所，藏有天书残卷，对下界飞升者既不亲也不拒。' },
 ];
 
 const RELATIONS = [
@@ -107,7 +123,7 @@ const RELATIONS = [
   { a: 'xingluo', b: 'xuedao', type: '敌对', note: '血刀寨劫过星罗岛的船，结下梁子。' },
   { a: 'wanbao', b: 'xingzhou', type: '竞争', note: '万宝阁想自开星舟线，行会寸步不让。' },
   { a: 'guixufu', b: 'xingzhou', type: '盟约', note: '城规靠行会的船运撑着，行会靠城规的禁斗护着。' },
-  { a: 'guixufu', b: 'taiqing_gong', type: '从属', note: '归墟城的仙籍由太清仙宫册封，名义上听调。' },
+  { a: 'guixufu', b: 'taiqing_gong', type: '从属', note: '天渊城的仙籍由太清仙宫册封，名义上听调。' },
   { a: 'qiyao', b: 'qingqiu', type: '竞争', note: '七妖王忌惮青丘幻术，划界时从不与狐族相邻。' },
   { a: 'qingqiu', b: 'cui', type: '交易', note: '青丘的丹方换崔氏的灵药，两家都说是"私谊"。' },
   { a: 'xingyun_clan', b: 'yuntie', type: '世仇', note: '陨铁盟强占矿洞，遗族的祭坛被推平了三座。' },
@@ -381,7 +397,7 @@ function pickWeighted(list, rand) {
   return list[list.length - 1].region;
 }
 
-// 开局区域：青芜（新手）权重最高，寒渊海作为高风险选择保留少量可能。
+// 开局区域：越国·建州（新手）权重最高，天罗国作为高风险选择保留少量可能。
 export function pickStarter(rand = Math.random) {
   return pickWeighted([
     { region: 'qingwu', w: 6 },
@@ -431,7 +447,7 @@ const SECRETS = {
   },
   qingwu_court: {
     of: 'shiyun',
-    truth: '青芜王朝年年向拾云门纳贡，换修士护国；国库那笔银子记作"河工"。',
+    truth: '建州的凡俗王朝年年向拾云门纳贡，换修士护国；国库那笔银子记作"河工"。',
     trail: '每年秋后国库少一笔银子，账册写作"河工"，可河工这些年一次没修过。',
   },
 };

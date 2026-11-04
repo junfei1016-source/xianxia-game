@@ -135,15 +135,15 @@ test('撤阵：从册中移除', () => {
 });
 
 test('传送阵减半路程', () => {
-  const { player, world } = setup('dayan'); // 大阵须借地脉，大衍灵气 3
+  const { player, world } = setup('dayan'); // 大阵须借地脉，元武国灵气 3
   setFormation(world, player, { name: '传送阵' });
   assert.equal(world.formations.length, 1);
   const report = {};
-  applyStateUpdates(player, world, { travelTo: '青芜国' }, report);
+  applyStateUpdates(player, world, { travelTo: '越国·建州' }, report);
   assert.ok(report.out.timeMonths > 0);
   const months = report.out.timeMonths;
-  // 大衍到青芜 8 日 ≈ 0.27 月，减半后约 4 日 ≈ 0.13 月
-  assert.ok(months < 0.2, `应减半（实际 ${months}）`);
+  // 元武国到建州 20 日 ≈ 0.67 月，减半后约 10 日 ≈ 0.33 月
+  assert.ok(months < 0.4, `应减半（实际 ${months}）`);
 });
 
 test('合计效果取最强：两座聚灵不叠加', () => {

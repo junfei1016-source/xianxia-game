@@ -23,7 +23,7 @@ const good = () => ({
   qi: 3,
   danger: 3,
   products: ['灵品', '玄品'],
-  links: [{ to: '青芜国', days: 5 }],
+  links: [{ to: '越国·建州', days: 5 }],
   desc: '终年大雾的泽国，散修在此避祸。',
 });
 
@@ -47,7 +47,7 @@ test('合法提案：通过并入库，来回两程都记上', () => {
 test('名字太短、重名都要拒', () => {
   const world = newWorldState();
   assert.equal(validateRegionProposal({ ...good(), name: '泽' }, world).ok, false);
-  assert.equal(validateRegionProposal({ ...good(), name: '青芜国' }, world).ok, false);
+  assert.equal(validateRegionProposal({ ...good(), name: '越国·建州' }, world).ok, false);
 });
 
 test('灵气/危险越界要拒', () => {
@@ -59,14 +59,14 @@ test('灵气/危险越界要拒', () => {
 
 test('产出受地气约束：灵气 2·危险 1 出不了仙品', () => {
   const world = newWorldState();
-  const res = validateRegionProposal({ ...good(), qi: 2, danger: 1, products: ['仙品'], links: [{ to: '青芜国', days: 5 }] }, world);
+  const res = validateRegionProposal({ ...good(), qi: 2, danger: 1, products: ['仙品'], links: [{ to: '越国·建州', days: 5 }] }, world);
   assert.equal(res.ok, false);
   assert.ok(res.issues.some((x) => x.includes('出不了')));
 });
 
 test('神品要灵气 ≥5', () => {
   const world = newWorldState();
-  const res = validateRegionProposal({ ...good(), qi: 4, danger: 5, products: ['神品'], links: [{ to: '青芜国', days: 5 }] }, world);
+  const res = validateRegionProposal({ ...good(), qi: 4, danger: 5, products: ['神品'], links: [{ to: '越国·建州', days: 5 }] }, world);
   assert.equal(res.ok, false);
   assert.ok(res.issues.some((x) => x.includes('神品')));
 });
@@ -80,8 +80,8 @@ test('没有通路的地界不能入图', () => {
 
 test('路程越界或指向未知区域要拒', () => {
   const world = newWorldState();
-  assert.equal(validateRegionProposal({ ...good(), links: [{ to: '青芜国', days: 0 }] }, world).ok, false);
-  assert.equal(validateRegionProposal({ ...good(), links: [{ to: '青芜国', days: 61 }] }, world).ok, false);
+  assert.equal(validateRegionProposal({ ...good(), links: [{ to: '越国·建州', days: 0 }] }, world).ok, false);
+  assert.equal(validateRegionProposal({ ...good(), links: [{ to: '越国·建州', days: 61 }] }, world).ok, false);
   assert.equal(validateRegionProposal({ ...good(), links: [{ to: '不存在的地方', days: 5 }] }, world).ok, false);
 });
 

@@ -51,6 +51,7 @@ const suites = [
   ['境界阶梯（炼虚/顺序/各表覆盖）', ['tests/realm-ladder.test.mjs']],
   ['天时与传闻（征兆分层/真假参半）', ['tests/sky-rumors.test.mjs']],
   ['开局定图（地图钉死/不许开新域）', ['tests/world-map-lock.test.mjs']],
+  ['地图按原著（越国/元武/天罗/乱星海）', ['tests/world-map-canon.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 
