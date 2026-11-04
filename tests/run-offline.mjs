@@ -59,6 +59,7 @@ const suites = [
   ['天渊城服役（青冥卫/三百年/差事）', ['tests/spirit-duty.test.mjs']],
   ['任务殿（发榜/接榜/功勋）', ['tests/task-hall.test.mjs']],
   ['宗门任务殿（各挂各牌/好感结盟）', ['tests/faction-tasks.test.mjs']],
+  ['关系网（人情债/传导/联手）', ['tests/bond-network.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 

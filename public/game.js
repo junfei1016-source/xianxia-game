@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.51.0';
+export const GAME_VERSION = '1.52.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -510,7 +510,8 @@ export function hasItemNamed(world, key) {
 export function findCompanion(world, name) {
   const list = (world && Array.isArray(world.npcs) ? world.npcs : []).filter((x) => x && x.name);
   if (name) return list.find((x) => x.name === String(name).trim()) || null;
-  return list.find((x) => /道侣|双修|夫妻|挚友|结义|师徒|同门/.test(String(x.relation || ''))) || null;
+  return list.find((x) => /道侣|双修|夫妻|挚友|结义|师徒|同门/.test(String(x.relation || '')))
+    || list.find((x) => bondOf(x).trust >= 60) || null; // 交情深了也肯搭手
 }
 
 export function smuggleChance(player, world, node, companion = null) {
@@ -1231,7 +1232,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
   "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [], "reveals": [], "linkReveals": [],
-  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "smuggle": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "gainType": "neutral", "eraChange": null
+  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "smuggle": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "gainType": "neutral", "eraChange": null
 }
 字段说明：
 - narrative：必填。
@@ -1276,17 +1277,33 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 拍卖 auctionBids：玩家在**黄枫谷坊市的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
 - 地图在开局已经定死：本局**不存在**"新开辟的区域"。不要登记 newRegion，也不要写行程表之外的地界；未知之处只能作为传闻、遗迹或远方的说法提及（"据说北边还有一片荒原"），不写具体路程与产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：玩家在天渊城应征青冥卫（服役）时填 {}。须有仙籍、且在城内；服役每年领灭尘丹，满三百年可自由离开。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：叙事里玩家在天渊城应征青冥卫时填 {}。
@@ -1627,7 +1644,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "dropTask": null,
   "redeem": null,
   "takeFactionTask": null,
-  "redeemFaction": null, "takeFactionTask": null, "redeemFaction": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null,
+  "redeemFaction": null,
+  "repayDebt": null, "repayDebt": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null,
   "gainType": "neutral",
   "eraChange": null
 }
@@ -1637,17 +1655,33 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。【境界岁月】大境界突破还须在本境积累足够年数（提示里会给出"还差约 N 年"），年数不足时一律填 null，改为描写继续闭关、游历或等机缘。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
 - 闭关时长：请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）。**闭关时的修为由系统按境界与时长结算**（一个境界大致要熬满其最少在境年限才圆满），你的 cultivation delta 只填"这次闭关的效率提示"：常速 8~15，灵地/丹药好给 18~20，环境差给 5~7；不要自己算出总收益写进去。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（系统据此按时长结算并计算连续闭关的递减）。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：玩家在天渊城应征青冥卫（服役）时填 {}。须有仙籍、且在城内；服役每年领灭尘丹，满三百年可自由离开。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：叙事里玩家在天渊城应征青冥卫时填 {}。
@@ -1804,6 +1838,74 @@ const BOND_SEED = [
   ['仇敌', { trust: 0, need: 0, grudge: 85 }],
   ['敌对', { trust: 5, need: 0, grudge: 70 }],
 ];
+// ---------- 人情债：欠了要还，不还就变怨 ----------
+// 原著里"人情"是修士间的硬通货：护法挡灾、赠药、担保都是债（第 1583 章担保人、第 1356 章立功换前程）。
+// 这里让四维里的 debt 真正会动：欠着不还，信任掉、怨气涨；还了，信任涨、怨气消。
+export function addDebt(world, npcName, amount = 10, reason = '') {
+  const npc = (world.npcs || []).find((x) => x && x.name === String(npcName).trim());
+  if (!npc) return null;
+  const b = bondOf(npc);
+  npc.bond = { ...b, debt: clampBond(b.debt + amount) };
+  if (!Array.isArray(world.debtLog)) world.debtLog = [];
+  world.debtLog.push({ npc: npc.name, amount, reason, month: monthOrdinal(world.date || { year: 1, month: 1, day: 1 }) });
+  if (world.debtLog.length > 40) world.debtLog.splice(0, world.debtLog.length - 40);
+  return `【人情】${npc.name}帮了你（${reason || '搭把手'}），这份人情记在账上（欠 ${npc.bond.debt}）。`;
+}
+
+export function repayDebt(world, player, npcName) {
+  const npc = (world.npcs || []).find((x) => x && x.name === String(npcName).trim());
+  if (!npc) return { ok: false, reason: '不认识这个人。' };
+  const b = bondOf(npc);
+  if (b.debt <= 0) return { ok: false, reason: `你不欠${npc.name}什么。` };
+  const pay = Math.min(b.debt, 50);
+  npc.bond = { ...b, debt: clampBond(b.debt - pay), trust: clampBond(b.trust + Math.round(pay / 2)), grudge: clampBond(b.grudge - Math.round(pay / 4)) };
+  return { ok: true, note: `【还情】你把欠${npc.name}的人情还上了一大半，对方神色缓和不少（欠 ${npc.bond.debt}）。` };
+}
+
+// 每年催债：欠着不还，信任掉、怨气涨；交情深（trust≥80）的可以宽限
+export function settleDebts(world, player) {
+  const notes = [];
+  for (const npc of world.npcs || []) {
+    if (!npc || !npc.bond) continue;
+    const b = bondOf(npc);
+    if (b.debt <= 0) continue;
+    if (b.trust >= 80) continue;
+    const trust = clampBond(b.trust - 3);
+    const grudge = clampBond(b.grudge + (b.debt >= 60 ? 4 : 1));
+    npc.bond = { ...b, trust, grudge };
+    if (b.debt >= 60 && grudge >= 50) notes.push(`【人情债】${npc.name}久久没等到你还这份人情，脸色已经不太好了。`);
+  }
+  return notes;
+}
+
+// 关系网传导：朋友的仇人也是仇人，仇人的朋友也不待见你（第 4156 行的逻辑抽出来定期跑）
+export function propagateBonds(world) {
+  const notes = [];
+  for (const link of world.npcLinks || []) {
+    if (!link || !link.a || !link.b) continue;
+    const A = (world.npcs || []).find((x) => x.name === link.a);
+    const B = (world.npcs || []).find((x) => x.name === link.b);
+    if (!A || !B) continue;
+    const ba = bondOf(A);
+    const bb = bondOf(B);
+    if (ba.grudge >= 60 && bb.grudge < 40) {
+      B.bond = { ...bb, trust: clampBond(bb.trust - 3) };
+      if (bb.grudge + 3 >= 40) notes.push(`【牵累】${B.name}听${A.name}说过你的事，看你的眼神也冷了。`);
+    } else if (ba.trust >= 70 && bb.trust < 70) {
+      B.bond = { ...bb, trust: clampBond(bb.trust + 1) };
+    }
+  }
+  return notes;
+}
+
+// 玩家眼下欠着谁的人情（给界面用）
+export function debtSummary(world) {
+  return (world.npcs || [])
+    .map((n) => ({ name: n.name, debt: bondOf(n).debt, trust: bondOf(n).trust, grudge: bondOf(n).grudge }))
+    .filter((x) => x.debt > 0)
+    .sort((a, b) => b.debt - a.debt);
+}
+
 export function clampBond(v) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : 0;
@@ -3388,6 +3490,7 @@ export function validateStateOutput(input) {
   redeem: record({ id: 'string' }),
   takeFactionTask: record({ factionId: 'string', id: 'string' }, ['factionId', 'id']),
   redeemFaction: record({ factionId: 'string', id: 'string' }, ['factionId', 'id']),
+  repayDebt: record({ name: 'name' }, ['name']),
     plant: record({ material: 'name' }, ['material']),
     tendPlot: record({ id: 'string' }),
     harvestPlot: record({ id: 'string' }),
@@ -3565,7 +3668,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
     for (const name of guards) {
       const npc = (world.npcs || []).find((n) => n.name === name);
       if (!npc) continue;
-      npc.bond = { ...bondOf(npc), trust: clampBond(bondOf(npc).trust + 5) };
+      npc.bond = { ...bondOf(npc), trust: clampBond(bondOf(npc).trust + 5), debt: clampBond(bondOf(npc).debt + 10) };
       // 挡灾要付代价：心魔伤神，人祸伤身；三个月内不能再来护法
       const hurt = /心魔/.test(p.by) ? '心神受损' : '负伤';
       npc.condition = { state: hurt, untilMonth: monthOrdinal(world.date) + 3 };
@@ -3755,6 +3858,12 @@ export function applyStateUpdates(player, world, input, report = {}) {
     player.pillUsageMonth = monthOrdinal(world.date);
     const resist = eff.factor < 0.9 ? `（抗药性 ×${eff.factor}）` : '';
     pillNotes.push(`【丹药】${name}：${bits.length ? bits.join('，') : '并无实效'}${resist}`);
+  }
+  // 还人情
+  if (out.repayDebt && typeof out.repayDebt === 'object') {
+    const r = repayDebt(world, player, String(out.repayDebt.name || ''));
+    pillNotes.push(r.ok ? r.note : `【还情】${r.reason}`);
+    delete out.repayDebt;
   }
   // 宗门任务殿：接 / 兑功勋
   if (out.takeFactionTask && typeof out.takeFactionTask === 'object') {
@@ -4856,12 +4965,18 @@ export function advanceTime(world, player, months = 0) {
     }
   }
   const taskNotes = settleTasks(world, player);
+  const debtNotes = [];
+  {
+    const nowMonth2 = monthOrdinal(world.date || { year: 1, month: 1, day: 1 });
+    for (const nt of settleDebts(world, player)) debtNotes.push(nt);
+    if (nowMonth2 % 3 === 0) for (const nt of propagateBonds(world)) debtNotes.push(nt);
+  }
   // 黑户的日子：灭尘丹、两色雷劫、天渊卫盘查
   const dutyNotes = settleDuty(world, player, months);
   const outlawNotes = settleOutlaw(world, player, months);
   const checkNote = policeCheck(world, player);
   if (checkNote) outlawNotes.push(checkNote);
-  world.lastOutlawEvents = [...dutyNotes, ...taskNotes, ...outlawNotes];
+  world.lastOutlawEvents = [...dutyNotes, ...taskNotes, ...debtNotes, ...outlawNotes];
 }
 
 // ---------- 大势时间轴（有期限的大势必须按时演变，不能无限拖延）----------
