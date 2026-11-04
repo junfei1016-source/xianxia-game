@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.53.0';
+export const GAME_VERSION = '1.53.1';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -1280,32 +1280,10 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
 - 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：玩家在天渊城应征青冥卫（服役）时填 {}。须有仙籍、且在城内；服役每年领灭尘丹，满三百年可自由离开。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
-- 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
-- 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：叙事里玩家在天渊城应征青冥卫时填 {}。
 - 办身份牌 requestPass：黑户在灵界托人担保、领自由身份牌（第 1583 章）时填 {faction: 担保势力名}。须已与本地势力结盟、且拿得出灵石，成不成由系统判。
 - 偷渡 smuggle：玩家要**走空间节点硬闯灵界**（不是正常飞升）时填 {node: 节点名, accompany: 同行者姓名（有人一起去才填）}。须化神以上；带上化界珠、破灭法目、破界符能提高把握，有人联手比独闯稳得多。系统会掷骰：成了是黑户，可能死。不要自己描述结果。
@@ -1658,32 +1636,10 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
 - 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
 - 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：玩家在天渊城应征青冥卫（服役）时填 {}。须有仙籍、且在城内；服役每年领灭尘丹，满三百年可自由离开。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
-- 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
-- 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
-- 还人情 repayDebt：{name: 人名}。
-- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
-- 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：叙事里玩家在天渊城应征青冥卫时填 {}。
 - 办身份牌 requestPass：叙事里黑户托人担保换身份牌时填 {faction: 担保势力名}。
 - 偷渡 smuggle：叙事里玩家从空间节点硬闯灵界时填 {node: 节点名, accompany: 同行者姓名（若有）}；须化神以上；系统掷骰，成则落在灵界荒野且无仙籍，败则重伤或身死。
