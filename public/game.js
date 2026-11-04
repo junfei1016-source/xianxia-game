@@ -5,14 +5,106 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, travelPlan, regionQi, macroOf, nodeInRegion, qiLabel, qiCultMult, REGION_QI_RULES, signsOf, RUMOR_SOURCES, factionsIn, TASK_TIERS, TASK_KINDS, TASK_TITLES, MERIT_SHOP, FACTION_TASK_STYLE, FACTION_SHOP, SECT_RANKS, SECT_CATALOG, FACTION_ALLY_FAVOR } from './world.js';
-import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
-import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
-import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
-import { materialByName, materialTier, materialBrewBonus, elementalBrewAdjust, GATHER_KINDS, gatherPool, MATERIAL_TIERS, elementRelation, elementsClash } from './materials.js';
-import { formationByName, formationCost, canSetFormation, formationEffects, FORMATION_TIERS, isPortable, FORMATIONS, canSetOnLeyline, upgradeCost, FORMATION_MAX_LEVEL, leylinePhase, LEYLINE_MIN_QI } from './formations.js';
-import { CRAFT_NAMES, SKILL_LEVELS, skillLevelOf, craftBonus, practiceGain, studyGain, talismanByName, TALISMAN_TIERS, TALISMANS, drawChance, applyCraftExp, isBottlenecked, MASTER_CAP_LEVEL } from './craft.js';
-import { TECHNIQUES, TECH_GRADES, TECH_TYPES, MAX_LAYER, techniqueByName, techniqueExact, techniqueEffect, techniqueEffects, gradeOf, layerCost, layerUpCost, normalizeTechnique, checkTechniqueRequirements, requirementText, defOf } from './techniques.js';
+import {
+  buildSlice,
+  ensureWorldGeo,
+  moveToRegion,
+  regionById,
+  regionByName,
+  factionById,
+  factionByName,
+  relationsOf,
+  secretOf,
+  secretFactionsIn,
+  priceMultiplier,
+  addRegion,
+  travelPlan,
+  regionQi,
+  macroOf,
+  nodeInRegion,
+  qiLabel,
+  qiCultMult,
+  REGION_QI_RULES,
+  signsOf,
+  RUMOR_SOURCES,
+  factionsIn,
+  TASK_TIERS,
+  TASK_KINDS,
+  TASK_TITLES,
+  MERIT_SHOP,
+  FACTION_TASK_STYLE,
+  FACTION_SHOP,
+  SECT_RANKS,
+  SECT_CATALOG,
+  FACTION_ALLY_FAVOR } from './world.js';
+import { diversityBrief,
+  normalizeTrait,
+  rememberTrait } from './personality.js';
+import { pillByName,
+  pillEffect,
+  recipeOf,
+  brewChance,
+  PILLS } from './pills.js';
+import { treasureByName,
+  treasurePower,
+  tierOf,
+  canRefine,
+  refineCost,
+  TREASURE_TIERS,
+  ATTACK_TYPES,
+  DEFENSE_TYPES,
+  treasureCatalog,
+  treasureElement } from './treasures.js';
+import { materialByName,
+  materialTier,
+  materialBrewBonus,
+  elementalBrewAdjust,
+  GATHER_KINDS,
+  gatherPool,
+  MATERIAL_TIERS,
+  elementRelation,
+  elementsClash } from './materials.js';
+import { formationByName,
+  formationCost,
+  canSetFormation,
+  formationEffects,
+  FORMATION_TIERS,
+  isPortable,
+  FORMATIONS,
+  canSetOnLeyline,
+  upgradeCost,
+  FORMATION_MAX_LEVEL,
+  leylinePhase,
+  LEYLINE_MIN_QI } from './formations.js';
+import { CRAFT_NAMES,
+  SKILL_LEVELS,
+  skillLevelOf,
+  craftBonus,
+  practiceGain,
+  studyGain,
+  talismanByName,
+  TALISMAN_TIERS,
+  TALISMANS,
+  drawChance,
+  applyCraftExp,
+  isBottlenecked,
+  MASTER_CAP_LEVEL } from './craft.js';
+import { TECHNIQUES,
+  TECH_GRADES,
+  TECH_TYPES,
+  MAX_LAYER,
+  techniqueByName,
+  techniqueExact,
+  techniqueEffect,
+  techniqueEffects,
+  gradeOf,
+  layerCost,
+  layerUpCost,
+  normalizeTechnique,
+  checkTechniqueRequirements,
+  requirementText,
+  defOf,
+} from './techniques.js';
 import { ROOT_ELEMENTS, MUTANT_ROOTS, rootProfile, rootCultMult, rootLayerCap, normalizeRoots, rootTraits, refineRootsOne, rootCraftPenalty } from './roots.js';
 
 // 法宝名录目录（注入提示词：阶位定死，名字管够）
@@ -48,7 +140,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.55.0';
+export const GAME_VERSION = '1.56.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -842,6 +934,10 @@ export function advanceTask(world, player, kind, detail = '') {
         const f = (world.factions || []).find((x) => x.id === t.factionId);
         if (f) f.favor = (f.favor || 0) + t.reward.merit * 4;
         if (world.sect && world.sect.id === t.factionId) addSectContribution(world, t.factionId, t.reward.merit);
+        if (world.war && world.war.active) {
+          const loot = warLoot(world);
+          if (loot) notes.push(loot);
+        }
         notes.push(`【交差】「${t.title}」办成了：得 ${t.reward.stones} 灵石、${t.factionName}功勋 ${t.reward.merit}（共 ${world.factionMerit[t.factionId]}）。`);
         const allyNote = f ? tryFactionAlly(world, t.factionId) : null;
         if (allyNote) notes.push(allyNote);
@@ -941,10 +1037,24 @@ export function sectRankUp(world, player) {
 }
 
 // 藏经阁：按成分给货，用贡献换
+// 藏经阁的功法是真货：按辈分从 TECHNIQUES 里挑，丹药仍是通用货
 export function sectCatalog(world) {
   const sect = sectOf(world);
   const alignment = (sect && sect.faction.alignment) || '中立';
-  return SECT_CATALOG[alignment] || SECT_CATALOG['中立'];
+  const base = SECT_CATALOG[alignment] || SECT_CATALOG['中立'];
+  const rankIdx = Math.max(0, SECT_RANKS.findIndex((r) => r.rank === (sect ? sect.rank : '外门弟子')));
+  const grade = rankIdx >= 3 ? '高阶功法' : (rankIdx >= 2 ? '中阶功法' : '低阶功法');
+  const pool = TECHNIQUES.filter((t) => t.grade === grade);
+  const pick = pool[0] || TECHNIQUES[0];
+  const techItem = {
+    id: 'tech-real',
+    name: pick.name,
+    merit: rankIdx >= 3 ? 300 : (rankIdx >= 2 ? 150 : 60),
+    technique: pick.name,
+    secret: true,
+    note: pick.desc,
+  };
+  return [techItem, ...base.filter((x) => x.id !== 'tech')];
 }
 
 export function sectRedeem(world, player, itemId) {
@@ -956,9 +1066,117 @@ export function sectRedeem(world, player, itemId) {
   if (!item) return { ok: false, reason: '藏经阁里没有这件。' };
   if (sect.contribution < item.merit) return { ok: false, reason: `贡献不够：这件要 ${item.merit}，你有 ${sect.contribution}。` };
   ensureSect(world).contribution -= item.merit;
-  ensureSect(world).bought.push(item.id);
+  ensureSect(world).bought.push(item.name);
+  if (item.technique) {
+    if (!Array.isArray(player.techniques)) player.techniques = [];
+    if (player.techniques.some((t) => t.name === item.technique)) return { ok: false, reason: '这门功法你已经修了。' };
+    const def = TECHNIQUES.find((t) => t.name === item.technique) || { name: item.technique };
+    player.techniques.push(normalizeTechnique({ ...def, layer: 1, exp: 0 }));
+  }
   if (item.qty) applyItemChange(world, { name: item.name, kind: '丹药' }, item.qty);
   return { ok: true, note: `【藏经阁】用 ${item.merit} 点贡献换了「${item.name}」。` };
+}
+
+// ---------- 宗门大比：每十年一场，赢了升辈分、得赏 ----------
+// 第 16 章七玄门少年比试、第 1550 章"大比"的场面感；门内比试是露头最快的路。
+export const TOURNAMENT_MONTHS = 120;
+
+export function ensureTournament(world) {
+  ensureSect(world);
+  const now = monthOrdinal(world.date || { year: 1, month: 1, day: 1 });
+  if (!Number.isFinite(world.sect.nextTournament) || world.sect.nextTournament <= 0) world.sect.nextTournament = now + TOURNAMENT_MONTHS;
+  return world.sect.nextTournament;
+}
+
+// 参战：比的是境界、修为、功法层数与一点运气
+export function sectTournamentScore(player, rand = Math.random) {
+  const layers = (player.techniques || []).reduce((s, t) => s + (Number(t.layer) || 1), 0);
+  return realmIndex(player.realm) * 10 + Math.min(100, player.cultivation || 0) / 10 + layers * 2 + rand() * 30;
+}
+
+export function runSectTournament(world, player, rand = Math.random) {
+  const sect = sectOf(world);
+  if (!sect) return null;
+  const now = monthOrdinal(world.date || { year: 1, month: 1, day: 1 });
+  ensureTournament(world);
+  if (now < world.sect.nextTournament) return null;
+  world.sect.nextTournament = now + TOURNAMENT_MONTHS;
+  const score = sectTournamentScore(player, rand);
+  const rival = 30 + realmIndex(player.realm) * 8 + rand() * 25; // 同辈里的对手
+  if (score >= rival + 15) {
+    ensureSect(world).contribution += 60;
+    player.spiritStones = (player.spiritStones || 0) + 800;
+    player.reputation = Math.min(100, (player.reputation || 0) + 10);
+    const up = sectRankUp(world, player);
+    return { ok: true, place: 'first', note: `【大比】门内比试你一路打到最后，夺了魁首：贡献 +60、赏 800 灵石、声望 +10。${up.ok ? up.note : ''}` };
+  }
+  if (score >= rival) {
+    ensureSect(world).contribution += 25;
+    player.spiritStones = (player.spiritStones || 0) + 300;
+    return { ok: true, place: 'third', note: '【大比】门内比试你进了前三：贡献 +25、赏 300 灵石。' };
+  }
+  player.reputation = Math.max(0, (player.reputation || 0) - 2);
+  return { ok: true, place: 'lost', note: '【大比】这一场你输在第二轮——门里人多的是能打的。' };
+}
+
+// ---------- 拜师：正式拜一位长老 ----------
+export function canTakeMaster(world, player) {
+  const sect = sectOf(world);
+  if (!sect) return { ok: false, reason: '你没有门派。' };
+  if (sect.rank === '外门弟子') return { ok: false, reason: '外门弟子还没资格拜师，先升内门。' };
+  if (world.sect.master) return { ok: false, reason: `你已经拜在${world.sect.master}门下了。` };
+  if (sect.contribution < 60) return { ok: false, reason: `得先攒够 60 点贡献让长老记住你（现在 ${sect.contribution}）。` };
+  return { ok: true };
+}
+
+export function takeMaster(world, player, masterName = '') {
+  const res = canTakeMaster(world, player);
+  if (!res.ok) return res;
+  const elder = String(masterName || '').trim()
+    || ((world.npcs || []).find((x) => /长老|师父|师尊|真人/.test(String(x.desc || '') + String(x.name || ''))) || {}).name
+    || '本门长老';
+  ensureSect(world).master = elder;
+  // 拜师礼：师父传一门中阶功法（真货）
+  const pool = TECHNIQUES.filter((t) => t.grade === '中阶功法');
+  const pick = pool[0] || TECHNIQUES[0];
+  if (!Array.isArray(player.techniques)) player.techniques = [];
+  let learned = '';
+  if (!player.techniques.some((t) => t.name === pick.name)) {
+    player.techniques.push(normalizeTechnique({ ...pick, layer: 1, exp: 0 }));
+    learned = `师父顺手传了你《${pick.name}》。`;
+  }
+  return { ok: true, note: `【拜师】你在${sectOf(world).faction.name}行了拜师礼，从此是${elder}门下。${learned}` };
+}
+
+// ---------- 宗门战事：正魔大战，打仗才有遗宝 ----------
+// 第 934 章提到"再次挑起正魔大战"；第 680 章坠魔谷：古修战场里"遗宝功法"引无数人送命。
+export function maybeStartWar(world, rand = Math.random) {
+  if (!world || world.war && world.war.active) return null;
+  if (rand() > 0.25) return null;
+  const sect = sectOf(world);
+  const side = sect && sect.faction.alignment === '魔道' ? '魔道' : '正道';
+  world.war = { active: true, side, monthsLeft: 24, startMonth: monthOrdinal(world.date || { year: 1, month: 1, day: 1 }) };
+  return `【战事】正魔两道在边境起了冲突，号令已下——这一战不知要打多久。`;
+}
+
+export function settleWar(world, player, months) {
+  if (!world || !world.war || !world.war.active) return null;
+  const days = elapsedGameDays(months);
+  const addMonths = Math.floor((days || 0) / 30);
+  world.war.monthsLeft -= addMonths;
+  if (world.war.monthsLeft > 0) return null;
+  world.war.active = false;
+  return '【战事】两边都死伤惨重，总算停了手——战场上的遗留，往后谁捡到是谁的。';
+}
+
+// 战场遗宝：战时办大事才掉（第 680 章那类古修遗物）
+export function warLoot(world, rand = Math.random) {
+  if (!world || !world.war || !world.war.active) return null;
+  if (rand() > 0.5) return null;
+  const pool = ['残破的玉简', '古修法器', '半卷丹方', '锈蚀的令牌'];
+  const item = pool[Math.floor(rand() * pool.length)];
+  applyItemChange(world, { name: item, kind: '遗宝' }, 1);
+  return `【战场遗宝】你在战场上摸到一件${item}。`;
 }
 
 // 离门：干净退出，或携功法叛门（叛门要被全宗追杀）
@@ -981,7 +1199,8 @@ export function leaveSect(world, player, opts = {}) {
   if (!sect) return { ok: false, reason: '你没有门派。' };
   const f = sect.faction;
   const secrets = sectSecrets(world);
-  const carried = secrets.filter((name) => (world.inventory || []).some((it) => it && String(it.name).includes(name)));
+  const carried = secrets.filter((name) => (world.inventory || []).some((it) => it && String(it.name).includes(name))
+    || (player.techniques || []).some((t) => t && String(t.name).includes(name)));
   ensureSect(world);
   world.sect = { contribution: 0, bought: [] };
 
@@ -1002,7 +1221,8 @@ export function leaveSect(world, player, opts = {}) {
   // 正常退出：秘传交还，只带走普通的东西
   if (carried.length) {
     for (const name of carried) {
-      world.inventory = world.inventory.filter((it) => !(it && String(it.name).includes(name)));
+      world.inventory = (world.inventory || []).filter((it) => !(it && String(it.name).includes(name)));
+      player.techniques = (player.techniques || []).filter((t) => !(t && String(t.name).includes(name)));
     }
   }
   f.favor = Math.max(-200, (f.favor || 0) - 20);
@@ -1039,6 +1259,7 @@ export function amendSect(world, player) {
   player.spiritStones -= cost;
   const secrets = (world.flags.sectName ? [] : []);
   world.inventory = (world.inventory || []).filter((it) => !(it && /本门功法|魔门功法|杂学功法|禁术竹简|筑基丹方/.test(String(it.name))));
+  player.techniques = (player.techniques || []).filter((t) => !(t && /本门功法|魔门功法|杂学功法/.test(String(t.name))));
   world.flags.sectTraitor = false;
   world.flags.sectBounty = 0;
   return { ok: true, note: `【销案】你交还了抄走的东西、赔了 ${cost} 块灵石，那家的赏格撤了——从此两不相欠。` };
@@ -1399,7 +1620,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
   "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [], "reveals": [], "linkReveals": [],
-  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "smuggle": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "gainType": "neutral", "eraChange": null
+  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "smuggle": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeMaster": null, "gainType": "neutral", "eraChange": null
 }
 字段说明：
 - narrative：必填。
@@ -1444,10 +1665,12 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 拍卖 auctionBids：玩家在**黄枫谷坊市的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
 - 地图在开局已经定死：本局**不存在**"新开辟的区域"。不要登记 newRegion，也不要写行程表之外的地界；未知之处只能作为传闻、遗迹或远方的说法提及（"据说北边还有一片荒原"），不写具体路程与产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
+- 拜师 takeMaster：内门以上、贡献 ≥60 后可拜一位长老 {master: 长老名（可空）}，师父会传一门中阶功法。
 - 宗门 joinSect/sectRedeem/leaveSect/amendSect：离门时可把藏经阁的秘传交还（takeSecrets:false，正常退出不通缉）；带走（takeSecrets:true）就是盗经，会被挂赏格。amendSect 交还并赔钱销案。
 - 宗门 joinSect/sectRedeem/leaveSect：拜入本地门派填 {faction: 门派名}；用贡献进藏经阁换东西填 {id}；离门 {betray:true} 是携艺叛门（要被追杀）。门内辈分由贡献与境界自动升，不用你判定。
 - 宗门：joinSect {faction} / sectRedeem {id} / leaveSect {betray}。
 - 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 拜师 takeMaster：内门以上、贡献 ≥60 后可拜一位长老 {master: 长老名（可空）}，师父会传一门中阶功法。
 - 宗门 joinSect/sectRedeem/leaveSect/amendSect：离门时可把藏经阁的秘传交还（takeSecrets:false，正常退出不通缉）；带走（takeSecrets:true）就是盗经，会被挂赏格。amendSect 交还并赔钱销案。
 - 宗门 joinSect/sectRedeem/leaveSect：拜入本地门派填 {faction: 门派名}；用贡献进藏经阁换东西填 {id}；离门 {betray:true} 是携艺叛门（要被追杀）。门内辈分由贡献与境界自动升，不用你判定。
 - 宗门：joinSect {faction} / sectRedeem {id} / leaveSect {betray}。
@@ -1800,7 +2023,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "joinSect": null,
   "sectRedeem": null,
   "leaveSect": null,
-  "amendSect": null, "amendSect": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null,
+  "amendSect": null,
+  "takeMaster": null, "takeMaster": null, "amendSect": null, "takeMaster": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeMaster": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeMaster": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeMaster": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeMaster": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeMaster": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "repayDebt": null, "joinSect": null, "sectRedeem": null, "leaveSect": null, "amendSect": null, "takeMaster": null,
   "gainType": "neutral",
   "eraChange": null
 }
@@ -1810,10 +2034,12 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。【境界岁月】大境界突破还须在本境积累足够年数（提示里会给出"还差约 N 年"），年数不足时一律填 null，改为描写继续闭关、游历或等机缘。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
 - 闭关时长：请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）。**闭关时的修为由系统按境界与时长结算**（一个境界大致要熬满其最少在境年限才圆满），你的 cultivation delta 只填"这次闭关的效率提示"：常速 8~15，灵地/丹药好给 18~20，环境差给 5~7；不要自己算出总收益写进去。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（系统据此按时长结算并计算连续闭关的递减）。
+- 拜师 takeMaster：内门以上、贡献 ≥60 后可拜一位长老 {master: 长老名（可空）}，师父会传一门中阶功法。
 - 宗门 joinSect/sectRedeem/leaveSect/amendSect：离门时可把藏经阁的秘传交还（takeSecrets:false，正常退出不通缉）；带走（takeSecrets:true）就是盗经，会被挂赏格。amendSect 交还并赔钱销案。
 - 宗门 joinSect/sectRedeem/leaveSect：拜入本地门派填 {faction: 门派名}；用贡献进藏经阁换东西填 {id}；离门 {betray:true} 是携艺叛门（要被追杀）。门内辈分由贡献与境界自动升，不用你判定。
 - 宗门：joinSect {faction} / sectRedeem {id} / leaveSect {betray}。
 - 还人情 repayDebt：玩家送礼、回护、出力去还某人人情时填 {name: 人名}；欠着不还，人家会记恨。
+- 拜师 takeMaster：内门以上、贡献 ≥60 后可拜一位长老 {master: 长老名（可空）}，师父会传一门中阶功法。
 - 宗门 joinSect/sectRedeem/leaveSect/amendSect：离门时可把藏经阁的秘传交还（takeSecrets:false，正常退出不通缉）；带走（takeSecrets:true）就是盗经，会被挂赏格。amendSect 交还并赔钱销案。
 - 宗门 joinSect/sectRedeem/leaveSect：拜入本地门派填 {faction: 门派名}；用贡献进藏经阁换东西填 {id}；离门 {betray:true} 是携艺叛门（要被追杀）。门内辈分由贡献与境界自动升，不用你判定。
 - 宗门：joinSect {faction} / sectRedeem {id} / leaveSect {betray}。
@@ -3710,6 +3936,7 @@ export function validateStateOutput(input) {
   sectRedeem: record({ id: 'string' }, ['id']),
   leaveSect: record({ betray: 'boolean', takeSecrets: 'boolean' }),
   amendSect: record({}),
+  takeMaster: record({ master: 'name' }),
     plant: record({ material: 'name' }, ['material']),
     tendPlot: record({ id: 'string' }),
     harvestPlot: record({ id: 'string' }),
@@ -4094,6 +4321,11 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const r = sectRedeem(world, player, String(out.sectRedeem.id || ''));
     pillNotes.push(r.ok ? r.note : `【藏经阁】${r.reason}`);
     delete out.sectRedeem;
+  }
+  if (out.takeMaster && typeof out.takeMaster === 'object') {
+    const r = takeMaster(world, player, String(out.takeMaster.master || ''));
+    pillNotes.push(r.ok ? r.note : `【拜师】不成：${r.reason}`);
+    delete out.takeMaster;
   }
   if (out.amendSect) {
     const r = amendSect(world, player);
@@ -5218,6 +5450,12 @@ export function advanceTime(world, player, months = 0) {
   {
     const up = sectRankUp(world, player);
     if (up.ok) taskNotes.push(up.note);
+    const tour = runSectTournament(world, player);
+    if (tour) taskNotes.push(tour.note);
+    const warStart = maybeStartWar(world);
+    if (warStart) taskNotes.push(warStart);
+    const warEnd = settleWar(world, player, months);
+    if (warEnd) taskNotes.push(warEnd);
   }
   const debtNotes = [];
   {

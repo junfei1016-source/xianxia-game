@@ -80,7 +80,7 @@ test('外门进不了藏经阁，内门可以', () => {
   const r = sectRedeem(world, player, 'pill');
   assert.equal(r.ok, true);
   assert.ok(world.sect.contribution < 200);
-  assert.ok(world.sect.bought.includes('pill'));
+  assert.ok(world.sect.bought.includes('回春丹'), '记下换过什么');
 });
 
 test('贡献不够换不了', () => {
@@ -140,14 +140,14 @@ test('正常退出：秘传要交还，不会通缉', () => {
   joinSect(world, player, world.factions[0].name);
   world.sect.rank = '内门弟子';
   world.sect.contribution = 100;
-  sectRedeem(world, player, 'tech');
-  assert.ok(world.inventory.some((it) => /本门功法|魔门功法|杂学功法/.test(it.name)), '换到了功法');
+  sectRedeem(world, player, 'tech-real');
+  assert.ok(player.techniques.length > 0, '功法真进了功法列表');
   const r = leaveSect(world, player, {});
   assert.equal(r.ok, true);
   assert.match(r.note, /交还/);
   assert.ok(!world.flags.sectTraitor, '正常退出不算叛徒');
   assert.equal(world.flags.sectBounty || 0, 0, '没有赏格');
-  assert.ok(!world.inventory.some((it) => /本门功法|魔门功法|杂学功法/.test(it.name)), '秘传已交还');
+  assert.equal(player.techniques.length, 0, '秘传（真功法）已交还');
 });
 
 test('正常退出却把秘传带走：按盗经处理，挂赏格', () => {
@@ -155,12 +155,12 @@ test('正常退出却把秘传带走：按盗经处理，挂赏格', () => {
   joinSect(world, player, world.factions[0].name);
   world.sect.rank = '内门弟子';
   world.sect.contribution = 100;
-  sectRedeem(world, player, 'tech');
+  sectRedeem(world, player, 'tech-real');
   const r = leaveSect(world, player, { takeSecrets: true });
   assert.match(r.note, /盗经/);
   assert.equal(world.flags.sectTraitor, true);
   assert.ok(world.flags.sectBounty > 0);
-  assert.ok(world.inventory.some((it) => /功法/.test(it.name)), '东西还在身上');
+  assert.ok(player.techniques.length > 0, '功法还在身上');
 });
 
 test('叛门赏格按贡献折算，门人会来寻仇', () => {

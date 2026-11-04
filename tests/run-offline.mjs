@@ -61,6 +61,7 @@ const suites = [
   ['宗门任务殿（各挂各牌/好感结盟）', ['tests/faction-tasks.test.mjs']],
   ['关系网（人情债/传导/联手）', ['tests/bond-network.test.mjs']],
   ['宗门体系（入门/辈分/贡献/藏经阁/叛门）', ['tests/sect-system.test.mjs']],
+  ['宗门大比·拜师·真功法·战事', ['tests/sect-features.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 
