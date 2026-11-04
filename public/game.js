@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, travelPlan, regionQi, macroOf, nodeInRegion, qiLabel, qiCultMult, REGION_QI_RULES, signsOf, RUMOR_SOURCES, TASK_TIERS, TASK_KINDS, TASK_TITLES, MERIT_SHOP } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, travelPlan, regionQi, macroOf, nodeInRegion, qiLabel, qiCultMult, REGION_QI_RULES, signsOf, RUMOR_SOURCES, factionsIn, TASK_TIERS, TASK_KINDS, TASK_TITLES, MERIT_SHOP, FACTION_TASK_STYLE, FACTION_SHOP, FACTION_ALLY_FAVOR } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.49.0';
+export const GAME_VERSION = '1.50.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -827,9 +827,20 @@ export function advanceTask(world, player, kind, detail = '') {
     t.progress += 1;
     if (t.progress >= t.need) {
       player.spiritStones = (player.spiritStones || 0) + t.reward.stones;
-      world.merit = (world.merit || 0) + t.reward.merit;
       world.liveTasks = world.liveTasks.filter((x) => x.id !== t.id);
-      notes.push(`【交差】「${t.title}」办成了：得 ${t.reward.stones} 灵石、功勋 ${t.reward.merit}（累计 ${world.merit}）。`);
+      if (t.factionId) {
+        // 势力任务：功勋记到那家门下，好感也跟着涨
+        if (!world.factionMerit) world.factionMerit = {};
+        world.factionMerit[t.factionId] = (world.factionMerit[t.factionId] || 0) + t.reward.merit;
+        const f = (world.factions || []).find((x) => x.id === t.factionId);
+        if (f) f.favor = (f.favor || 0) + t.reward.merit * 4;
+        notes.push(`【交差】「${t.title}」办成了：得 ${t.reward.stones} 灵石、${t.factionName}功勋 ${t.reward.merit}（共 ${world.factionMerit[t.factionId]}）。`);
+        const allyNote = f ? tryFactionAlly(world, t.factionId) : null;
+        if (allyNote) notes.push(allyNote);
+      } else {
+        world.merit = (world.merit || 0) + t.reward.merit;
+        notes.push(`【交差】「${t.title}」办成了：得 ${t.reward.stones} 灵石、功勋 ${t.reward.merit}（累计 ${world.merit}）。`);
+      }
     } else {
       notes.push(`【进度】「${t.title}」${t.progress}/${t.need}。`);
     }
@@ -846,11 +857,113 @@ export function settleTasks(world, player) {
     const left = daysUntil(now, t.dueDate);
     if (left !== null && left < 0) {
       world.liveTasks = world.liveTasks.filter((x) => x.id !== t.id);
-      world.merit = Math.max(0, (world.merit || 0) - 1);
-      notes.push(`【砸了】「${t.title}」过了限期，差事砸在手里，功勋扣一。`);
+      if (t.factionId) {
+        const f = (world.factions || []).find((x) => x.id === t.factionId);
+        if (f) f.favor = Math.max(0, (f.favor || 0) - 10);
+        notes.push(`【砸了】${t.factionName || '那家'}的「${t.title}」过了限期，差事砸了，那家对你的好感掉了十分。`);
+      } else {
+        world.merit = Math.max(0, (world.merit || 0) - 1);
+        notes.push(`【砸了】「${t.title}」过了限期，差事砸在手里，功勋扣一。`);
+      }
     }
   }
   return notes;
+}
+
+// ---------- 宗门任务殿：每个势力按自己的性质挂活 ----------
+export function factionStyle(faction) {
+  return FACTION_TASK_STYLE[(faction && faction.type) || ''] || FACTION_TASK_STYLE['默认'];
+}
+
+// 本地势力 + 各自的牌面（同一势力同一期固定）
+export function factionBoards(world) {
+  ensureTasks(world);
+  if (!world.factionMerit || typeof world.factionMerit !== 'object') world.factionMerit = {};
+  const region = world.geo ? regionById(world.geo.regionId, world) : null;
+  if (!region) return [];
+  const here = factionsIn(region.id);
+  const known = new Map((world.factions || []).map((f) => [f.name, f]));
+  return here.map((f) => {
+    const mine = known.get(f.name) || f;
+    const style = factionStyle(f);
+    const merit = world.factionMerit[f.id] || 0;
+    const favor = Number.isFinite(mine.favor) ? mine.favor : 0;
+    const board = [];
+    for (let i = 0; i < 2; i += 1) {
+      const seed = `${f.id}|${world.taskBoard.index}|${i}`;
+      const kind = style.kinds[hash32(seed + 'k') % style.kinds.length];
+      const kdef = TASK_KINDS[kind];
+      const count = kdef.pool[hash32(seed + 'n') % kdef.pool.length];
+      const tier = (f.tier <= 2) ? (i === 0 ? '高阶' : '长老会') : '低阶';
+      const def = TASK_TIERS[tier];
+      board.push({
+        id: `f-${f.id}-${i}`,
+        factionId: f.id,
+        factionName: f.name,
+        tier,
+        kind,
+        title: pickBy(TASK_TITLES[kind], seed + 't'),
+        target: kind === '行路' ? pickBy(['落霞坊', '元武国', '天罗国', '越国·建州'], seed + 'r') : kdef.unit,
+        need: count,
+        days: pickBy(def.days, seed + 'd'),
+        reward: { stones: pickBy(def.stones, seed + 's'), merit: Math.round(def.merit * style.merit) },
+        minRealm: def.minRealm,
+      });
+    }
+    return { faction: { id: f.id, name: f.name, type: f.type, alignment: f.alignment, tier: f.tier, relation: mine.relation || '' }, merit, favor, board };
+  });
+}
+
+// 接势力任务：敌对势力不给你活，好感太低也接不到大活
+export function takeFactionTask(world, player, factionId, taskId) {
+  ensureTasks(world);
+  if (!world.liveTasks) world.liveTasks = [];
+  const fb = factionBoards(world).find((b) => b.faction.id === factionId);
+  if (!fb) return { ok: false, reason: '此地没有这家势力。' };
+  if (fb.faction.relation === '敌对') return { ok: false, reason: `${fb.faction.name}与你为敌，不会把差事交给你。` };
+  if (world.liveTasks.length >= 3) return { ok: false, reason: '手上最多接三件差事。' };
+  const t = fb.board.find((x) => x.id === taskId);
+  if (!t) return { ok: false, reason: '这家的牌上没有这件差事。' };
+  if (world.liveTasks.some((x) => x.id === t.id)) return { ok: false, reason: '这件你已经接了。' };
+  if (realmIndex(player.realm) < realmIndex(t.minRealm)) return { ok: false, reason: `这件要 ${t.minRealm} 以上才接得。` };
+  const due = addGameDays(worldGameDate(world), t.days) || worldGameDate(world);
+  world.liveTasks.push({ ...t, progress: 0, dueDate: due });
+  return { ok: true, note: `【接了】${t.factionName}的「${t.title}」：${t.kind} ${t.need}，${t.days} 日为限。` };
+}
+
+export function factionMeritOf(world, factionId) {
+  return (world && world.factionMerit && world.factionMerit[factionId]) || 0;
+}
+
+// 好感够了自动结盟（第 1356 章那套"立功换前程"）
+export function tryFactionAlly(world, factionId) {
+  const f = (world.factions || []).find((x) => x.id === factionId);
+  if (!f) return null;
+  if (f.relation === '结盟') return null;
+  if ((f.favor || 0) < FACTION_ALLY_FAVOR) return null;
+  f.relation = '结盟';
+  return `【结盟】${f.name}认了你的本事与诚意，从此与你是盟约之谊。`;
+}
+
+// 势力功勋台：按立场换不同的东西
+export function factionShop(world, factionId) {
+  const f = (world.factions || []).find((x) => x.id === factionId);
+  const alignment = (f && f.alignment) || '中立';
+  return FACTION_SHOP[alignment] || FACTION_SHOP['中立'];
+}
+
+export function redeemFaction(world, player, factionId, itemId) {
+  const f = (world.factions || []).find((x) => x.id === factionId);
+  if (!f) return { ok: false, reason: '没有这家势力。' };
+  const shop = factionShop(world, factionId);
+  const item = shop.find((x) => x.id === itemId || x.name === itemId);
+  if (!item) return { ok: false, reason: '这家的功勋台上没有这件东西。' };
+  const have = factionMeritOf(world, factionId);
+  if (have < item.merit) return { ok: false, reason: `${f.name}的功勋不够：要 ${item.merit}，你有 ${have}。` };
+  world.factionMerit[factionId] = have - item.merit;
+  if (item.stones) player.spiritStones = (player.spiritStones || 0) + item.stones;
+  if (item.qty) applyItemChange(world, { name: item.name, kind: '丹药' }, item.qty);
+  return { ok: true, note: `【功勋】拿${f.name}的功勋兑了「${item.name}」，余 ${world.factionMerit[factionId]}。` };
 }
 
 // 功勋兑换
@@ -1083,7 +1196,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
   "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [], "reveals": [], "linkReveals": [],
-  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "smuggle": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "gainType": "neutral", "eraChange": null
+  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "smuggle": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "gainType": "neutral", "eraChange": null
 }
 字段说明：
 - narrative：必填。
@@ -1128,10 +1241,18 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 拍卖 auctionBids：玩家在**黄枫谷坊市的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
 - 地图在开局已经定死：本局**不存在**"新开辟的区域"。不要登记 newRegion，也不要写行程表之外的地界；未知之处只能作为传闻、遗迹或远方的说法提及（"据说北边还有一片荒原"），不写具体路程与产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
+- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
+- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：玩家在天渊城应征青冥卫（服役）时填 {}。须有仙籍、且在城内；服役每年领灭尘丹，满三百年可自由离开。
+- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
+- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：叙事里玩家在天渊城应征青冥卫时填 {}。
 - 办身份牌 requestPass：黑户在灵界托人担保、领自由身份牌（第 1583 章）时填 {faction: 担保势力名}。须已与本地势力结盟、且拿得出灵石，成不成由系统判。
@@ -1469,7 +1590,9 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "enlist": null,
   "takeTask": null,
   "dropTask": null,
-  "redeem": null, "takeTask": null, "dropTask": null, "redeem": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null,
+  "redeem": null,
+  "takeFactionTask": null,
+  "redeemFaction": null, "takeFactionTask": null, "redeemFaction": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null, "requestPass": null, "enlist": null, "takeTask": null, "dropTask": null, "redeem": null, "takeFactionTask": null, "redeemFaction": null,
   "gainType": "neutral",
   "eraChange": null
 }
@@ -1479,10 +1602,18 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。【境界岁月】大境界突破还须在本境积累足够年数（提示里会给出"还差约 N 年"），年数不足时一律填 null，改为描写继续闭关、游历或等机缘。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
 - 闭关时长：请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）。**闭关时的修为由系统按境界与时长结算**（一个境界大致要熬满其最少在境年限才圆满），你的 cultivation delta 只填"这次闭关的效率提示"：常速 8~15，灵地/丹药好给 18~20，环境差给 5~7；不要自己算出总收益写进去。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（系统据此按时长结算并计算连续闭关的递减）。
+- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
+- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：玩家在天渊城应征青冥卫（服役）时填 {}。须有仙籍、且在城内；服役每年领灭尘丹，满三百年可自由离开。
+- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：玩家在任务殿接榜填 {id: 任务编号}（牌面见快照里的 taskBoard）；退榜用 dropTask；用功勋换东西用 redeem {id}。任务进度只认引擎记账，你不要自己判完成。
+- 宗门任务殿 takeFactionTask/redeemFaction：本地势力各自的牌面（见快照 factionBoards），接某家的活填 {factionId, id}；兑功勋填 {factionId, id}。敌对势力不给你活，好感够了会自动结盟。
+- 宗门任务殿 takeFactionTask/redeemFaction：{factionId, id}。
 - 任务殿 takeTask/dropTask/redeem：接榜 / 退榜 / 功勋兑换，均填 {id}。
 - 入伍 enlist：叙事里玩家在天渊城应征青冥卫时填 {}。
 - 办身份牌 requestPass：叙事里黑户托人担保换身份牌时填 {faction: 担保势力名}。
@@ -3220,6 +3351,8 @@ export function validateStateOutput(input) {
   takeTask: record({ id: 'string' }),
   dropTask: record({ id: 'string' }),
   redeem: record({ id: 'string' }),
+  takeFactionTask: record({ factionId: 'string', id: 'string' }, ['factionId', 'id']),
+  redeemFaction: record({ factionId: 'string', id: 'string' }, ['factionId', 'id']),
     plant: record({ material: 'name' }, ['material']),
     tendPlot: record({ id: 'string' }),
     harvestPlot: record({ id: 'string' }),
@@ -3582,6 +3715,17 @@ export function applyStateUpdates(player, world, input, report = {}) {
     player.pillUsageMonth = monthOrdinal(world.date);
     const resist = eff.factor < 0.9 ? `（抗药性 ×${eff.factor}）` : '';
     pillNotes.push(`【丹药】${name}：${bits.length ? bits.join('，') : '并无实效'}${resist}`);
+  }
+  // 宗门任务殿：接 / 兑功勋
+  if (out.takeFactionTask && typeof out.takeFactionTask === 'object') {
+    const r = takeFactionTask(world, player, String(out.takeFactionTask.factionId || ''), String(out.takeFactionTask.id || ''));
+    pillNotes.push(r.ok ? r.note : `【接了】不成：${r.reason}`);
+    delete out.takeFactionTask;
+  }
+  if (out.redeemFaction && typeof out.redeemFaction === 'object') {
+    const r = redeemFaction(world, player, String(out.redeemFaction.factionId || ''), String(out.redeemFaction.id || ''));
+    pillNotes.push(r.ok ? r.note : `【功勋】${r.reason}`);
+    delete out.redeemFaction;
   }
   // 任务殿：接/退/兑换
   if (out.takeTask && typeof out.takeTask === 'object') {

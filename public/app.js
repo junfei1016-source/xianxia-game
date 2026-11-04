@@ -69,6 +69,10 @@ import {
   canAscendToSpirit,
   isOnDuty,
   takeTask,
+  factionBoards,
+  takeFactionTask,
+  factionShop,
+  redeemFaction,
   redeemMerit,
 } from './game.js';
 
@@ -787,7 +791,18 @@ function renderQuest() {
     ? live.map((t) => `<div class="quest-row"><span class="quest-title">${esc(t.title)}</span><span class="quest-meta">进度 ${t.progress}/${t.need} · 限期 ${esc((t.dueDate && (t.dueDate.year + '年' + t.dueDate.month + '月' + t.dueDate.day + '日')) || '—')}</span></div>`).join('')
     : '<div class="empty">手上没有接下的差事</div>';
   const shopHtml = MERIT_SHOP.map((x) => `<div class="quest-row"><span class="quest-title">${esc(x.name)}</span><span class="quest-meta">功勋 ${x.merit}</span><button type="button" class="mini" data-redeem="${esc(x.id)}">兑</button></div>`).join('');
+  // 宗门任务殿：本地势力各挂各的牌
+  const boards = factionBoards(world);
+  const factionHtml = boards.length
+    ? boards.map((b) => `<details class="codex-group"><summary>${esc(b.faction.name)}（${esc(b.faction.type || '')}·${esc(b.faction.alignment || '中立')}）功勋 ${b.merit} · 好感 ${b.favor}</summary>`
+      + b.board.map((t) => `<div class="quest-row"><span class="quest-title">[${esc(t.tier)}] ${esc(t.title)}</span>`
+        + `<span class="quest-meta">${esc(t.kind)} ${t.need} · ${t.days} 日 · ${t.reward.stones} 灵石 · 功勋 ${t.reward.merit}</span>`
+        + `<button type="button" class="mini" data-faction="${esc(b.faction.id)}" data-fid="${esc(t.id)}">接</button></div>`).join('')
+      + factionShop(world, b.faction.id).map((x) => `<div class="quest-row"><span class="quest-title">兑·${esc(x.name)}</span><span class="quest-meta">功勋 ${x.merit}</span><button type="button" class="mini" data-fredeem="${esc(b.faction.id)}" data-fitem="${esc(x.id)}">兑</button></div>`).join('')
+      + '</details>').join('')
+    : '';
   $('questPanel').innerHTML = (html || '')
+    + (factionHtml ? `<details class="codex-group" open><summary>宗门任务殿</summary>${factionHtml}</details>` : '')
     + `<details class="codex-group" open><summary>任务殿（功勋 ${merit}）</summary>${boardHtml}</details>`
     + `<details class="codex-group" open><summary>已接 (${live.length}/3)</summary>${liveHtml}</details>`
     + `<details class="codex-group"><summary>功勋台</summary>${shopHtml}</details>`;
@@ -1891,6 +1906,12 @@ function bindEvents() {
   $('questPanel').addEventListener('click', (e) => {
     const take = e.target && e.target.getAttribute && e.target.getAttribute('data-take');
     if (take) { const r = takeTask(world, player, take); appendSystem(r.ok ? r.note : `【接榜】不成：${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
+    const fcl = e.target && e.target.getAttribute && e.target.getAttribute('data-faction');
+    const fTask = e.target && e.target.getAttribute && e.target.getAttribute('data-fid');
+    if (fcl && fTask) { const r = takeFactionTask(world, player, fcl, fTask); appendSystem(r.ok ? r.note : `【接了】不成：${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
+    const fr = e.target && e.target.getAttribute && e.target.getAttribute('data-fredeem');
+    const fi = e.target && e.target.getAttribute && e.target.getAttribute('data-fitem');
+    if (fr && fi) { const r = redeemFaction(world, player, fr, fi); appendSystem(r.ok ? r.note : `【功勋】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
     const redeem = e.target && e.target.getAttribute && e.target.getAttribute('data-redeem');
     if (redeem) { const r = redeemMerit(world, player, redeem); appendSystem(r.ok ? r.note : `【功勋】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
     const btn = e.target.closest('[data-cancel]');

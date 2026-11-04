@@ -58,6 +58,7 @@ const suites = [
   ['黑户在灵界（灭尘丹/两色雷劫/身份牌）', ['tests/spirit-outlaw.test.mjs']],
   ['天渊城服役（青冥卫/三百年/差事）', ['tests/spirit-duty.test.mjs']],
   ['任务殿（发榜/接榜/功勋）', ['tests/task-hall.test.mjs']],
+  ['宗门任务殿（各挂各牌/好感结盟）', ['tests/faction-tasks.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 

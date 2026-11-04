@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '2.0.0';
+export const WORLD_VERSION = '2.1.0';
 
 // ============================================================
 //  凡界地图（按《凡人修仙传》的地理骨架搭）
@@ -614,6 +614,41 @@ export const TASK_TITLES = {
   猎妖: ['清剿城郊妖兽', '断妖路', '猎取妖丹', '剿灭兽巢'],
   采集: ['采办灵药', '取寒铁三斤', '寻千年血参', '凑一炉丹材'],
   行路: ['送信到邻境', '押一趟镖', '带话给旧识', '探一处险地'],
+};
+
+// 每个宗门/势力都有自己的任务殿：活儿的样子由它的性质决定
+// （宗门差遣、帮派打杀、商会押货、朝廷缉捕、世家采办、妖族血食、散修联盟挂单）
+export const FACTION_TASK_STYLE = {
+  宗门: { kinds: ['猎妖', '采集'], merit: 1.2, note: '门中差遣' },
+  帮派: { kinds: ['猎妖', '行路'], merit: 1.0, note: '帮里的活' },
+  商会: { kinds: ['行路', '采集'], merit: 1.1, note: '押货跑商' },
+  朝廷: { kinds: ['猎妖', '行路'], merit: 1.3, note: '衙门差遣' },
+  世家: { kinds: ['采集', '行路'], merit: 1.1, note: '族中采办' },
+  妖族: { kinds: ['猎妖'], merit: 1.4, note: '妖族的血食' },
+  散修联盟: { kinds: ['行路', '采集', '猎妖'], merit: 1.0, note: '盟里挂的活' },
+  默认: { kinds: ['采集', '行路'], merit: 1.0, note: '杂活' },
+};
+
+// 势力好感：挂满这么多才能结盟（结盟本来就要拿命换）
+export const FACTION_ALLY_FAVOR = 100;
+
+// 各派功勋台换的东西按立场分档
+export const FACTION_SHOP = {
+  正道: [
+    { id: 'heal', name: '回春丹', merit: 5, qty: 3 },
+    { id: 'talisman', name: '破界符', merit: 40, qty: 1 },
+    { id: 'stones', name: '灵石', merit: 8, stones: 400 },
+  ],
+  魔道: [
+    { id: 'xuesha', name: '血煞丹', merit: 8, qty: 1 },
+    { id: 'dark', name: '阴煞之气', merit: 6, qty: 2 },
+    { id: 'stones', name: '灵石', merit: 8, stones: 400 },
+  ],
+  中立: [
+    { id: 'stones', name: '灵石', merit: 8, stones: 400 },
+    { id: 'dust', name: '灭尘丹', merit: 25, qty: 1 },
+    { id: 'material', name: '灵玉', merit: 12, qty: 1 },
+  ],
 };
 
 // 功勋能换什么（第 1356 章：立大功可"功成身退"；天渊城的功勋是有实物的）
