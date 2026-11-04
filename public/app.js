@@ -1497,7 +1497,8 @@ async function sendTurn(forcedText) {
       const months = (out && Number.isFinite(out.timeMonths) && out.timeMonths > 0) ? out.timeMonths : 0;
       advanceTime(world, player, months);
       for (const note of world.lastRegionQiEvents || []) appendSystem(note, 'quest'); // 地脉枯荣
-      for (const note of world.lastOutlawEvents || []) appendSystem(note, 'quest'); // 黑户的日子：灭尘丹/雷劫/盘查
+      for (const note of world.lastOutlawEvents || []) appendSystem(note, 'quest');
+      for (const note of world.lastOffendNotes || []) appendSystem(note, 'quest'); // 掠夺得罪了谁 // 黑户的日子：灭尘丹/雷劫/盘查
       const eraNote = enforceEraTimeline(world, out); // 大势时间轴：期限到必演变
       if (eraNote) appendSystem(eraNote, 'quest');
       checkQuestDeadlines();

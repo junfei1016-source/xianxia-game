@@ -26,6 +26,7 @@ const setup = (region = 'qingwu', realm = '金丹初期') => {
   world.geo = { regionId: region, sinceTurn: 0, migrated: false };
   world.date = { year: 40, month: 5, day: 1 };
   world.turn = 90;
+  world.npcs = [{ name: '苏瑶', desc: '道侣', relation: '道侣' }]; // 长老会的大活要有人联手
   ensureTasks(world);
   refreshTaskBoard(world);
   return { player, world };
@@ -121,6 +122,36 @@ test('功勋兑换：够就扣，不够就说明', () => {
   assert.equal(ok.ok, true);
   assert.equal(world.merit, 5 - heal.merit);
   assert.ok(world.inventory.some((it) => it.name === heal.name));
+});
+
+
+test('长老会的大活要有人联手（第 1358 章）', () => {
+  const solo = setup('qingwu', '化神初期');
+  solo.world.npcs = [];
+  const elder = solo.world.taskBoard.list.find((t) => t.tier === '长老会');
+  const r = takeTask(solo.world, solo.player, elder.id);
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /联手/);
+
+  const team = setup('qingwu', '化神初期');
+  const elder2 = team.world.taskBoard.list.find((t) => t.tier === '长老会');
+  const ok = takeTask(team.world, team.player, elder2.id);
+  assert.equal(ok.ok, true);
+  assert.equal(team.world.liveTasks[0].companion, '苏瑶');
+});
+
+test('掠夺会得罪本地正道势力，跌破底线就成敌对', () => {
+  const { player, world } = setup('qingwu', '化神初期');
+  world.factions = [
+    { id: 'a', name: '拾云门', type: '宗门', alignment: '正道', tier: 2, relation: '中立', favor: 30 },
+    { id: 'b', name: '血刀寨', type: '帮派', alignment: '魔道', tier: 2, relation: '中立', favor: 30 },
+  ];
+  applyStateUpdates(player, world, { gainType: 'plunder', stateUpdates: { spiritStones: { delta: 50 } } });
+  const zheng = world.factions.find((f) => f.id === 'a');
+  const mo = world.factions.find((f) => f.id === 'b');
+  assert.ok(zheng.favor < 30, '正道势力好感下降');
+  assert.equal(mo.favor, 30, '魔道不该因掠夺掉好感');
+  assert.ok(Array.isArray(world.lastOffendNotes));
 });
 
 test('应用层入口：takeTask / redeem 都能走通，且不会把任务写进状态', () => {

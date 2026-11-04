@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.50.0';
+export const GAME_VERSION = '1.51.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -799,10 +799,16 @@ export function takeTask(world, player, id) {
   ensureTasks(world);
   if (!world.liveTasks) world.liveTasks = [];
   if (world.liveTasks.length >= 3) return { ok: false, reason: '手上最多接三件差事，先做完再接。' };
-  const t = world.taskBoard.list.find((x) => x.id === id);
+  let t = world.taskBoard.list.find((x) => x.id === id);
   if (!t) return { ok: false, reason: '牌上没有这件差事（可能已经换期）。' };
   if (world.liveTasks.some((x) => x.id === id)) return { ok: false, reason: '这件你已经接了。' };
   if (realmIndex(player.realm) < realmIndex(t.minRealm)) return { ok: false, reason: `这件差事要 ${t.minRealm} 以上才接得。` };
+  // 第 1358 章：长老会的大活"需要多人联手"，一个人接不了
+  if (t.tier === '长老会') {
+    const mate = findCompanion(world);
+    if (!mate) return { ok: false, reason: '长老会的活一个人做不了，得先找到肯与你联手的人（道侣/挚友/师徒/同门）。' };
+    t = { ...t, companion: mate.name };
+  }
   const due = addGameDays(worldGameDate(world), t.days) || worldGameDate(world);
   world.liveTasks.push({ ...t, progress: 0, takenMonth: monthOrdinal(world.date || { year: 1, month: 1, day: 1 }), dueDate: due });
   world.taskBoard.list = world.taskBoard.list.filter((x) => x.id !== id);
@@ -922,10 +928,15 @@ export function takeFactionTask(world, player, factionId, taskId) {
   if (!fb) return { ok: false, reason: '此地没有这家势力。' };
   if (fb.faction.relation === '敌对') return { ok: false, reason: `${fb.faction.name}与你为敌，不会把差事交给你。` };
   if (world.liveTasks.length >= 3) return { ok: false, reason: '手上最多接三件差事。' };
-  const t = fb.board.find((x) => x.id === taskId);
+  let t = fb.board.find((x) => x.id === taskId);
   if (!t) return { ok: false, reason: '这家的牌上没有这件差事。' };
   if (world.liveTasks.some((x) => x.id === t.id)) return { ok: false, reason: '这件你已经接了。' };
   if (realmIndex(player.realm) < realmIndex(t.minRealm)) return { ok: false, reason: `这件要 ${t.minRealm} 以上才接得。` };
+  if (t.tier === '长老会') {
+    const mate = findCompanion(world);
+    if (!mate) return { ok: false, reason: '这类大活一个人接不得，得有人联手（道侣/挚友/师徒/同门）。' };
+    t = { ...t, companion: mate.name };
+  }
   const due = addGameDays(worldGameDate(world), t.days) || worldGameDate(world);
   world.liveTasks.push({ ...t, progress: 0, dueDate: due });
   return { ok: true, note: `【接了】${t.factionName}的「${t.title}」：${t.kind} ${t.need}，${t.days} 日为限。` };
@@ -933,6 +944,30 @@ export function takeFactionTask(world, player, factionId, taskId) {
 
 export function factionMeritOf(world, factionId) {
   return (world && world.factionMerit && world.factionMerit[factionId]) || 0;
+}
+
+// 敌对行为：掠夺（gainType=plunder）在当前区域会得罪本地正道／中立势力
+// 原文第 273 章：猎杀对方修士、抢储物袋是常态，做了就结仇；正道对魔修有成见（第 253/255 章魔道六宗入侵越国）。
+export function offendFactions(world, kind = 'plunder') {
+  if (!world || !Array.isArray(world.factions) || !world.factions.length) return [];
+  const region = world.geo ? regionById(world.geo.regionId, world) : null;
+  if (!region) return [];
+  const here = new Set(factionsIn(region.id).map((f) => f.name));
+  const notes = [];
+  for (const f of world.factions) {
+    if (!here.has(f.name)) continue;
+    if (f.relation === '结盟') continue; // 盟友的事，帐另算
+    if (kind === 'plunder' && (f.alignment === '正道' || f.alignment === '中立')) {
+      f.favor = Math.max(-200, (f.favor || 0) - 20);
+      if (f.favor <= -60 && f.relation !== '敌对') {
+        f.relation = '敌对';
+        notes.push(`【结仇】${f.name}记下了这笔账，从此与你为敌。`);
+      } else {
+        notes.push(`【得罪】${f.name}看在眼里，好感降到 ${f.favor}。`);
+      }
+    }
+  }
+  return notes;
 }
 
 // 好感够了自动结盟（第 1356 章那套"立功换前程"）
@@ -3628,6 +3663,11 @@ export function applyStateUpdates(player, world, input, report = {}) {
   const repMult = reputationMultiplier(player.reputation);
   const intensity = MORALITY_INTENSITY[s.difficulty] ?? 0.2;
   const gainMult = moralityGainMultiplier(player.morality, out.gainType, intensity);
+  if (out.gainType === 'plunder') {
+    const offendNotes = offendFactions(world, 'plunder');
+    if (!world.lastOffendNotes) world.lastOffendNotes = [];
+    world.lastOffendNotes = offendNotes;
+  }
   const fortuneMult = fortuneMultiplier(player.morality, intensity) + (activeHas(world.inventory, 'fortune') ? AFFIX_REGISTRY['气运'].fx.fortune : 0); // 气运词条
   const era = ERA_TYPES[world.eraType] || { gainMult: 1, dangerMult: 1, cultMult: 1 };
   const closeMonths = (typeof out.timeMonths === 'number' && out.timeMonths > 0) ? Math.min(out.timeMonths, 600) : 1; // 闭关时长放大修为，上限600月(50年)，"闭关十年"如实生效
