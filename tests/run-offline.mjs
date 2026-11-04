@@ -54,6 +54,7 @@ const suites = [
   ['地图按原著（越国/元武/天罗/乱星海）', ['tests/world-map-canon.test.mjs']],
   ['地理层级与路网（陆路/海路/古传送阵）', ['tests/travel-network.test.mjs']],
   ['界面上限（人界到化神，飞升仙界才算通关）', ['tests/interface-cap.test.mjs']],
+  ['偷渡（空间节点九死一生）', ['tests/spirit-smuggle.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 

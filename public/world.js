@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '1.8.0';
+export const WORLD_VERSION = '1.9.0';
 
 // ============================================================
 //  凡界地图（按《凡人修仙传》的地理骨架搭）
@@ -571,6 +571,27 @@ export const GATES = [
   { a: 'dajin', b: 'wulong', days: 4, cost: 400, name: '跨洋大阵', note: '湾南州外的跨洋大阵，另一头在五龙海' },
 ];
 
+// ============================================================
+//  空间节点：不飞升也能硬闯过去的路（"偷渡"）
+//
+//  第 1071 章：人界"还存在着一些天生薄弱的空间节点……界面之力，远比其他地方薄弱得多"，
+//    有足够外力就能"打开一条登天之路"；但"所有的节点处空间都极不稳定"，最危险的是空间风暴，
+//    "一旦被卷入其中，就是有再大的神通也是必死无疑的"。
+//  第 1195 章：灵界三宝之一的**化界珠**专破空间禁制；"没有化界珠在身……根本是有去无回的"。
+//  第 1238 章：三个节点里两处入口就有猛烈空间风暴，剩下一处随时可能塌陷。
+//  第 1461 章：韩立本人就是从节点偷渡去灵界的，"万年灵液都消耗在空间节点里"。
+//  所以：节点是捷径，但九死一生，而且过去了也是没有仙籍的黑户。
+// ============================================================
+export const SPACE_NODES = [
+  { region: 'wubian', name: '无边海·断界崖', stability: 0.30, note: '海雾常年不散，崖下是一道望不见底的裂缝。' },
+  { region: 'chisha', name: '天罗国·无光谷', stability: 0.22, note: '魔道六宗把这片谷地封成禁地，说是"底下不干净"。' },
+  { region: 'xingyun', name: '奇渊岛·沉星渊', stability: 0.35, note: '深渊海域底下还有一道缝，当年那些妖兽就是从这儿钻上来的。' },
+];
+
+export function nodeInRegion(regionId) {
+  return SPACE_NODES.find((n) => n.region === regionId) || null;
+}
+
 export function macroOf(region) {
   return REGION_META[region && region.id] || { macro: '天南', kind: '国' };
 }
@@ -699,9 +720,11 @@ export function buildSlice(player, world) {
     .slice(-2)
     .map((c) => c.text);
 
+  const node = nodeInRegion(region.id);
   const lines = [
     `【世界切片】区域：${region.name}（${region.desc}）灵气${eq}（${qiLabel(eq)}）·危险${ed}。`,
     chronicle.length ? `【地脉】${chronicle.join('；')}` : '',
+    node ? `【异象】此地界力薄（${node.name}）：肯拿命赌的人，能从这道裂缝硬闯灵界。` : '',
     facText ? `已知势力：${facText}。` : '',
     unknownCount > 0 ? `此外还有 ${unknownCount} 家势力未与之打过交道。` : '',
     roads ? `可达：${roads}。` : '',
