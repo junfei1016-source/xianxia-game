@@ -13,6 +13,7 @@ import { materialByName, materialTier, materialBrewBonus, elementalBrewAdjust, G
 import { formationByName, formationCost, canSetFormation, formationEffects, FORMATION_TIERS, isPortable, FORMATIONS, canSetOnLeyline, upgradeCost, FORMATION_MAX_LEVEL, leylinePhase, LEYLINE_MIN_QI } from './formations.js';
 import { CRAFT_NAMES, SKILL_LEVELS, skillLevelOf, craftBonus, practiceGain, studyGain, talismanByName, TALISMAN_TIERS, TALISMANS, drawChance, applyCraftExp, isBottlenecked, MASTER_CAP_LEVEL } from './craft.js';
 import { TECHNIQUES, TECH_GRADES, TECH_TYPES, MAX_LAYER, techniqueByName, techniqueExact, techniqueEffect, techniqueEffects, gradeOf, layerCost, layerUpCost, normalizeTechnique, checkTechniqueRequirements, requirementText, defOf } from './techniques.js';
+import { ROOT_ELEMENTS, MUTANT_ROOTS, rootProfile, rootCultMult, rootLayerCap, normalizeRoots } from './roots.js';
 
 // 法宝名录目录（注入提示词：阶位定死，名字管够）
 const TREASURE_CATALOG = treasureCatalog();
@@ -43,7 +44,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.34.0';
+export const GAME_VERSION = '1.35.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -425,6 +426,7 @@ export function newPlayerState() {
     craftStuck: {},     // 各艺卡瓶颈的次数（越高越容易顿悟）
     techniques: [],     // 已修功法：[{name, layer, exp}]
     mainTechnique: null, // 主修功法名（只吃一门）
+    spiritRoots: null,  // 测出的灵根：['水'] / ['木','火']；未测为 null
   };
 }
 
@@ -2076,7 +2078,15 @@ export function practiceTechnique(world, player, input) {
   const gain = Math.max(1, Math.round(days * (2 + (tech.layer || 1) * 0.5)));
   tech.exp = (tech.exp || 0) + gain;
   const need = layerCost(tech.layer);
+  // 灵根所限：伪灵根练不过三、四层（第 127 章）
+  const cap = rootLayerCap(player);
   let note = `【修功】${days} 日修「${tech.name}」第 ${tech.layer} 层，火候 +${gain}（${tech.exp}/${need}）。`;
+  if (tech.layer >= cap && tech.layer < MAX_LAYER) {
+    return {
+      ok: true, days,
+      note: `【修功】${days} 日修「${tech.name}」，第 ${tech.layer} 层已是你灵根的上限——再练也是空耗，须换更好的灵根或另寻机缘。`,
+    };
+  }
   if (tech.exp >= need && tech.layer < MAX_LAYER) {
     const cost = layerUpCost(def, tech.layer);
     if (player.spiritStones >= cost) {
@@ -2146,6 +2156,19 @@ export function checkCraftSecretExposure(world, player, rand = Math.random) {
     note += `【事泄】你暗拜「${s.master}」学${skill}的事被旧师「${s.from}」知道了——欺师灭祖的罪名坐实（声望 -10）。`;
   }
   return note;
+}
+
+// 测灵根：一旦测出便不改（第 144 章韩立被测出四属性缺金的伪灵根）
+export function awakenRoots(world, player, input) {
+  const roots = normalizeRoots((input && input.roots) || (input && input.elements) || []);
+  if (!roots.length) return { ok: false, reason: '没有测出灵根（须给金木水火土之一）' };
+  if (Array.isArray(player.spiritRoots) && player.spiritRoots.length) {
+    return { ok: false, reason: `灵根已测：${player.spiritRoots.join('、')}，不可更易` };
+  }
+  player.spiritRoots = roots;
+  const prof = rootProfile(player);
+  const slow = prof.layerCap <= 5 ? '，伪灵根之身，功法只能练到三、四层' : '';
+  return { ok: true, note: `【测灵根】你是${roots.join('、')}属——${prof.tier}（${prof.label}），修炼${prof.cultMult > 1.1 ? '事半功倍' : prof.cultMult < 1 ? '颇为吃力' : '中平'}${slow}。` };
 }
 
 // ---------- 炼器（五行配材）----------
@@ -2617,6 +2640,7 @@ export function validateStateOutput(input) {
     }, ['name']),
     practiceTechnique: record({ name: 'name', days: 'number' }, ['name']),
     setMainTechnique: record({ name: 'name' }, ['name']),
+    awakenRoots: record({ roots: array(enumeration(...ROOT_ELEMENTS, ...MUTANT_ROOTS)) }, ['roots']),
     forge: record({ name: 'name', materials: array('string'), fire: enumeration('真火', '地火') }, ['name']),
     newRegion: record({
       name: 'name', terrain: 'string', qi: 'number', danger: 'number', desc: 'string',
@@ -2882,7 +2906,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
     if (pillApplied && (key === 'hp' || key === 'cultivation') && delta > 0) continue;
     if (key === 'hp' && delta < 0) { if (god) delta = 0; else delta = Math.round(delta * diff.damageMult * era.dangerMult * (combat ? combatDamageMult(realmDiff) : 1) * (combat ? equipDef : 1) * (combat ? affixDefMult : 1) * formationFx.damageTaken * buffFx.damageTaken * (techFx.damageTaken || 1)); } // 言出法随免伤；否则难度+大势+境界差+装备防御+词条+护山阵+符力+炼体
     if (key === 'cultivation' && delta > 0) {
-      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm * formationFx.cultMult * techCultMult; // 再加聚灵阵与主修功法
+      const mults = pace.cultivationMult * fortuneMult * era.cultMult * skillMult * treasureMult * rarityCultMult * affixCultMult * relationMult * factionMult * cultGain * closedMult * qiDevMult * farm * formationFx.cultMult * techCultMult * rootCultMult(player); // 再加聚灵阵、主修功法与灵根资质
       if (closedDoor) {
         // 闭关：修为按时长结算，模型给的 delta 只当效率提示（不再 ×closeMonths，避免一次闭关灌满）
         delta = Math.round(seclusionGain(player.realm, out.timeMonths, delta) * mults * 100) / 100;
@@ -3031,6 +3055,11 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const r = setMainTechnique(world, player, out.setMainTechnique);
     pillNotes.push(r.note || `【主修】${r.reason}`);
     delete out.setMainTechnique;
+  }
+  if (out.awakenRoots && typeof out.awakenRoots === 'object') {
+    const r = awakenRoots(world, player, out.awakenRoots);
+    pillNotes.push(r.note || `【测灵根】${r.reason}`);
+    delete out.awakenRoots;
   }
   // 炼器：五行配材，成败由系统掷（名录外的器物炼不出来）
   if (out.forge && typeof out.forge === 'object') {

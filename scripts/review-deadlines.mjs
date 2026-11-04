@@ -20,6 +20,7 @@ const assets = new Map([
   ['/formations.js', ['formations.js', 'text/javascript; charset=utf-8']],
   ['/craft.js', ['craft.js', 'text/javascript; charset=utf-8']],
   ['/techniques.js', ['techniques.js', 'text/javascript; charset=utf-8']],
+  ['/roots.js', ['roots.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
   ['/icon.svg', ['icon.svg', 'image/svg+xml']],
 ]);
