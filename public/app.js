@@ -69,6 +69,9 @@ import {
   canAscendToSpirit,
   isOnDuty,
   debtSummary,
+  sectOf,
+  sectCatalog,
+  sectRedeem,
   takeTask,
   factionBoards,
   takeFactionTask,
@@ -644,6 +647,7 @@ function renderStatus() {
   const spiritLabel = outlaw ? '无（偷渡黑户）' : '已登记';
   const unsuppressed = (world.outlaw && Number.isFinite(world.outlaw.unsuppressedMonths)) ? world.outlaw.unsuppressedMonths : 0;
   const outlawYears = Math.floor(unsuppressed / 12);
+  const sect = sectOf(world);
   const debts = debtSummary(world).slice(0, 4);
   const onDuty = isOnDuty(world);
   const dutyYears = (world.duty && Number.isFinite(world.duty.years)) ? world.duty.years : 0;
@@ -673,6 +677,7 @@ function renderStatus() {
     <div class="stat-row" ${tip(ifaceTip)}><dt>所处</dt><dd>${ifaceLabel}</dd></div>
     ${iface === '灵界' ? `<div class="stat-row" ${tip(spiritTip)}><dt>仙籍</dt><dd>${spiritLabel}</dd></div>` : ''}
     ${iface === '灵界' && outlaw ? `<div class="stat-row" ${tip('灭尘丹每年服一粒才压得住下界气息；不服用的话，三百年一次的小天劫会变成必死的两色雷劫。')}><dt>劫气</dt><dd>${outlawYears} 年未服丹</dd></div>` : ''}
+    ${sect ? `<div class="stat-row" ${tip('门内辈分靠贡献与境界升；贡献可进藏经阁换功法丹药。')}><dt>宗门</dt><dd>${esc(sect.faction.name)} · ${esc(sect.rank)} · 贡献 ${sect.contribution}</dd></div>` : ''}
     ${debts.length ? `<div class="stat-row" ${tip('你欠着的人情：欠着不还，人家会记恨；还上了，交情会更硬。')}><dt>人情债</dt><dd>${debts.map((x) => `${esc(x.name)} ${x.debt}`).join('、')}</dd></div>` : ''}
     ${iface === '灵界' && onDuty ? `<div class="stat-row" ${tip('在天渊城服役：每年领一粒灭尘丹，服够三百年下界气息尽去，就可自由离开。')}><dt>服役</dt><dd>${dutyLabel}</dd></div>` : ''}
     <div class="stat-row" ${tip('当前境界的修炼进度（0~100%）。到 100% 后进入瓶颈，需机缘（丹药/传承/顿悟/磨砺）才能突破。')}><dt>修为进度</dt><dd>${bar(p.cultivation)} ${p.cultivation}%</dd></div>
@@ -804,7 +809,10 @@ function renderQuest() {
       + factionShop(world, b.faction.id).map((x) => `<div class="quest-row"><span class="quest-title">兑·${esc(x.name)}</span><span class="quest-meta">功勋 ${x.merit}</span><button type="button" class="mini" data-fredeem="${esc(b.faction.id)}" data-fitem="${esc(x.id)}">兑</button></div>`).join('')
       + '</details>').join('')
     : '';
+  const sect = sectOf(world);
+  const sectShop = sect ? sectCatalog(world).map((x) => `<div class="quest-row"><span class="quest-title">${esc(x.name)}</span><span class="quest-meta">贡献 ${x.merit}</span><button type="button" class="mini" data-sect="${esc(x.id)}">换</button></div>`).join('') : '';
   $('questPanel').innerHTML = (html || '')
+    + (sect ? `<details class="codex-group"><summary>藏经阁（${esc(sect.faction.name)} · 贡献 ${sect.contribution}）</summary>${sectShop}</details>` : '')
     + (factionHtml ? `<details class="codex-group" open><summary>宗门任务殿</summary>${factionHtml}</details>` : '')
     + `<details class="codex-group" open><summary>任务殿（功勋 ${merit}）</summary>${boardHtml}</details>`
     + `<details class="codex-group" open><summary>已接 (${live.length}/3)</summary>${liveHtml}</details>`
@@ -1916,6 +1924,8 @@ function bindEvents() {
     const fr = e.target && e.target.getAttribute && e.target.getAttribute('data-fredeem');
     const fi = e.target && e.target.getAttribute && e.target.getAttribute('data-fitem');
     if (fr && fi) { const r = redeemFaction(world, player, fr, fi); appendSystem(r.ok ? r.note : `【功勋】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
+    const sectItem = e.target && e.target.getAttribute && e.target.getAttribute('data-sect');
+    if (sectItem) { const r = sectRedeem(world, player, sectItem); appendSystem(r.ok ? r.note : `【藏经阁】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
     const redeem = e.target && e.target.getAttribute && e.target.getAttribute('data-redeem');
     if (redeem) { const r = redeemMerit(world, player, redeem); appendSystem(r.ok ? r.note : `【功勋】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
     const btn = e.target.closest('[data-cancel]');

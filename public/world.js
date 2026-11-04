@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '2.1.0';
+export const WORLD_VERSION = '2.2.0';
 
 // ============================================================
 //  凡界地图（按《凡人修仙传》的地理骨架搭）
@@ -627,6 +627,38 @@ export const FACTION_TASK_STYLE = {
   妖族: { kinds: ['猎妖'], merit: 1.4, note: '妖族的血食' },
   散修联盟: { kinds: ['行路', '采集', '猎妖'], merit: 1.0, note: '盟里挂的活' },
   默认: { kinds: ['采集', '行路'], merit: 1.0, note: '杂活' },
+};
+
+// ============================================================
+//  宗门体系：入门、辈分、贡献、藏经阁
+//  第 1 章：七玄门有外门内门之分，五年一次招收内门弟子；
+//  第 8 章：墨大夫收韩立为"亲传弟子"；
+//  第 668 章：御灵宗有藏经阁，秘术功法都在里面；
+//  第 106 章：升仙大会、筑基丹——入门与破境都要资源。
+export const SECT_RANKS = [
+  { rank: '外门弟子', need: 0, realm: '炼气初期', note: '杂役与跑腿，一年见不到几次长老' },
+  { rank: '内门弟子', need: 30, realm: '炼气中期', note: '有资格进藏经阁第一层' },
+  { rank: '亲传弟子', need: 120, realm: '筑基初期', note: '有位师父肯把真本事教你' },
+  { rank: '执事', need: 400, realm: '金丹初期', note: '管一摊子事，门内说话有人听了' },
+];
+
+// 藏经阁：按立场的货不同，价用贡献
+export const SECT_CATALOG = {
+  正道: [
+    { id: 'tech', name: '本门功法·残卷', merit: 40, qty: 1, note: '一门主修功法的前三层' },
+    { id: 'pill', name: '回春丹', merit: 15, qty: 3 },
+    { id: 'recipe', name: '筑基丹方', merit: 120, qty: 1 },
+  ],
+  魔道: [
+    { id: 'tech', name: '魔门功法·残卷', merit: 40, qty: 1 },
+    { id: 'pill', name: '血煞丹', merit: 18, qty: 2 },
+    { id: 'secret', name: '禁术竹简', merit: 150, qty: 1 },
+  ],
+  中立: [
+    { id: 'tech', name: '杂学功法', merit: 35, qty: 1 },
+    { id: 'pill', name: '聚气丹', merit: 12, qty: 3 },
+    { id: 'material', name: '灵玉', merit: 20, qty: 1 },
+  ],
 };
 
 // 势力好感：挂满这么多才能结盟（结盟本来就要拿命换）
