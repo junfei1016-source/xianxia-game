@@ -16,6 +16,8 @@ import {
   findCompanion,
   bondOf,
   clampBond,
+  betrayalCheck,
+  growNpcLinks,
 } from '../public/game.js';
 
 const setup = () => {
@@ -127,6 +129,60 @@ test('应用层入口：repayDebt 字段能还人情', () => {
   const note = applyStateUpdates(player, world, { repayDebt: { name: '田掌柜' } });
   assert.match(note, /还情/);
   assert.ok(bondOf(world.npcs[1]).debt < 30);
+});
+
+
+test('硬债有期限：到期不还直接结仇，交情再硬也没用', () => {
+  const { player, world } = setup();
+  world.npcs[1].bond.trust = 95; // 交情极硬
+  addDebt(world, '田掌柜', 40, '救命之恩', 'hard');
+  const entry = world.debts.find((d) => d.kind === 'hard');
+  assert.ok(Number.isFinite(entry.dueMonth), '硬债要记到期月份');
+  world.date = { year: 40, month: 12, day: 1 }; // 拖过期限
+  const notes = settleDebts(world, player);
+  assert.match(notes.join(''), /赖账/);
+  const after = bondOf(world.npcs[1]);
+  assert.ok(after.grudge >= 60, '怨气大涨');
+  assert.equal(world.npcs[1].relation, '敌对');
+});
+
+test('软债看时间：交情硬可以一直宽限，不会结仇', () => {
+  const { player, world } = setup();
+  world.npcs[1].bond.trust = 95;
+  addDebt(world, '田掌柜', 40, '抬了句话', 'soft');
+  world.date = { year: 99, month: 1, day: 1 };
+  const notes = settleDebts(world, player);
+  assert.equal(notes.length, 0, '软债不催交情深的人');
+  assert.notEqual(world.npcs[1].relation, '敌对');
+});
+
+test('背叛：怨满信空的人会反水', () => {
+  const { player, world } = setup();
+  world.npcs[0].bond = { debt: 0, grudge: 80, trust: 10, need: 20 };
+  let calls = 0;
+  const res = betrayalCheck(world, player, 'guard', () => (calls++ === 0 ? 0.1 : 0.1));
+  assert.ok(res && res.npc === '苏瑶');
+  assert.match(res.note, /反水/);
+  assert.equal(world.npcs[0].relation, '敌对');
+});
+
+test('背叛：交情深的人不会反水', () => {
+  const { world, player } = setup();
+  world.npcs[0].bond = { debt: 0, grudge: 20, trust: 80, need: 20 };
+  assert.equal(betrayalCheck(world, player, 'guard', () => 0.1), null);
+});
+
+test('人脉会长：每季给两个人牵一条线，不重复', () => {
+  const { world } = setup();
+  world.npcLinks = [];
+  let seed = 5;
+  const rand = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  const grown = growNpcLinks(world, rand);
+  assert.ok(grown && grown.a && grown.b);
+  assert.equal(world.npcLinks.length, 1);
+  // 已经认识的那对不再加
+  const again = growNpcLinks(world, () => 0);
+  assert.ok(world.npcLinks.length <= 2);
 });
 
 test('四维都有上下限，不会被灌爆', () => {

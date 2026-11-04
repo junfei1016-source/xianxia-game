@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.52.0';
+export const GAME_VERSION = '1.53.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -1841,15 +1841,30 @@ const BOND_SEED = [
 // ---------- 人情债：欠了要还，不还就变怨 ----------
 // 原著里"人情"是修士间的硬通货：护法挡灾、赠药、担保都是债（第 1583 章担保人、第 1356 章立功换前程）。
 // 这里让四维里的 debt 真正会动：欠着不还，信任掉、怨气涨；还了，信任涨、怨气消。
-export function addDebt(world, npcName, amount = 10, reason = '') {
+// 人情分两种：
+//  · soft（软债）：搭把手、抬句话。没期限，看交情慢慢还；不还就是信任变薄、怨气渐长。
+//  · hard（硬债）：救命之恩、契约、担保。有期限，到期必须还；不还就直接结仇（第 1583 章担保那种性质）。
+export const HARD_DEBT_MONTHS = 12;
+
+export function addDebt(world, npcName, amount = 10, reason = '', kind = 'soft') {
   const npc = (world.npcs || []).find((x) => x && x.name === String(npcName).trim());
   if (!npc) return null;
   const b = bondOf(npc);
   npc.bond = { ...b, debt: clampBond(b.debt + amount) };
+  if (!Array.isArray(world.debts)) world.debts = [];
+  const nowMonth = monthOrdinal(world.date || { year: 1, month: 1, day: 1 });
+  world.debts.push({
+    npc: npc.name,
+    kind: kind === 'hard' ? 'hard' : 'soft',
+    amount,
+    reason: reason || '',
+    since: nowMonth,
+    dueMonth: kind === 'hard' ? nowMonth + HARD_DEBT_MONTHS : null,
+  });
   if (!Array.isArray(world.debtLog)) world.debtLog = [];
-  world.debtLog.push({ npc: npc.name, amount, reason, month: monthOrdinal(world.date || { year: 1, month: 1, day: 1 }) });
+  world.debtLog.push({ npc: npc.name, amount, reason, kind, month: nowMonth });
   if (world.debtLog.length > 40) world.debtLog.splice(0, world.debtLog.length - 40);
-  return `【人情】${npc.name}帮了你（${reason || '搭把手'}），这份人情记在账上（欠 ${npc.bond.debt}）。`;
+  return `【${kind === 'hard' ? '欠命' : '人情'}】${npc.name}帮了你（${reason || '搭把手'}）${kind === 'hard' ? `，这笔是${HARD_DEBT_MONTHS}个月内必须还的` : ''}（共欠 ${npc.bond.debt}）。`;
 }
 
 export function repayDebt(world, player, npcName) {
@@ -1859,17 +1874,44 @@ export function repayDebt(world, player, npcName) {
   if (b.debt <= 0) return { ok: false, reason: `你不欠${npc.name}什么。` };
   const pay = Math.min(b.debt, 50);
   npc.bond = { ...b, debt: clampBond(b.debt - pay), trust: clampBond(b.trust + Math.round(pay / 2)), grudge: clampBond(b.grudge - Math.round(pay / 4)) };
-  return { ok: true, note: `【还情】你把欠${npc.name}的人情还上了一大半，对方神色缓和不少（欠 ${npc.bond.debt}）。` };
+  // 先销硬债（按到期先后），再销软债
+  if (!Array.isArray(world.debts)) world.debts = [];
+  let left = pay;
+  const mine = world.debts.filter((d) => d.npc === npc.name).sort((x, y) => (x.kind === y.kind ? 0 : x.kind === 'hard' ? -1 : 1));
+  for (const d of mine) {
+    if (left <= 0) break;
+    const take = Math.min(d.amount, left);
+    d.amount -= take;
+    left -= take;
+  }
+  world.debts = world.debts.filter((d) => d.amount > 0);
+  const hardLeft = world.debts.filter((d) => d.npc === npc.name && d.kind === 'hard').length;
+  return { ok: true, note: `【还情】你把欠${npc.name}的${hardLeft ? '一部分（硬债还没清）' : '人情'}还上了，对方神色缓和不少（欠 ${npc.bond.debt}）。` };
 }
 
 // 每年催债：欠着不还，信任掉、怨气涨；交情深（trust≥80）的可以宽限
 export function settleDebts(world, player) {
   const notes = [];
+  if (!Array.isArray(world.debts)) world.debts = [];
+  const nowMonth = monthOrdinal(world.date || { year: 1, month: 1, day: 1 });
   for (const npc of world.npcs || []) {
     if (!npc || !npc.bond) continue;
     const b = bondOf(npc);
     if (b.debt <= 0) continue;
-    if (b.trust >= 80) continue;
+    const mine = world.debts.filter((d) => d.npc === npc.name);
+    const hard = mine.filter((d) => d.kind === 'hard');
+    const overdue = hard.filter((d) => Number.isFinite(d.dueMonth) && nowMonth >= d.dueMonth);
+    if (overdue.length) {
+      // 硬债过期：交情再好也白搭，直接结仇
+      const grudge = clampBond(b.grudge + 60); // 赖账是结死仇：直接推到敌对线以上
+      const trust = clampBond(b.trust - 40);
+      npc.bond = { ...b, trust, grudge };
+      if (grudge >= 60) npc.relation = '敌对';
+      notes.push(`【赖账】${npc.name}的这笔人情到期没还——那是救命的账，从此与你结仇。`);
+      world.debts = world.debts.filter((d) => !overdue.includes(d));
+      continue;
+    }
+    if (b.trust >= 80 && !hard.length) continue; // 交情硬的软债可宽限
     const trust = clampBond(b.trust - 3);
     const grudge = clampBond(b.grudge + (b.debt >= 60 ? 4 : 1));
     npc.bond = { ...b, trust, grudge };
@@ -1896,6 +1938,40 @@ export function propagateBonds(world) {
     }
   }
   return notes;
+}
+
+// 背叛：怨气压过交情的人，会在你背后动手（第 273 章那种"背后一刀"）
+export function betrayalCheck(world, player, context = 'guard', rand = Math.random) {
+  const traitor = (world.npcs || []).find((n) => {
+    const b = bondOf(n);
+    return b.grudge >= 70 && b.trust <= 15;
+  });
+  if (!traitor) return null;
+  if (rand() > 0.45) return null;
+  traitor.relation = '敌对';
+  traitor.bond = { ...bondOf(traitor), grudge: 100, trust: 0 };
+  const where = context === 'guard' ? '闭关护法时' : (context === 'smuggle' ? '过空间节点时' : '联手办事时');
+  return {
+    npc: traitor.name,
+    note: `【反水】${where}，${traitor.name}忽然倒戈——你只来得及看到对方眼里那点冷意。`,
+  };
+}
+
+// NPC 之间的关系会长：每季按常来常往，替两个人牵一条线（师承/亲眷/旧怨/同门）
+const LINK_TYPES = ['同门', '旧识', '师承', '亲眷', '旧怨'];
+export function growNpcLinks(world, rand = Math.random) {
+  const npcs = (world.npcs || []).filter((x) => x && x.name);
+  if (npcs.length < 2) return null;
+  if (!Array.isArray(world.npcLinks)) world.npcLinks = [];
+  if (world.npcLinks.length >= 24) return null;
+  const a = npcs[Math.floor(rand() * npcs.length)];
+  const b = npcs[Math.floor(rand() * npcs.length)];
+  if (!a || !b || a.name === b.name) return null;
+  const exists = world.npcLinks.some((l) => (l.a === a.name && l.b === b.name) || (l.a === b.name && l.b === a.name));
+  if (exists) return null;
+  const type = LINK_TYPES[Math.floor(rand() * LINK_TYPES.length)];
+  world.npcLinks.push({ a: a.name, b: b.name, type, note: '', turn: world.turn || 0 });
+  return { a: a.name, b: b.name, type, note: `【人脉】${a.name}与${b.name}扯上了关系（${type}）。` };
 }
 
 // 玩家眼下欠着谁的人情（给界面用）
@@ -3668,6 +3744,12 @@ export function applyStateUpdates(player, world, input, report = {}) {
     for (const name of guards) {
       const npc = (world.npcs || []).find((n) => n.name === name);
       if (!npc) continue;
+      const betrayal = betrayalCheck(world, player, 'guard');
+      if (betrayal) {
+        injured.push(`${betrayal.npc}反水`);
+        player.hp = Math.max(1, Math.round(player.hp - player.maxHp * 0.15));
+        continue;
+      }
       npc.bond = { ...bondOf(npc), trust: clampBond(bondOf(npc).trust + 5), debt: clampBond(bondOf(npc).debt + 10) };
       // 挡灾要付代价：心魔伤神，人祸伤身；三个月内不能再来护法
       const hurt = /心魔/.test(p.by) ? '心神受损' : '负伤';
@@ -4969,7 +5051,11 @@ export function advanceTime(world, player, months = 0) {
   {
     const nowMonth2 = monthOrdinal(world.date || { year: 1, month: 1, day: 1 });
     for (const nt of settleDebts(world, player)) debtNotes.push(nt);
-    if (nowMonth2 % 3 === 0) for (const nt of propagateBonds(world)) debtNotes.push(nt);
+    if (nowMonth2 % 3 === 0) {
+      for (const nt of propagateBonds(world)) debtNotes.push(nt);
+      const grown = growNpcLinks(world);
+      if (grown) debtNotes.push(grown.note);
+    }
   }
   // 黑户的日子：灭尘丹、两色雷劫、天渊卫盘查
   const dutyNotes = settleDuty(world, player, months);
