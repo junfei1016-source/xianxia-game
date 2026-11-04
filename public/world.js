@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '1.5.0';
+export const WORLD_VERSION = '1.6.0';
 
 // ============================================================
 //  凡界地图（按《凡人修仙传》的地理骨架搭）
@@ -424,17 +424,80 @@ export function currentRegion(world) {
   return (geo && regionById(geo.regionId, world)) || null;
 }
 
-// 移动：返回 { from, to, days }；不连通或原地返回 null。
+// ============================================================
+//  地理层级：界 → 大区 → 区域（国／岛／坊市／草原），以及"怎么走"
+//
+//  原著里这三件事分得很清：
+//   · 第 221 章：越国、元武国是这一带的中等国，大国是天罗国与风都国——**同一片陆上大区**；
+//   · 第 365/366 章：乱星海是海外群岛，与陆地隔着海，海上还有鬼雾——**另一片大区**；
+//   · 第 364 章：韩立是从越国用**古传送阵**到的乱星海，不是走过去的；
+//   · 第 1315 章：灵界只能飞升或跨界传送。
+//  所以路不止一条：同区陆路、海区海路、跨区得靠传送阵（要灵石）。
+// ============================================================
+export const MACROS = {
+  天南: { id: '天南', label: '天南', note: '越国、元武、天罗这一带，陆路相连，国与国之间走上月余' },
+  乱星海: { id: '乱星海', label: '乱星海', note: '海外群岛，内星海由星宫管辖，外海凶险，往来靠舟船与古传送阵' },
+  灵界: { id: '灵界', label: '灵界', note: '上界，凡界无路可至' },
+};
+
+// 每个区域属于哪个大区、是什么性质的地界
+export const REGION_META = {
+  qingwu: { macro: '天南', kind: '国' },
+  luoxia: { macro: '天南', kind: '坊市' },
+  dayan: { macro: '天南', kind: '国' },
+  chisha: { macro: '天南', kind: '国' },
+  wanyao: { macro: '天南', kind: '草原' },
+  hanyuan: { macro: '乱星海', kind: '岛' },
+  guixu: { macro: '乱星海', kind: '岛城' },
+  xingyun: { macro: '乱星海', kind: '岛' },
+  taiqing: { macro: '灵界', kind: '边城' },
+};
+
+// 古传送阵：点对点，跨大区的唯一定期通路，开一次要灵石（第 364 章：韩立以低阶灵石启动古阵）
+export const GATES = [
+  { a: 'qingwu', b: 'hanyuan', days: 1, cost: 200, name: '古传送阵', note: '建州太岳山脉深处的古阵，另一头在外海' },
+];
+
+export function macroOf(region) {
+  return REGION_META[region && region.id] || { macro: '天南', kind: '国' };
+}
+
+export function gateBetween(fromId, toId) {
+  return GATES.find((g) => (g.a === fromId && g.b === toId) || (g.a === toId && g.b === fromId)) || null;
+}
+
+// 这一趟怎么走：{ days, mode: '陆路'|'海路'|'传送阵', cost, note }；走不了返回 null
+export function travelPlan(fromId, toId, world = null) {
+  if (!fromId || !toId) return null;
+  const from = regionById(fromId, world);
+  const to = regionById(toId, world);
+  if (!from || !to) return null;
+  if (fromId === toId) return { days: 0, mode: '原地', cost: 0, note: '' };
+  const mf = macroOf(from).macro;
+  const mt = macroOf(to).macro;
+  if (mf === '灵界' || mt === '灵界') return null; // 凡界无路可至，只能飞升
+  if (mf === mt) {
+    const days = travelDays(fromId, toId, world);
+    if (days === null) return null;
+    const mode = mf === '乱星海' ? '海路' : '陆路';
+    return { days, mode, cost: 0, note: mode === '海路' ? '租舟出海' : '' };
+  }
+  const gate = gateBetween(fromId, toId);
+  if (!gate) return null; // 隔海又无传送阵：去不了
+  return { days: gate.days, mode: '传送阵', cost: gate.cost, note: gate.name };
+}
+
+// 移动：返回 { from, to, days, mode, cost, note }；不连通或原地返回 null。
 export function moveToRegion(world, targetId) {
   const to = regionById(targetId, world);
   if (!to) return null;
   const geo = ensureWorldGeo(world);
   if (!geo || geo.regionId === targetId) return null;
-  const days = travelDays(geo.regionId, targetId, world);
-  if (days === null) return null; // 跨界面，只能飞升
+  const plan = travelPlan(geo.regionId, targetId, world);
+  if (!plan) return null; // 跨界面或隔海无阵：只能另想他法
   const from = regionById(geo.regionId, world);
   world.geo = { ...geo, regionId: targetId, sinceTurn: world.turn || 0 };
-  return { from, to, days };
+  return { from, to, days: plan.days, mode: plan.mode, cost: plan.cost, note: plan.note };
 }
 
 // 势力的"底细"：引擎知道真相，但不写进开局切片。玩家起疑（调查类动作）才把线索交给 GM，
@@ -493,7 +556,14 @@ export function buildSlice(player, world) {
     .map((f) => `${f.name}：${SECRETS[f.id].truth}`)
     .join('');
   const roads = Object.entries(region.travel_days || {})
-    .map(([id, d]) => { const r = regionById(id, world); return r ? `${r.name}${d}日` : ''; })
+    .map(([id]) => {
+      const r = regionById(id, world);
+      if (!r) return '';
+      const plan = travelPlan(region.id, id, world);
+      if (!plan) return '';
+      const tag = plan.mode === '传送阵' ? `传送阵·${plan.cost}灵石` : plan.mode;
+      return `${r.name}${plan.days}日（${tag}）`;
+    })
     .filter(Boolean).join('、');
   const mult = priceMultiplier(region.id, world.eraType, world);
   const topRarity = region.products[region.products.length - 1];
@@ -513,6 +583,7 @@ export function buildSlice(player, world) {
     facText ? `已知势力：${facText}。` : '',
     unknownCount > 0 ? `此外还有 ${unknownCount} 家势力未与之打过交道。` : '',
     roads ? `可达：${roads}。` : '',
+    '跨海须借古传送阵（200 灵石）；灵界无路，只能飞升。',
     `物价×${mult.toFixed(2)}；本地产出上限${topRarity}。`,
     mats.length ? `可采：${mats.join('、')}。` : '',
     revealedText ? `【已查明】${revealedText}` : '',

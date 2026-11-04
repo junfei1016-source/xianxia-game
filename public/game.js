@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, regionQi, qiLabel, qiCultMult, REGION_QI_RULES, signsOf, RUMOR_SOURCES } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, travelPlan, regionQi, qiLabel, qiCultMult, REGION_QI_RULES, signsOf, RUMOR_SOURCES } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.40.0';
+export const GAME_VERSION = '1.41.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -2993,19 +2993,28 @@ export function applyStateUpdates(player, world, input, report = {}) {
     if (target && (!cur || target.id !== cur.id)) {
       const travelFx = formationEffects((world.formations || []).filter((f) => !cur || f.region === cur.id), world);
       const travelBuff = talismanBuffFx(world).fx.travelMult * rootTraits(player).travelMult;
+      const plan = travelPlan(cur ? cur.id : (world.geo && world.geo.regionId), target.id, world);
+      if (!plan) {
+        travelNote = `【行路】${target.name}去不了：隔着海，又没有传送阵。`;
+      } else if (plan.cost > (player.spiritStones || 0)) {
+        travelNote = `【行路】${plan.note || '传送阵'}启动要 ${plan.cost} 块灵石，你身上只有 ${player.spiritStones || 0} 块，走不了。`;
+      } else {
       const moved = moveToRegion(world, target.id);
       if (moved) {
+        if (plan.cost) player.spiritStones = Math.max(0, player.spiritStones - plan.cost);
         const days = Math.max(1, Math.round(moved.days * travelFx.travelMult * travelBuff));
         const months = Math.round((days / 30) * 1000) / 1000;
         const anchor = worldGameDate(world);
         if (!anchor || addGameDays(anchor, elapsedGameDays(months))) {
           out.timeMonths = months;
-          const via = travelFx.travelMult < 1 ? '，借传送阵' : '';
-          travelNote = `【行路】${moved.from.name} → ${moved.to.name}（${days} 日，约 ${months.toFixed(2)} 月${via}）`;
+          const via = travelFx.travelMult < 1 ? '，借阵法加速' : '';
+          const costText = plan.cost ? `，耗灵石 ${plan.cost}` : '';
+          travelNote = `【行路】${moved.from.name} → ${moved.to.name}（${plan.mode} ${days} 日，约 ${months.toFixed(2)} 月${costText}${via}）`;
           // 初到一地，落脚处总会听到一两句——这是原著里的常态（先打听，再动身）
           const heard = askAround(world, player, { region: moved.to });
           if (heard) travelNote += `\n${heard.note}`;
         }
+      }
       }
     }
     delete out.travelTo; // 只用于结算，不落到前端状态
@@ -3915,8 +3924,8 @@ export function applyStateUpdates(player, world, input, report = {}) {
     const drain = activeHas(world.inventory, 'lifesteal') && hpLost > 0 ? ` · 噬血返还 ${Math.round(hpLost * 0.3)}` : '';
     return `【战斗】${enemyLabel}${realmNote} · 你${wound}（气血-${hpLost}${drain}）`;
   }
-  if (interruptNote) return [interruptNote, treatNote, regionNote, ...pillNotes].filter(Boolean).join('\n');
-  if (treatNote || regionNote || pillNotes.length) return [treatNote, regionNote, ...pillNotes].filter(Boolean).join('\n');
+  if (interruptNote) return [interruptNote, treatNote, regionNote, ...pillNotes, travelNote].filter(Boolean).join('\n');
+  if (treatNote || regionNote || pillNotes.length) return [treatNote, regionNote, ...pillNotes, travelNote].filter(Boolean).join('\n');
   if (revealNote) return revealNote;
   if (travelNote) return travelNote;
   return null;
