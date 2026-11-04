@@ -68,9 +68,11 @@ import {
   realmCapFor,
   canAscendToSpirit,
   isOnDuty,
+  takeTask,
+  redeemMerit,
 } from './game.js';
 
-import { ensureWorldGeo, lockWorldMap, startingFactions, regionById } from './world.js';
+import { ensureWorldGeo, lockWorldMap, startingFactions, regionById, MERIT_SHOP } from './world.js';
 
 const $ = (id) => document.getElementById(id);
 const MORTAL_CAP_TEXT = '化神后期';
@@ -773,7 +775,22 @@ function renderQuest() {
   if (mains.length) html += '<div class="quest-group">主线</div>' + mains.map(item).join('');
   if (sides.length) html += '<div class="quest-group">支线</div>' + sides.map(item).join('');
   if (ended.length) html += `<details class="quest-ended"><summary>已结束（${ended.length}）</summary>` + ended.map(item).join('') + '</details>';
-  $('questPanel').innerHTML = html || '<div class="empty">暂无任务</div>';
+  const board = (world.taskBoard && Array.isArray(world.taskBoard.list)) ? world.taskBoard.list : [];
+  const live = Array.isArray(world.liveTasks) ? world.liveTasks : [];
+  const merit = world.merit || 0;
+  const boardHtml = board.length
+    ? board.map((t) => `<div class="quest-row"><span class="quest-title">[${esc(t.tier)}] ${esc(t.title)}</span>`
+      + `<span class="quest-meta">${esc(t.kind)} ${t.need}${esc(t.target && t.kind !== '行路' ? '' : '')} · 限 ${t.days} 日 · ${t.reward.stones} 灵石 · 功勋 ${t.reward.merit}</span>`
+      + `<button type="button" class="mini" data-take="${esc(t.id)}">接</button></div>`).join('')
+    : '<div class="empty">今日牌上空着（换期后会重挂）</div>';
+  const liveHtml = live.length
+    ? live.map((t) => `<div class="quest-row"><span class="quest-title">${esc(t.title)}</span><span class="quest-meta">进度 ${t.progress}/${t.need} · 限期 ${esc((t.dueDate && (t.dueDate.year + '年' + t.dueDate.month + '月' + t.dueDate.day + '日')) || '—')}</span></div>`).join('')
+    : '<div class="empty">手上没有接下的差事</div>';
+  const shopHtml = MERIT_SHOP.map((x) => `<div class="quest-row"><span class="quest-title">${esc(x.name)}</span><span class="quest-meta">功勋 ${x.merit}</span><button type="button" class="mini" data-redeem="${esc(x.id)}">兑</button></div>`).join('');
+  $('questPanel').innerHTML = (html || '')
+    + `<details class="codex-group" open><summary>任务殿（功勋 ${merit}）</summary>${boardHtml}</details>`
+    + `<details class="codex-group" open><summary>已接 (${live.length}/3)</summary>${liveHtml}</details>`
+    + `<details class="codex-group"><summary>功勋台</summary>${shopHtml}</details>`;
 }
 function kindCls(kind) {
   return { '丹药': 'pill', '法宝': 'treasure', '武器': 'weapon', '衣物': 'cloth', '天材地宝': 'elixir', '材料': 'mat' }[kind] || 'mat';
@@ -1872,6 +1889,10 @@ function bindEvents() {
     if (el) openChronicle(el.getAttribute('data-subject'));
   });
   $('questPanel').addEventListener('click', (e) => {
+    const take = e.target && e.target.getAttribute && e.target.getAttribute('data-take');
+    if (take) { const r = takeTask(world, player, take); appendSystem(r.ok ? r.note : `【接榜】不成：${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
+    const redeem = e.target && e.target.getAttribute && e.target.getAttribute('data-redeem');
+    if (redeem) { const r = redeemMerit(world, player, redeem); appendSystem(r.ok ? r.note : `【功勋】${r.reason}`); renderAll(); saveGame(AUTO_SLOT); return; }
     const btn = e.target.closest('[data-cancel]');
     if (btn) cancelQuest(btn.getAttribute('data-cancel'));
   });

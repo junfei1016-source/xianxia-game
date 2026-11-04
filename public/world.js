@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '1.9.0';
+export const WORLD_VERSION = '2.0.0';
 
 // ============================================================
 //  凡界地图（按《凡人修仙传》的地理骨架搭）
@@ -591,6 +591,38 @@ export const SPACE_NODES = [
 export function nodeInRegion(regionId) {
   return SPACE_NODES.find((n) => n.region === regionId) || null;
 }
+
+// ============================================================
+//  任务殿：挂在墙上的差事
+//  第 1356-1358 章：天渊城长老会会发布"耗时较长、功勋极重"的任务，危险大，多要多人联手；
+//  第 273 章：各派坊市也有自己的悬赏（猎杀魔修、采办材料），赏额可观。所以任务殿分三档：
+//    低阶（坊市散活）／高阶（宗门与商会的大活）／长老会（天渊城点名）。
+export const TASK_TIERS = {
+  低阶: { label: '低阶', minRealm: '筑基初期', days: [30, 60], stones: [50, 200], merit: 1 },
+  高阶: { label: '高阶', minRealm: '金丹初期', days: [90, 120], stones: [300, 1200], merit: 3 },
+  长老会: { label: '长老会', minRealm: '化神初期', days: [180, 240], stones: [2000, 6000], merit: 10 },
+};
+
+// 任务的"做法"——都能被引擎直接看住，不靠叙事自报
+export const TASK_KINDS = {
+  猎妖: { unit: '头', pool: [2, 3, 5] },
+  采集: { unit: '份', pool: [2, 3, 5] },
+  行路: { unit: '处', pool: [1, 2] },
+};
+
+export const TASK_TITLES = {
+  猎妖: ['清剿城郊妖兽', '断妖路', '猎取妖丹', '剿灭兽巢'],
+  采集: ['采办灵药', '取寒铁三斤', '寻千年血参', '凑一炉丹材'],
+  行路: ['送信到邻境', '押一趟镖', '带话给旧识', '探一处险地'],
+};
+
+// 功勋能换什么（第 1356 章：立大功可"功成身退"；天渊城的功勋是有实物的）
+export const MERIT_SHOP = [
+  { id: 'dust', name: '灭尘丹', merit: 30, qty: 1, note: '天渊城按功勋发的灭尘丹（在册者另有每年一粒）' },
+  { id: 'stones', name: '灵石', merit: 10, stones: 500, note: '功勋折现' },
+  { id: 'heal', name: '回春丹', merit: 5, qty: 3, note: '常备伤药' },
+  { id: 'talisman', name: '破界符', merit: 60, qty: 1, note: '破界用的符箓，价高' },
+];
 
 export function macroOf(region) {
   return REGION_META[region && region.id] || { macro: '天南', kind: '国' };
