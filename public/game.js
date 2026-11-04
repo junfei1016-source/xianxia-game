@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.47.0';
+export const GAME_VERSION = '1.48.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -658,6 +658,92 @@ export function getSpiritPass(world, player) {
   return { ok: true, note: `【身份牌】${res.faction.name}替你做了担保，你拿到了灵界的自由身份牌，从此不算黑户了。` };
 }
 
+// ---------- 天渊城服役（有仙籍的正途）----------
+// 第 1315/1316 章：飞升者一到灵界，本该在飞灵台现身、去天渊城服役；天渊城每年给飞升修士发一粒灭尘丹；
+//   **服够三百年**，下界气息彻底洗去，就能自由离开天渊城。第 1316/1317 章：这些人被编为**青冥卫**——
+//   初代飞升修士潜力惊人，多半不必考核就直接任命。
+export const DUTY_YEARS = 300;           // 服够三百年才洗得干净（第 1316 章）
+export const DUTY_RANKS = ['青冥卫', '青冥卫队长'];
+
+export function ensureDuty(world) {
+  if (!world || typeof world !== 'object') return null;
+  if (!world.duty || typeof world.duty !== 'object' || Array.isArray(world.duty)) world.duty = {};
+  if (!Number.isFinite(world.duty.startMonth) || world.duty.startMonth < 0) world.duty.startMonth = 0;
+  if (!Number.isFinite(world.duty.years) || world.duty.years < 0) world.duty.years = 0;
+  if (!Number.isFinite(world.duty.merit) || world.duty.merit < 0) world.duty.merit = 0;
+  if (!Number.isFinite(world.duty.clock) || world.duty.clock < 0) world.duty.clock = 0;
+  if (!world.duty.rank) world.duty.rank = '';
+  return world.duty;
+}
+
+export function isOnDuty(world) {
+  return !!(world && world.duty && world.duty.rank);
+}
+
+// 入伍：须在天渊城、有仙籍（不是黑户）、尚未入伍
+export function canEnlist(world, player) {
+  const region = world && world.geo ? regionById(world.geo.regionId, world) : null;
+  if (!region || region.id !== 'taiqing') return { ok: false, reason: '天渊城才有征召，你不在城里。' };
+  if (isOutlaw(world)) return { ok: false, reason: '无籍者进不了天渊城名册，先办身份牌洗白再说。' };
+  if (isOnDuty(world)) return { ok: false, reason: '你已经在册了。' };
+  if (world.flags && world.flags.spiritFree) return { ok: false, reason: '下界气息已洗尽，你不必再服役。' };
+  return { ok: true };
+}
+
+export function enlist(world, player) {
+  const res = canEnlist(world, player);
+  if (!res.ok) return res;
+  const d = ensureDuty(world);
+  d.rank = DUTY_RANKS[0];
+  d.startMonth = monthOrdinal(world.date || { year: 1, month: 1, day: 1 });
+  d.years = 0;
+  d.merit = 0;
+  d.clock = 0;
+  world.flags.spiritRegistered = true;
+  return { ok: true, note: '【入伍】天渊城的执事把你的名字录进青冥卫名册：此后每年领一粒灭尘丹，服够三百年便可自由。' };
+}
+
+// 年度结算：发丹、差事、军功、满期
+export function settleDuty(world, player, months = 0, rand = Math.random) {
+  ensureDuty(world);
+  if (!isOnDuty(world)) return [];
+  const days = elapsedGameDays(months);
+  if (days === null || days <= 0) return [];
+  const addMonths = Math.floor(days / 30);
+  if (addMonths <= 0) return [];
+  const before = Math.floor(world.duty.clock / 12);
+  world.duty.clock += addMonths;
+  const after = Math.floor(world.duty.clock / 12);
+  const events = [];
+  for (let i = before; i < after; i += 1) {
+    world.duty.years += 1;
+    // 每年一粒灭尘丹：在册的人不用自己找（第 1316 章）
+    ensureOutlaw(world).unsuppressedMonths = 0;
+    const roll = rand();
+    if (roll < 0.45) {
+      world.duty.merit += 1;
+      events.push('【差事】随青冥卫小队出城巡边，斩了几头流窜的妖物，记军功一功。');
+    } else if (roll < 0.75) {
+      events.push('【差事】轮到守城，城头罡风刮了整月，无事。');
+    } else if (roll < 0.92) {
+      player.hp = Math.max(1, Math.round(player.hp - player.maxHp * 0.08));
+      world.duty.merit += 2;
+      events.push('【差事】妖族袭扰城郊，你带伤把人挡回去，记军功两功。');
+    } else {
+      world.duty.merit += 3;
+      player.spiritStones = (player.spiritStones || 0) + 300;
+      events.push('【差事】截下一支偷运灵材的队伍，分到三百灵石，记军功三功。');
+    }
+    events.push('【灭尘丹】天渊城按例发下一粒，你服了，下界气息又淡一分。');
+  }
+  if (world.duty.years >= DUTY_YEARS && !world.flags.spiritFree) {
+    world.flags.spiritFree = true;
+    world.duty.rank = '已退役';
+    events.push(`【满役】服够 ${DUTY_YEARS} 年，下界气息彻底洗去——从今天起你可以自由离开天渊城了。`);
+  }
+  return events;
+}
+
 // ---------- 天时：世道不报名，只露征兆（分层可见）----------
 // 原文从没有"天下大势：某世"这种说法给玩家；韩立只知道米价、溃兵、封山、灵气变薄。
 // 所以内部五种世道照旧管收益/危险/修炼/期限/稀有度，但对玩家只说三层征兆，
@@ -876,7 +962,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
   "died": false,
   "newNpcs": [], "newLocations": [], "newSkills": [], "newEvents": [], "itemChanges": [], "equipChanges": [],
   "newQuests": [], "questUpdates": [], "factionRelations": [], "npcRelations": [], "newFactions": [], "hooks": [], "effectRequests": [], "retract": [], "personalityReveals": [], "reveals": [], "linkReveals": [],
-  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "smuggle": null, "requestPass": null, "gainType": "neutral", "eraChange": null
+  "flags": {}, "goal": null, "timeMonths": 1, "travelTo": null, "askAround": null, "smuggle": null, "requestPass": null, "enlist": null, "gainType": "neutral", "eraChange": null
 }
 字段说明：
 - narrative：必填。
@@ -921,6 +1007,8 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 拍卖 auctionBids：玩家在**黄枫谷坊市的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
 - 地图在开局已经定死：本局**不存在**"新开辟的区域"。不要登记 newRegion，也不要写行程表之外的地界；未知之处只能作为传闻、遗迹或远方的说法提及（"据说北边还有一片荒原"），不写具体路程与产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
+- 入伍 enlist：玩家在天渊城应征青冥卫（服役）时填 {}。须有仙籍、且在城内；服役每年领灭尘丹，满三百年可自由离开。
+- 入伍 enlist：叙事里玩家在天渊城应征青冥卫时填 {}。
 - 办身份牌 requestPass：黑户在灵界托人担保、领自由身份牌（第 1583 章）时填 {faction: 担保势力名}。须已与本地势力结盟、且拿得出灵石，成不成由系统判。
 - 偷渡 smuggle：玩家要**走空间节点硬闯灵界**（不是正常飞升）时填 {node: 节点名, accompany: 同行者姓名（有人一起去才填）}。须化神以上；带上化界珠、破灭法目、破界符能提高把握，有人联手比独闯稳得多。系统会掷骰：成了是黑户，可能死。不要自己描述结果。
 - 打听 askAround：玩家开口向人打听消息（问路、问行情、问某地某事、在茶馆里听人说话）时填 {about: "打听什么"}。消息由系统从"街谈"里给，可能是真的，也可能是讹传；你只负责把人话写进叙事，**不要自己编消息内容或结论**。
@@ -1252,7 +1340,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
   "travelTo": null,
   "askAround": null,
   "smuggle": null,
-  "requestPass": null, "requestPass": null,
+  "requestPass": null,
+  "enlist": null, "enlist": null, "requestPass": null, "enlist": null,
   "gainType": "neutral",
   "eraChange": null
 }
@@ -1262,6 +1351,8 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。【境界岁月】大境界突破还须在本境积累足够年数（提示里会给出"还差约 N 年"），年数不足时一律填 null，改为描写继续闭关、游历或等机缘。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
 - 闭关时长：请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）。**闭关时的修为由系统按境界与时长结算**（一个境界大致要熬满其最少在境年限才圆满），你的 cultivation delta 只填"这次闭关的效率提示"：常速 8~15，灵地/丹药好给 18~20，环境差给 5~7；不要自己算出总收益写进去。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（系统据此按时长结算并计算连续闭关的递减）。
+- 入伍 enlist：玩家在天渊城应征青冥卫（服役）时填 {}。须有仙籍、且在城内；服役每年领灭尘丹，满三百年可自由离开。
+- 入伍 enlist：叙事里玩家在天渊城应征青冥卫时填 {}。
 - 办身份牌 requestPass：叙事里黑户托人担保换身份牌时填 {faction: 担保势力名}。
 - 偷渡 smuggle：叙事里玩家从空间节点硬闯灵界时填 {node: 节点名, accompany: 同行者姓名（若有）}；须化神以上；系统掷骰，成则落在灵界荒野且无仙籍，败则重伤或身死。
 - 打听 askAround：叙事里玩家向人打听消息（问路、问行情、问某地某事、听人闲话）时填 {about: "打听什么"}；系统据此给他一条街谈，可能是真的也可能是讹传。你不许自己编消息内容。
@@ -2993,6 +3084,7 @@ export function validateStateOutput(input) {
   askAround: record({ about: 'string' }),
   smuggle: record({ node: 'string', accompany: 'name' }),
   requestPass: record({ faction: 'string' }),
+  enlist: record({}),
     plant: record({ material: 'name' }, ['material']),
     tendPlot: record({ id: 'string' }),
     harvestPlot: record({ id: 'string' }),
@@ -3354,6 +3446,12 @@ export function applyStateUpdates(player, world, input, report = {}) {
     player.pillUsageMonth = monthOrdinal(world.date);
     const resist = eff.factor < 0.9 ? `（抗药性 ×${eff.factor}）` : '';
     pillNotes.push(`【丹药】${name}：${bits.length ? bits.join('，') : '并无实效'}${resist}`);
+  }
+  // 入伍：天渊城服役（第 1316/1317 章）
+  if (out.enlist && typeof out.enlist === 'object') {
+    const r = enlist(world, player);
+    pillNotes.push(r.ok ? r.note : `【入伍】不成：${r.reason}`);
+    delete out.enlist;
   }
   // 办身份牌：黑户洗白（第 1583 章）
   if (out.requestPass && typeof out.requestPass === 'object') {
@@ -4411,10 +4509,11 @@ export function advanceTime(world, player, months = 0) {
   // 地脉枯荣：岁月过去，被采薄的灵脉会自消压力、慢慢回补（无变化时不发提示）
   evolveRegionQi(world, months);
   // 黑户的日子：灭尘丹、两色雷劫、天渊卫盘查
+  const dutyNotes = settleDuty(world, player, months);
   const outlawNotes = settleOutlaw(world, player, months);
   const checkNote = policeCheck(world, player);
   if (checkNote) outlawNotes.push(checkNote);
-  world.lastOutlawEvents = outlawNotes;
+  world.lastOutlawEvents = [...dutyNotes, ...outlawNotes];
 }
 
 // ---------- 大势时间轴（有期限的大势必须按时演变，不能无限拖延）----------

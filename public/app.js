@@ -67,6 +67,7 @@ import {
   interfaceOf,
   realmCapFor,
   canAscendToSpirit,
+  isOnDuty,
 } from './game.js';
 
 import { ensureWorldGeo, lockWorldMap, startingFactions, regionById } from './world.js';
@@ -636,6 +637,12 @@ function renderStatus() {
   const spiritLabel = outlaw ? '无（偷渡黑户）' : '已登记';
   const unsuppressed = (world.outlaw && Number.isFinite(world.outlaw.unsuppressedMonths)) ? world.outlaw.unsuppressedMonths : 0;
   const outlawYears = Math.floor(unsuppressed / 12);
+  const onDuty = isOnDuty(world);
+  const dutyYears = (world.duty && Number.isFinite(world.duty.years)) ? world.duty.years : 0;
+  const dutyMerit = (world.duty && Number.isFinite(world.duty.merit)) ? world.duty.merit : 0;
+  const dutyLabel = world.duty && world.duty.rank === '已退役'
+    ? '已满役（可自由离开天渊城）'
+    : `${(world.duty && world.duty.rank) || '青冥卫'} · 第 ${dutyYears} 年 / 300 年 · 军功 ${dutyMerit}`;
   const spiritTip = outlaw
     ? '偷渡过来的，没有飞灵台的仙籍：天渊卫见了就要拿人，也进不了天渊城服役。'
     : '经飞灵台登记在册，有仙籍，可去天渊城服役换灭尘丹（第 1316 章）。';
@@ -658,6 +665,7 @@ function renderStatus() {
     <div class="stat-row" ${tip(ifaceTip)}><dt>所处</dt><dd>${ifaceLabel}</dd></div>
     ${iface === '灵界' ? `<div class="stat-row" ${tip(spiritTip)}><dt>仙籍</dt><dd>${spiritLabel}</dd></div>` : ''}
     ${iface === '灵界' && outlaw ? `<div class="stat-row" ${tip('灭尘丹每年服一粒才压得住下界气息；不服用的话，三百年一次的小天劫会变成必死的两色雷劫。')}><dt>劫气</dt><dd>${outlawYears} 年未服丹</dd></div>` : ''}
+    ${iface === '灵界' && onDuty ? `<div class="stat-row" ${tip('在天渊城服役：每年领一粒灭尘丹，服够三百年下界气息尽去，就可自由离开。')}><dt>服役</dt><dd>${dutyLabel}</dd></div>` : ''}
     <div class="stat-row" ${tip('当前境界的修炼进度（0~100%）。到 100% 后进入瓶颈，需机缘（丹药/传承/顿悟/磨砺）才能突破。')}><dt>修为进度</dt><dd>${bar(p.cultivation)} ${p.cultivation}%</dd></div>
     <div class="stat-row" ${tip('关系与势力的修炼加成：道侣+25%、师徒+20%、挚友/结义+10%（取最高一档）；每个结盟势力+5%（上限+15%）。')}><dt>关系·势力</dt><dd>${relBonus > 0 ? '+' + relBonus + '%' : '无加成'}</dd></div>
     <div class="stat-row" ${tip(`气血：${p.hp}/${p.maxHp}。受伤会降低气血，归零则身死道消；气血上限随境界提升。`)}><dt>气血</dt><dd>${bar(p.hp, p.maxHp)} ${p.hp}/${p.maxHp}</dd></div>
