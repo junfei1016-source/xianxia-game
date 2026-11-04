@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.45.0';
+export const GAME_VERSION = '1.46.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -500,44 +500,64 @@ export function canAscendToSpirit(player, world) {
 // ---------- 偷渡：从空间节点硬闯灵界 ----------
 // 原文第 1071、1195、1238、1461 章：节点是捷径，但空间风暴九死一生；
 // 有化界珠才有几分把握；过去了也没有仙籍，是天渊卫眼里的黑户。
-export const SMUGGLE_MIN = '元婴后期'; // 修为太低的进去会被空间之力化为乌有（第 1039 章）
+export const SMUGGLE_MIN = '化神初期'; // 第 1039 章：修为没超越化神期，进通道就被空间之力化为乌有；第 1238 章也是"化神后"才谈偷渡
 
 export function hasItemNamed(world, key) {
   return (world && Array.isArray(world.inventory) ? world.inventory : []).some((it) => it && String(it.name || '').includes(key));
 }
 
-export function smuggleChance(player, world, node) {
+// 同行者：韩立是"与冰凤联手通过节点"过去的（第 1990 章），一个人硬闯是另一回事
+export function findCompanion(world, name) {
+  const list = (world && Array.isArray(world.npcs) ? world.npcs : []).filter((x) => x && x.name);
+  if (name) return list.find((x) => x.name === String(name).trim()) || null;
+  return list.find((x) => /道侣|双修|夫妻|挚友|结义|师徒|同门/.test(String(x.relation || ''))) || null;
+}
+
+export function smuggleChance(player, world, node, companion = null) {
   if (!node) return 0;
   let p = node.stability;
-  if (hasItemNamed(world, '化界珠')) p += 0.3; // 第 1195 章：化界珠专破空间禁制
+  if (hasItemNamed(world, '化界珠')) p += 0.3;   // 第 1195 章：化界珠专破空间禁制，没它九死一生
+  if (hasItemNamed(world, '破灭法目')) p += 0.1; // 第 1180 章：练成破灭法目才看得清裂缝
+  if (hasItemNamed(world, '破界符')) p += 0.05;  // 第 1056 章：符只破障，还要配秘术，故只算小补
   p += Math.max(0, realmIndex(player && player.realm) - realmIndex(SMUGGLE_MIN)) * 0.05;
-  return Math.max(0.03, Math.min(0.9, Math.round(p * 100) / 100));
+  p += companion ? 0.15 : -0.1; // 联手比独闯稳（第 1990 章"你我联手通过节点"）
+  return Math.max(0.03, Math.min(0.92, Math.round(p * 100) / 100));
 }
 
 // 走节点偷渡：成功→随机落在灵界一处，黑户身份；失败→多半身死，侥幸活下来也重伤留在原地
-export function attemptSmuggle(player, world, rand = Math.random) {
+export function attemptSmuggle(player, world, rand = Math.random, companionName = '') {
   const regionId = world && world.geo ? world.geo.regionId : '';
   const node = nodeInRegion(regionId);
   if (!node) return { ok: false, reason: '此地没有空间节点，只有几处界面薄弱之处才打得开通路。' };
   if (realmIndex(player.realm) < realmIndex(SMUGGLE_MIN)) {
     return { ok: false, reason: `修为不足：${SMUGGLE_MIN}以下入内，会被空间之力化为乌有。` };
   }
-  const chance = smuggleChance(player, world, node);
+  const companion = findCompanion(world, companionName);
+  const chance = smuggleChance(player, world, node, companion);
   const roll = rand();
   if (roll < chance) {
     const spots = ['fengyuan', 'leihai', 'xuetian'].map((id) => regionById(id, world)).filter(Boolean);
     const spot = spots[Math.floor(rand() * spots.length)] || regionById('fengyuan', world);
     world.geo = { regionId: spot.id, sinceTurn: world.turn || 0 };
     world.flags.spiritOutlaw = true; // 偷渡过去：没有仙籍
-    // 随身灵物折在空间通道里（第 1461 章：万年灵液都耗在节点里）
-    world.inventory = (world.inventory || []).filter((it) => !(it && /化界珠|万年灵液|破界符/.test(String(it.name || ''))));
+    // 耗材折在通道里：万年灵液与破界符（第 1461 章）；化界珠是护身的关键，留着
+    world.inventory = (world.inventory || []).filter((it) => !(it && /万年灵液|破界符/.test(String(it.name || ''))));
     // 天渊卫与飞灵台记上一笔
     for (const f of world.factions || []) {
       if (/天渊卫|接引堂/.test(f.name)) f.relation = '敌对';
     }
     return {
       ok: true,
-      note: `【偷渡】你钻进${node.name}的裂缝，空间风暴撕了不知多久，最后摔在${spot.name}的荒地里。没有飞灵台的仙籍，你现在是天渊卫眼里该抓的人。`,
+      note: `【偷渡】你${companion ? `与${companion.name}联手` : '独自'}钻进${node.name}的裂缝，空间风暴撕了不知多久，最后摔在${spot.name}的荒地里。没有飞灵台的仙籍，你现在是天渊卫眼里该抓的人。`,
+    };
+  }
+  // 有同伴时，最凶险的那一刻她（他）可能替你挡下
+  if (companion && rand() < 0.35) {
+    player.hp = Math.max(1, Math.round(player.maxHp * 0.2));
+    companion.condition = { text: '空间风暴里伤了根基', untilMonth: (monthOrdinal(world.date) || 0) + 12 };
+    return {
+      ok: false,
+      note: `【偷渡】通道塌了。${companion.name}把你往外一推，自己却被空间之力撕去半条命（伤及根基，养一年）。你们被甩回${node.name}，这一趟没能成。`,
     };
   }
   // 失败：多半死在空间风暴里
@@ -817,7 +837,7 @@ const WORLD_RULES_FAST = RULES_CORE + `
 - 拍卖 auctionBids：玩家在**黄枫谷坊市的拍卖会**上举牌时登记，每项 {item: 丹名或丹方名, bid: 出价}。**拍卖会是会期制：每年 3 月、9 月各一场**，不在会期不能举牌（系统会给下一场时间）。起拍价由系统按市价 ×1.5 定，对手出价随机；价高者得、没拍到不扣钱。不要自己写成交价或丹药产出，成交后系统会扣灵石并入库。
 - 地图在开局已经定死：本局**不存在**"新开辟的区域"。不要登记 newRegion，也不要写行程表之外的地界；未知之处只能作为传闻、遗迹或远方的说法提及（"据说北边还有一片荒原"），不写具体路程与产出。
 - 关系浮出 linkReveals：玩家查到某条**暗关系**的实证（两人私下往来、账目、口供）时登记，每项 {a: 甲, b: 乙, type?: 关系类型}；系统只把这一条写进档案与关系网，其余暗关系依旧不公开。没有则留空数组。
-- 偷渡 smuggle：玩家要**走空间节点硬闯灵界**（不是正常飞升）时填 {node: 节点名}。系统会掷骰：成了是黑户，可能死。不要自己描述结果。
+- 偷渡 smuggle：玩家要**走空间节点硬闯灵界**（不是正常飞升）时填 {node: 节点名, accompany: 同行者姓名（有人一起去才填）}。须化神以上；带上化界珠、破灭法目、破界符能提高把握，有人联手比独闯稳得多。系统会掷骰：成了是黑户，可能死。不要自己描述结果。
 - 打听 askAround：玩家开口向人打听消息（问路、问行情、问某地某事、在茶馆里听人说话）时填 {about: "打听什么"}。消息由系统从"街谈"里给，可能是真的，也可能是讹传；你只负责把人话写进叙事，**不要自己编消息内容或结论**。
 - 行路 travelTo：玩家本回合动身前往另一区域并抵达时，填【世界切片】"可达"里的区域名；没有移动则省略。系统按路程表结算耗时，你**不要**自己写赶路时长，timeMonths 也不要算这段路。跨区域只能到"可达"列出的地方。
 - flags：重要剧情标记只用布尔值（闭关修炼/苦修时标记 closedDoor:true；脱险/恢复可用 deathImminent:false、qiDeviation:false，但不能将这两个标记设 true，也不能写入或撤回 deathByRisk、eraExpired、goalCompleted）。任务 completed/failed/cancelled 均为终态，禁止重开、改写、补期限或伪造相反事迹；同批不能将同一任务同时完成与失败。goal：目标变化；timeMonths：本回合经过的有限非负月数（可为小数，1月≈30天）。短场景（对话/探查/打斗）填 0；出现时间词按此换算——一夜/次日≈0.03、数日/三日≈0.1、旬日/十日≈0.33、半月≈0.5、一月/数月≈1~3、一年/数年≈12~36、闭关十年≈120。gainType：本回合收益来源，取值 "righteous"（正道途径）/ "plunder"（掠夺途径）/ "neutral"。eraChange：大势演变，{type, text} 或 null。物品和撤回退款的 delta 必须明确给出有限数字，缺失不会默认增加一件。
@@ -1156,7 +1176,7 @@ const EXTRACT_SYSTEM = `你是这个修仙游戏的状态提取器。根据"当�
 - 境界突破用 realmChange 填新境界名（必须严格来自境界阶梯：${LADDER_TEXT}，且大境界不可跳级、须逐级而上；小境界可快速破、甚至连破多个小境界）。每一阶的修为门槛只是参考（前低后高）：${BREAKTHROUGH_NEED_TEXT}。【小境界 vs 大境界】同一大境界内"初期→中期→后期"是小境界；"后期→下一大境界初期"是大境界。例：炼气初期→炼气中期是小境界、炼气后期→筑基初期是大境界。规则——闭关修炼任何阶段都正常涨修为（不要因瓶颈写零增长）；小境界（初期→中期、中期→后期）修为圆满即可填 realmChange，有丹药/天材地宝/顿悟辅助时达到门槛即可填、可连破多个小境界；大境界（如炼气后期→筑基初期、金丹后期→元婴初期）除圆满外还需机缘（叙事里出现丹药/天材地宝/传承/顿悟才填），攒了大量天材地宝也可快速跨过；化神→飞升还需道心+渡劫准备。只有叙事明确描写破境才填。【境界岁月】大境界突破还须在本境积累足够年数（提示里会给出"还差约 N 年"），年数不足时一律填 null，改为描写继续闭关、游历或等机缘。
 - 时间 timeMonths：本回合叙事中经过的时间（月数，可为小数，1 月≈30 天）。判定规则：叙事未出现任何时间跨度词（对话、探查、一时半刻等短场景）时填 0；出现时间词或 GM 写了时间变迁时，按此换算——一夜/次日/当晚 ≈0.03（1天）、数日/三日 ≈0.1（3天）、旬日/十日 ≈0.33（10天）、半月 ≈0.5、一月/数月 ≈1~3、一年/数年 ≈12~36、闭关十年 ≈120。GM 主动写的时间跳跃（如"三年后""岁月如梭"）也要如实换算。
 - 闭关时长：请把闭关时长写进 timeMonths（如"闭关十年"→timeMonths:120）。**闭关时的修为由系统按境界与时长结算**（一个境界大致要熬满其最少在境年限才圆满），你的 cultivation delta 只填"这次闭关的效率提示"：常速 8~15，灵地/丹药好给 18~20，环境差给 5~7；不要自己算出总收益写进去。若玩家本回合是**闭关修炼/苦修**（而非探索/任务/战斗的顿悟），请在 flags 里标记 closedDoor:true（系统据此按时长结算并计算连续闭关的递减）。
-- 偷渡 smuggle：叙事里玩家从空间节点硬闯灵界时填 {node: 节点名}；系统掷骰，成则落在灵界荒野且无仙籍，败则重伤或身死。
+- 偷渡 smuggle：叙事里玩家从空间节点硬闯灵界时填 {node: 节点名, accompany: 同行者姓名（若有）}；须化神以上；系统掷骰，成则落在灵界荒野且无仙籍，败则重伤或身死。
 - 打听 askAround：叙事里玩家向人打听消息（问路、问行情、问某地某事、听人闲话）时填 {about: "打听什么"}；系统据此给他一条街谈，可能是真的也可能是讹传。你不许自己编消息内容。
 - 行路 travelTo：叙事写玩家抵达另一个区域/城池/坊市时，填该区域名（须与【世界切片】"可达"中的名字一致，或叙事里明确确认的既有区域）；只在确实发生跨区域移动时填，原地活动不填。系统按路程表结算耗时，不要用 timeMonths 代替。
 - 寿元 lifespan：岁月流逝导致的寿元减少，系统会按 timeMonths 自动扣除，所以你**不要**为"闭关/赶路/等待"等正常时间流逝再写 lifespan 负 delta（否则会重复扣）。只有叙事发生**非时间流逝**的寿元变化时才写 lifespan delta——如服用延寿丹（正）、走火入魔/被抽取寿元/燃烧寿元（负）。
@@ -2884,7 +2904,7 @@ export function validateStateOutput(input) {
     auctionBids: array(record({ item: 'name', bid: 'number' }, ['item', 'bid'])),
     gather: record({ kind: enumeration('采药', '挖矿', '猎妖'), days: 'number' }, ['kind']),
   askAround: record({ about: 'string' }),
-  smuggle: record({ node: 'string' }),
+  smuggle: record({ node: 'string', accompany: 'name' }),
     plant: record({ material: 'name' }, ['material']),
     tendPlot: record({ id: 'string' }),
     harvestPlot: record({ id: 'string' }),
@@ -3249,7 +3269,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
   }
   // 偷渡：从空间节点硬闯灵界（第 1071/1195 章）
   if (out.smuggle && typeof out.smuggle === 'object') {
-    const res = attemptSmuggle(player, world);
+    const res = attemptSmuggle(player, world, Math.random, out.smuggle.accompany || '');
     if (res.note) pillNotes.push(res.note);
     delete out.smuggle;
   }

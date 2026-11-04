@@ -10,6 +10,7 @@ import {
   applyStateUpdates,
   attemptSmuggle,
   smuggleChance,
+  findCompanion,
   interfaceOf,
   SMUGGLE_MIN,
 } from '../public/game.js';
@@ -59,8 +60,8 @@ test('不在节点处，偷渡无从谈起', () => {
   assert.match(res.reason, /没有空间节点/);
 });
 
-test('修为太低会被空间之力化成乌有：元武国境内的守门也拦', () => {
-  const { player, world } = setup('wubian', '炼气后期');
+test('修为太低会被空间之力化成乌有：元婴期也别想', () => {
+  const { player, world } = setup('wubian', '元婴后期');
   const res = attemptSmuggle(player, world, fixed(0.01));
   assert.equal(res.ok, false);
   assert.match(res.reason, new RegExp(SMUGGLE_MIN));
@@ -99,7 +100,8 @@ test('偷渡成功：落在灵界荒野，没有仙籍，随身灵物折在通�
   assert.equal(interfaceOf(world), '灵界', '人已在灵界');
   assert.ok(['fengyuan', 'leihai', 'xuetian'].includes(world.geo.regionId), `落点异常：${world.geo.regionId}`);
   assert.equal(world.flags.spiritOutlaw, true, '没有仙籍');
-  assert.ok(!world.inventory.some((it) => /化界珠|万年灵液/.test(it.name)), '化界珠与万年灵液都耗在节点里');
+  assert.ok(world.inventory.some((it) => it.name === '化界珠'), '化界珠是护身的关键，不该耗掉');
+  assert.ok(!world.inventory.some((it) => /万年灵液|破界符/.test(it.name)), '灵液与破界符折在通道里');
   assert.ok(world.inventory.some((it) => it.name === '回春丹'), '别的丹不该被清掉');
 });
 
@@ -123,6 +125,43 @@ test('偷渡失败：多半身死道消，偶有重伤逃回', () => {
   assert.equal(hurt.player.hp, Math.max(1, Math.round(hurt.player.maxHp * 0.1)));
   assert.ok(hurt.player.lifespan < 100, '寿元折了二十年');
   assert.equal(hurt.world.geo.regionId, 'wubian', '人还在原地');
+});
+
+
+test('联手比独闯稳：韩立是与冰凤一同过的节点（第 1990 章）', () => {
+  const solo = setup('wubian', '化神初期');
+  const team = setup('wubian', '化神初期');
+  team.world.npcs = [{ name: '苏瑶', desc: '道侣', relation: '道侣' }];
+  const node = nodeInRegion('wubian');
+  const a = smuggleChance(solo.player, solo.world, node);
+  const b = smuggleChance(team.player, team.world, node, findCompanion(team.world));
+  assert.ok(b > a + 0.2, `联手应明显更稳：独闯 ${a} → 联手 ${b}`);
+});
+
+test('破灭法目与破界符各给一点加成（第 1180/1056 章）', () => {
+  const base = setup('wubian', '化神初期');
+  const withEye = setup('wubian', '化神初期');
+  withEye.world.inventory = [{ name: '破灭法目', qty: 1 }];
+  const withTalisman = setup('wubian', '化神初期');
+  withTalisman.world.inventory = [{ name: '破界符', qty: 1 }];
+  const node = nodeInRegion('wubian');
+  const p0 = smuggleChance(base.player, base.world, node);
+  assert.ok(smuggleChance(withEye.player, withEye.world, node) > p0);
+  assert.ok(smuggleChance(withTalisman.player, withTalisman.world, node) > p0);
+});
+
+test('同伴替你挡死劫：人回来了，但同伴伤了根基', () => {
+  const { player, world } = setup('wubian', '化神初期');
+  world.npcs = [{ name: '苏瑶', desc: '道侣', relation: '道侣' }];
+  // 第一次掷超过成功率（失败），第二次掷落在"替你挡"的 35% 内
+  let c = 0;
+  const seq = () => (c++ === 0 ? 0.99 : 0.1);
+  const res = attemptSmuggle(player, world, seq, '苏瑶');
+  assert.equal(res.ok, false);
+  assert.ok(!res.death, '有人挡下就不该死');
+  assert.match(res.note, /苏瑶/);
+  assert.equal(world.npcs[0].condition && world.npcs[0].condition.text, '空间风暴里伤了根基');
+  assert.equal(world.geo.regionId, 'wubian', '这一趟没成');
 });
 
 test('走正途与偷渡互不影响：化神后期圆满仍可正常破界飞升', () => {
