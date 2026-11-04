@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '1.3.0';
+export const WORLD_VERSION = '1.4.0';
 
 const REGIONS = [
   {
@@ -250,20 +250,50 @@ function realmRank(realm) {
   return key === undefined ? 0 : REALM_RANK[key];
 }
 
-// ---------- 动态区域（玩家在游戏里开辟/发现的新域） ----------
-// 静态九域不可改；玩家开出来的新域存在存档里（world.dynamicRegions），
-// 路程的正反向记在 world.dynamicTravel，避免污染模块级的世界表。
+// ---------- 开局定图：一局的地图在开头就钉死 ----------
+// 以前地图是"静态九域 + 局中随时新开的地"。现在改成：**开局一次性把地图写进存档 world.map**，
+// 之后谁都不许改——区域、路程、物价系数都以存档里的这份为准。
+// 好处：势力、路程、物价、秘境、采集点全挂在同一张图上，叙事不会前后矛盾；
+// 旧档没有 map 的，读档时按"静态表 + 已有的动态区域"补一份，幂等、不判罚。
 function dynamicRegions(world) {
   return world && Array.isArray(world.dynamicRegions) ? world.dynamicRegions : [];
 }
 
+export function worldMapOf(world) {
+  return world && world.map && Array.isArray(world.map.regions) && world.map.regions.length ? world.map : null;
+}
+
+// 把地图钉进存档（幂等：已有就原样返回，绝不覆盖）
+export function lockWorldMap(world) {
+  if (!world || typeof world !== 'object') return null;
+  const existing = worldMapOf(world);
+  if (existing) return existing;
+  const regions = [...REGIONS, ...dynamicRegions(world)].map((r) => ({
+    id: r.id,
+    name: r.name,
+    terrain: r.terrain,
+    qi: r.qi,
+    danger: r.danger,
+    products: Array.isArray(r.products) ? r.products.slice() : [],
+    travel_days: { ...(r.travel_days || {}) },
+    desc: r.desc,
+    ...(Number.isFinite(r.price) ? { price: r.price } : {}),
+    ...(r.dynamic ? { dynamic: true } : {}),
+  }));
+  const travel = { ...((world && world.dynamicTravel) || {}) };
+  world.map = { version: WORLD_VERSION, lockedAtTurn: world.turn || 0, regions, travel };
+  return world.map;
+}
+
 export function regionById(id, world = null) {
+  const map = worldMapOf(world);
+  if (map) return map.regions.find((r) => r.id === id) || null;
   return dynamicRegions(world).find((r) => r.id === id) || REGIONS.find((r) => r.id === id) || null;
 }
 export function regionByName(name, world = null) {
   if (!name) return null;
   const raw = String(name).trim();
-  const all = [...dynamicRegions(world), ...REGIONS];
+  const all = worldMapOf(world) ? worldMapOf(world).regions : [...dynamicRegions(world), ...REGIONS];
   return all.find((r) => r.name === raw) ||
     all.find((r) => raw.includes(r.name) || r.name.includes(raw)) || null;
 }
@@ -276,7 +306,10 @@ export function factionsIn(regionId) {
 export function relationsOf(factionId) {
   return RELATIONS.filter((r) => r.a === factionId || r.b === factionId);
 }
-export function allRegions(world = null) { return [...REGIONS, ...dynamicRegions(world)]; }
+export function allRegions(world = null) {
+  const map = worldMapOf(world);
+  return map ? map.regions.slice() : [...REGIONS, ...dynamicRegions(world)];
+}
 export function allFactions() { return FACTIONS.slice(); }
 export function allRelations() { return RELATIONS.slice(); }
 
@@ -289,13 +322,16 @@ export function travelDays(fromId, toId, world = null) {
   if (!from || !to) return null;
   const direct = from.travel_days && from.travel_days[toId];
   if (Number.isFinite(direct)) return direct;
-  const dyn = world && world.dynamicTravel && world.dynamicTravel[`${fromId}|${toId}`];
+  const mapTravel = (world && world.map && world.map.travel) || null;
+  const dyn = (mapTravel && mapTravel[`${fromId}|${toId}`]) ??
+    (world && world.dynamicTravel && world.dynamicTravel[`${fromId}|${toId}`]);
   if (Number.isFinite(dyn)) return dyn;
+  const extra = mapTravel || (world && world.dynamicTravel) || {};
   const neighbors = (id) => {
     const r = regionById(id, world);
     if (!r) return [];
     const list = Object.entries(r.travel_days || {});
-    for (const [k, d] of Object.entries((world && world.dynamicTravel) || {})) {
+    for (const [k, d] of Object.entries(extra)) {
       const [a, b] = k.split('|');
       if (a === id) list.push([b, d]);
     }
@@ -603,8 +639,10 @@ export function validateRegionProposal(proposal, world = null) {
 }
 
 // 入图：写进存档，并把来回两程都记上（路程必须对称）
+// 开局定图之后，这条路就关了——一局的地图在开头钉死，中途不许再长出新地界。
 export function addRegion(world, proposal) {
   if (!world) return { ok: false, issues: ['没有存档'], region: null };
+  if (worldMapOf(world)) return { ok: false, issues: ['本局地图已在开局定死，不能再开辟新域；未知之地只能作为传闻或遗迹存在'], region: null };
   const res = validateRegionProposal(proposal, world);
   if (!res.ok) return res;
   if (!Array.isArray(world.dynamicRegions)) world.dynamicRegions = [];

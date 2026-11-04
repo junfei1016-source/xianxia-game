@@ -66,7 +66,7 @@ import {
   perceptionTier,
 } from './game.js';
 
-import { ensureWorldGeo, startingFactions, regionById } from './world.js';
+import { ensureWorldGeo, lockWorldMap, startingFactions, regionById } from './world.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1211,6 +1211,7 @@ function loadGame(slot) {
   player = { ...newPlayerState(), ...s.player };
   world = { ...newWorldState(), ...s.world };
   migrateQuestDeadlines(world); // 兼容旧回合期限；读档只迁移，不执行超时判罚
+  lockWorldMap(world); // 旧档没有地图表的，按当时的九域＋已开路补一份（幂等、不判罚）
   ensureWorldGeo(world); // 旧档补区域坐标（幂等，不改数值、不判罚）
   history = Array.isArray(s.history) ? s.history : [];
   log = Array.isArray(s.log) ? s.log : [];
@@ -1284,6 +1285,8 @@ async function startGame() {
     player = newPlayerState();
     world = newWorldState();
     migrateQuestDeadlines(world);
+    // 开局第一件事：把这一局的整张地图钉死（区域、路程、物价系数），之后谁都不许改
+    lockWorldMap(world);
     world.settings = { difficulty: gameOptions.difficulty, pace: gameOptions.pace, turnLimit: gameOptions.turnLimit, cultGain: gameOptions.cultGain, godMode: gameOptions.godMode, length: gameOptions.length };
     history = [];
 
@@ -1589,6 +1592,7 @@ function rollbackOneTurn() {
   player = s.player;
   world = s.world;
   migrateQuestDeadlines(world);
+  lockWorldMap(world); // 回退档同样保证地图已钉死
   ensureWorldGeo(world); // 回退档同样补区域坐标，保持可玩
   log = s.log;
   history = s.history;
