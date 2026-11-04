@@ -64,11 +64,15 @@ import {
   rumorsFor,
   settleRumors,
   perceptionTier,
+  interfaceOf,
+  realmCapFor,
+  canAscendToSpirit,
 } from './game.js';
 
 import { ensureWorldGeo, lockWorldMap, startingFactions, regionById } from './world.js';
 
 const $ = (id) => document.getElementById(id);
+const MORTAL_CAP_TEXT = '化神后期';
 
 // 状态栏：境界 + 当前区域（区域来自世界骨架，旧档没有坐标时自动省掉）
 function statusLine() {
@@ -623,6 +627,14 @@ function renderStatus() {
   const ri = realmIndex(p.realm);
   const st = stanceProfile(p);
   const MAJORS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫', '飞升'];
+  // 人界只到化神后期：炼虚以上须飞升灵界（第 962 章：进阶化神后才有能力飞升灵界）
+  const iface = interfaceOf(world);
+  const capRealm = realmCapFor(world);
+  const canBreak = canAscendToSpirit(p, world);
+  const ifaceLabel = `${iface}${capRealm ? `（上限 ${capRealm}）` : '（无上限）'}`;
+  const ifaceTip = iface === '人界'
+    ? `人界之力所限，最多修到${MORTAL_CAP_TEXT}。再往上（炼虚、合体、大乘、渡劫）只有在灵界才修得——须化神后期且修为圆满，方能破界飞升灵界。${canBreak ? '你如今已可破界。' : ''}`
+    : '灵界无境界上限，可一路修到渡劫，再渡天劫飞升仙界。';
   const curMajor = p.realm === '飞升' ? '飞升' : realmMajor(p.realm);
   const ladder = MAJORS.map((m) => {
     const cls = m === curMajor ? 'cur' : (MAJORS.indexOf(m) < MAJORS.indexOf(curMajor) ? 'past' : '');
@@ -636,6 +648,7 @@ function renderStatus() {
     <div class="realm-ladder">${ladder}</div>
     <div class="stat-row" ${tip('你的名字与出身')}><dt>姓名</dt><dd>${esc(p.name)}</dd></div>
     <div class="stat-row" ${tip(`当前境界：${p.realm}（第 ${ri + 1}/${REALM_LADDER.length} 阶）。境界阶梯（大境）：${MAJORS.join(' → ')}。修为圆满后需机缘（丹药/传承/顿悟/磨砺）破境，不可一步登天。`)}><dt>境界</dt><dd>${esc(p.realm)}</dd></div>
+    <div class="stat-row" ${tip(ifaceTip)}><dt>所处</dt><dd>${ifaceLabel}</dd></div>
     <div class="stat-row" ${tip('当前境界的修炼进度（0~100%）。到 100% 后进入瓶颈，需机缘（丹药/传承/顿悟/磨砺）才能突破。')}><dt>修为进度</dt><dd>${bar(p.cultivation)} ${p.cultivation}%</dd></div>
     <div class="stat-row" ${tip('关系与势力的修炼加成：道侣+25%、师徒+20%、挚友/结义+10%（取最高一档）；每个结盟势力+5%（上限+15%）。')}><dt>关系·势力</dt><dd>${relBonus > 0 ? '+' + relBonus + '%' : '无加成'}</dd></div>
     <div class="stat-row" ${tip(`气血：${p.hp}/${p.maxHp}。受伤会降低气血，归零则身死道消；气血上限随境界提升。`)}><dt>气血</dt><dd>${bar(p.hp, p.maxHp)} ${p.hp}/${p.maxHp}</dd></div>

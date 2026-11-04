@@ -5,7 +5,7 @@
 //  剧情、NPC、事件、功法……统统由 AI 每局现场生成，不写死在这里。
 // ============================================================
 
-import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, travelPlan, regionQi, qiLabel, qiCultMult, REGION_QI_RULES, signsOf, RUMOR_SOURCES } from './world.js';
+import { buildSlice, ensureWorldGeo, moveToRegion, regionById, regionByName, factionById, factionByName, relationsOf, secretOf, secretFactionsIn, priceMultiplier, addRegion, travelPlan, regionQi, macroOf, qiLabel, qiCultMult, REGION_QI_RULES, signsOf, RUMOR_SOURCES } from './world.js';
 import { diversityBrief, normalizeTrait, rememberTrait } from './personality.js';
 import { pillByName, pillEffect, recipeOf, brewChance, PILLS } from './pills.js';
 import { treasureByName, treasurePower, tierOf, canRefine, refineCost, TREASURE_TIERS, ATTACK_TYPES, DEFENSE_TYPES, treasureCatalog, treasureElement } from './treasures.js';
@@ -48,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.43.0';
+export const GAME_VERSION = '1.44.0';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -473,6 +473,28 @@ export function newWorldState() {
       { id: 'main-ascend', type: 'main', title: '飞升成仙', desc: '渡劫飞升，位列仙班', objective: '修炼至渡劫期并渡过天劫', timeNode: '无期限', reward: '位列仙班，与天地同寿', status: 'active' },
     ],
   };
+}
+
+// ---------- 界面上限：人界只到化神，再往上得去灵界 ----------
+// 原文第 962 章：韩立问"化神期修士怎还会滞留这一界，不是说进阶化神期后就有能力飞升灵界了吗"；
+// 第 642 章："最终得以飞升灵界，再成为仙界仙人"——两段路：先飞升灵界，再飞升仙界。
+// 所以人界的天花板是化神后期；炼虚及以上只在灵界修得，飞升仙界才算真的"飞升"。
+export const MORTAL_CAP = '化神后期';
+
+export function interfaceOf(world) {
+  if (!world || !world.geo) return '人界';
+  const region = regionById(world.geo.regionId, world);
+  return region && macroOf(region).macro === '灵界' ? '灵界' : '人界';
+}
+
+// 当前界面能修到的最高境界（灵界无上限，返回 null）
+export function realmCapFor(world) {
+  return interfaceOf(world) === '灵界' ? null : MORTAL_CAP;
+}
+
+// 能否破界飞升灵界：须在人界、化神后期、修为圆满
+export function canAscendToSpirit(player, world) {
+  return interfaceOf(world) === '人界' && realmIndex(player && player.realm) >= realmIndex(MORTAL_CAP) && (player.cultivation || 0) >= 100;
 }
 
 // ---------- 天时：世道不报名，只露征兆（分层可见）----------
@@ -2751,6 +2773,7 @@ const ISSUE_MESSAGES = {
   conflicting_quest_updates: '同批任务完成与失败冲突，该任务更新全部忽略。',
   numeric_overflow: '运算结果超出安全数值范围，已忽略。',
   forbidden_flag: '代码管理的标记不允许由模型写入或撤回。',
+  interface_cap: '人界只到化神后期，炼虚以上须飞升灵界才修得。',
   breakthrough_too_soon: '大境界突破需在本境积累足够岁月，本次未生效（叙事保留，境界不变）。',
 };
 function stateIssue(issues, code, path) {
@@ -2993,6 +3016,19 @@ export function applyStateUpdates(player, world, input, report = {}) {
     if (target && (!cur || target.id !== cur.id)) {
       const travelFx = formationEffects((world.formations || []).filter((f) => !cur || f.region === cur.id), world);
       const travelBuff = talismanBuffFx(world).fx.travelMult * rootTraits(player).travelMult;
+      const targetMacro = (() => { const r = regionById(target.id, world); return r ? macroOf(r).macro : ''; })();
+      const leavingMortal = targetMacro === '灵界' && interfaceOf(world) === '人界';
+      if (leavingMortal && !canAscendToSpirit(player, world)) {
+        travelNote = '【破界】界力所隔：须修到化神后期、且修为圆满，才有破界飞升灵界的把握。';
+      } else if (leavingMortal) {
+        // 破界飞升：不走日数，直接把落脚点放到飞灵台（第 1315 章：飞升者本该在飞灵台现身）
+        const spot = regionById('feiling', world) || target;
+        world.geo = { regionId: spot.id, sinceTurn: world.turn || 0 };
+        out.timeMonths = 0;
+        travelNote = `【破界】你自${cur ? cur.name : '人界'}破开界力，落在${spot.name}。名册由天渊卫登记，从此是灵界的人了。`;
+      } else if (targetMacro !== '灵界' && interfaceOf(world) === '灵界') {
+        travelNote = '【行路】界力所隔：到了灵界，便下不去人界了。';
+      } else {
       const plan = travelPlan(cur ? cur.id : (world.geo && world.geo.regionId), target.id, world);
       if (!plan) {
         travelNote = `【行路】${target.name}去不了：隔着海，又没有传送阵。`;
@@ -3014,6 +3050,7 @@ export function applyStateUpdates(player, world, input, report = {}) {
           const heard = askAround(world, player, { region: moved.to });
           if (heard) travelNote += `\n${heard.note}`;
         }
+      }
       }
       }
     }
@@ -3383,7 +3420,12 @@ export function applyStateUpdates(player, world, input, report = {}) {
       const majorStep = realmMajor(out.realmChange) !== realmMajor(player.realm);
       const needYears = minYearsFor(player.realm);
       const stayedYears = yearsInRealm(world, player);
-      if (majorStep && stayedYears !== null && stayedYears < needYears) {
+      const capRealm = realmCapFor(world);
+      if (capRealm && idx > realmIndex(capRealm)) {
+        // 人界之力所限：化神后期已到头，炼虚以上只有灵界才修得
+        reject('interface_cap', 'realmChange');
+        delete out.realmChange; // 叙事保留，境界不动
+      } else if (majorStep && stayedYears !== null && stayedYears < needYears) {
         reject('breakthrough_too_soon', 'realmChange');
         delete out.realmChange; // 叙事保留，境界不动
       }
