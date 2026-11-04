@@ -599,7 +599,7 @@ function renderStatus() {
   const repBonus = Math.round((reputationMultiplier(p.reputation) - 1) * 100);
   const ri = realmIndex(p.realm);
   const st = stanceProfile(p);
-  const MAJORS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '合体', '大乘', '渡劫', '飞升'];
+  const MAJORS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫', '飞升'];
   const curMajor = p.realm === '飞升' ? '飞升' : realmMajor(p.realm);
   const ladder = MAJORS.map((m) => {
     const cls = m === curMajor ? 'cur' : (MAJORS.indexOf(m) < MAJORS.indexOf(curMajor) ? 'past' : '');

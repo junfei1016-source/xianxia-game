@@ -23,3 +23,6 @@ Thumbs.db
 # Local Codex/agent state
 .codex/
 .agents/
+
+# 本机临时文件（冒烟/服务 pid）
+._*

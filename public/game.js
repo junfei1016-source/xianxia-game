@@ -32,6 +32,10 @@ export const REALM_LADDER = [
   '金丹初期', '金丹中期', '金丹后期',
   '元婴初期', '元婴中期', '元婴后期',
   '化神初期', '化神中期', '化神后期',
+  // 炼虚：第 127 章《灵根之说》明列「下境界……炼气、筑基、结丹、元婴、化神等五层，
+  // 中境界有炼虚、合体、大乘三层」，所以化神之后、合体之前必须有炼虚。
+  // （v1.37.1 及以前漏了这三阶，导致阵法九级、部分功法/法宝/丹药的炼虚要求永远够不着。）
+  '炼虚初期', '炼虚中期', '炼虚后期',
   '合体初期', '合体中期', '合体后期',
   '大乘初期', '大乘中期', '大乘后期',
   '渡劫初期', '渡劫中期', '渡劫后期',
@@ -44,7 +48,7 @@ export function realmIndex(name) {
 }
 
 // 游戏版本号（发布时更新：帮助弹窗显示 + 导出日志附带，便于核对玩家版本）
-export const GAME_VERSION = '1.37.1';
+export const GAME_VERSION = '1.37.2';
 
 const LADDER_TEXT = REALM_LADDER.join(' → ');
 
@@ -59,6 +63,10 @@ export const REALM_BASE = {
   '金丹': { lifespan: 400, maxHp: 700 },
   '元婴': { lifespan: 800, maxHp: 1200 },
   '化神': { lifespan: 1500, maxHp: 2000 },
+  // 炼虚的寿元/气血取化神与合体的几何中点（1500/2000 → 3000/3500），
+  // 原文只给境界顺序与天劫节奏（第 1219 章：下境界三百年一小天劫、中境界三千年一大天劫），
+  // 没有逐阶寿元数，故此处是数值取舍。
+  '炼虚': { lifespan: 2100, maxHp: 2600 },
   '合体': { lifespan: 3000, maxHp: 3500 },
   '大乘': { lifespan: 6000, maxHp: 6000 },
   '渡劫': { lifespan: 10000, maxHp: 10000 },
@@ -92,7 +100,7 @@ export function breakthroughNeed(realm) {
 // 供 prompt 使用的门槛说明（单一事实源，避免几处描述不一致）。
 const BREAKTHROUGH_NEED_TEXT = BREAKTHROUGH_NEED
   .map((x) => (x.major === '凡人' ? `凡人→炼气需五成（${x.need}%）` : `${x.major}期需${x.need}%`))
-  .join('、') + '、合体/大乘/渡劫期需圆满（100%）';
+  .join('、') + '、炼虚/合体/大乘/渡劫期需圆满（100%）';
 
 // ---------- 难度与节奏（开发者可调）----------
 // damageMult 受伤倍率 / deathHigh 高危行为坠入濒死概率 / deathLethal 致命行为坠入濒死概率

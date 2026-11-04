@@ -48,6 +48,7 @@ const suites = [
   ['功法框架（品阶+特定要求）', ['tests/technique-framework.test.mjs']],
   ['灵根（天根/真灵根/伪灵根）', ['tests/roots.test.mjs']],
   ['地脉枯荣（采枯灵气与封山回补）', ['tests/region-qi.test.mjs']],
+  ['境界阶梯（炼虚/顺序/各表覆盖）', ['tests/realm-ladder.test.mjs']],
   ['版本一致性', ['tests/version-sync.test.mjs']],
 ];
 
