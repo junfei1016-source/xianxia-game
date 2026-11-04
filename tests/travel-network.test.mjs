@@ -30,14 +30,14 @@ const setup = (region = 'qingwu', stones = 0) => {
   return { player, world };
 };
 
-test('层级：九域分属三个大区（天南 5、乱星海 3、灵界 1）', () => {
+test('层级：十五域分属四个大区（天南 9、乱星海 4、大晋 1、灵界 1）', () => {
   const count = {};
   for (const r of allRegions()) {
     const m = macroOf(r).macro;
     count[m] = (count[m] || 0) + 1;
     assert.ok(MACROS[m], `${r.name} 归到了未定义的大区 ${m}`);
   }
-  assert.deepEqual(count, { 天南: 5, 乱星海: 3, 灵界: 1 });
+  assert.deepEqual(count, { 天南: 9, 乱星海: 4, 大晋: 1, 灵界: 1 });
   assert.equal(macroOf(regionById('qingwu')).macro, '天南');
   assert.equal(macroOf(regionById('hanyuan')).macro, '乱星海');
   assert.equal(macroOf(regionById('taiqing')).macro, '灵界');
@@ -74,7 +74,7 @@ test('跨大区只有古传送阵：一日可达，但要 200 灵石', () => {
   assert.equal(back.mode, '海路', '天星城与尾星岛同在外海，走海路');
   const backGate = travelPlan('hanyuan', 'qingwu');
   assert.equal(backGate.mode, '传送阵', '回建州也得靠阵');
-  assert.equal(GATES.length, 1);
+  assert.equal(GATES.length, 2, '两道阵：建州↔外海、天星城↔大晋');
   // 没有阵的组合去不了
   assert.equal(travelPlan('dayan', 'guixu'), null, '元武到天星城隔海又无阵');
   assert.equal(travelPlan('chisha', 'xingyun'), null);
@@ -118,9 +118,9 @@ test('切片把交通方式与花费讲清楚，并提醒灵界只能飞升', ()
   const { player, world } = setup('qingwu');
   const slice = buildSlice(player, world);
   assert.match(slice, /陆路/);
-  assert.match(slice, /跨海须借古传送阵（200 灵石）/);
+  assert.match(slice, /另有传送阵：乱星海·尾星岛 1日 \/ 200灵石（古传送阵）/);
   assert.match(slice, /灵界无路，只能飞升/);
-  assert.match(slice, /传送阵·200灵石/, '可达列表里要标出跨海那一条');
+  assert.match(slice, /跨海须借传送阵/, '要提醒跨海得走阵');
 });
 
 test('moveToRegion 返回方式与花费，原地不动返回 null', () => {

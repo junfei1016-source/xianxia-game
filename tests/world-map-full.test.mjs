@@ -8,12 +8,14 @@ import {
   priceMultiplier,
   buildSlice,
   regionById,
+  GATES,
+  travelPlan,
 } from '../public/world.js';
 import { isBlackMarket, newPlayerState, newWorldState } from '../public/game.js';
 
-test('地图完整：九域二十家，每域都有本地势力与当家人', () => {
-  assert.equal(allRegions().length, 9);
-  assert.equal(allFactions().length, 20);
+test('地图完整：十五域三十三家，每域都有本地势力与当家人', () => {
+  assert.equal(allRegions().length, 15);
+  assert.equal(allFactions().length, 32);
   for (const r of allRegions()) {
     const local = factionsIn(r.id);
     assert.ok(local.length >= 2, `${r.id} 势力不足`);
@@ -24,11 +26,21 @@ test('地图完整：九域二十家，每域都有本地势力与当家人', ()
   }
 });
 
-test('凡界四通八达：归墟、慕兰草原、奇渊岛都能走到', () => {
-  for (const id of ['guixu', 'wanyao', 'xingyun']) {
+test('凡界四通八达：同大区有陆路/海路，跨大区有传送阵', () => {
+  // 天南内部：陆路直达
+  for (const id of ['wanyao', 'zijin', 'jiangguo', 'jiuguo', 'wubian']) {
     const days = travelDays('qingwu', id);
-    assert.ok(Number.isFinite(days) && days > 0, `青芜到 ${id} 应可通行`);
+    assert.ok(Number.isFinite(days) && days > 0, `建州到 ${id} 应有陆路`);
   }
+  // 乱星海内部：海路
+  for (const id of ['guixu', 'xingyun', 'kuixing']) {
+    const days = travelDays('hanyuan', id);
+    assert.ok(Number.isFinite(days) && days > 0, `尾星岛到 ${id} 应有海路`);
+  }
+  // 跨大区：只能靠阵
+  assert.equal(travelDays('qingwu', 'guixu'), null, '隔海没有陆路');
+  assert.equal(travelPlan('qingwu', 'hanyuan').mode, '传送阵');
+  assert.equal(travelPlan('guixu', 'dajin').mode, '传送阵');
 });
 
 test('灵界·天渊城不与凡界连通：只能飞升', () => {
@@ -37,13 +49,15 @@ test('灵界·天渊城不与凡界连通：只能飞升', () => {
   assert.equal(travelDays('qingwu', 'taiqing'), null);
   assert.equal(travelDays('taiqing', 'qingwu'), null);
   // 但仙域自己有两家势力
-  assert.equal(factionsIn('taiqing').length, 2);
+  assert.equal(factionsIn('taiqing').length, 2, '灵界两家：仙宫与书院');
 });
 
 test('除仙域外，每个区域都至少有一条对外道路', () => {
   for (const r of allRegions()) {
     if (r.id === 'taiqing') continue;
-    assert.ok(Object.keys(r.travel_days || {}).length > 0, `${r.id} 无路可走`);
+    // 跨海靠传送阵的区域可以没有陆路（例如大晋湾南州），但必须有阵
+  const hasGate = GATES.some((g) => (g.a === r.id || g.b === r.id));
+  assert.ok(Object.keys(r.travel_days || {}).length > 0 || hasGate, `${r.id} 既无路也无阵`);
   }
 });
 

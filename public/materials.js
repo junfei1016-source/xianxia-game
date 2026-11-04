@@ -27,32 +27,32 @@ export const MATERIAL_KINDS = {
 // element：五行；year：药龄；toxic：有毒/阴煞；regions：常见产地
 export const MATERIALS = [
   // ---- 凡品（十年上下）----
-  { name: '灵草', kind: '灵草', year: 10, element: '木', regions: ['qingwu', 'luoxia', 'dayan'], desc: '最常见的灵草，十年药性。' },
-  { name: '三七草', kind: '灵草', year: 5, element: '木', regions: ['qingwu'], desc: '止血的凡药，修士也常备。' },
-  { name: '解毒草', kind: '灵草', year: 30, element: '木', regions: ['qingwu', 'luoxia'], desc: '解寻常蛇虫之毒。' },
-  { name: '灵泉水', kind: '灵液', tier: '凡品', year: 0, element: '水', regions: ['qingwu', 'luoxia', 'hanyuan'], desc: '含灵气的地泉，炼丹常用。' },
-  { name: '玄铁', kind: '矿石', tier: '凡品', year: 0, element: '金', regions: ['dayan', 'chisha'], desc: '打制法器的寻常精铁。' },
-  { name: '赤铜', kind: '矿石', tier: '凡品', year: 0, element: '金', regions: ['dayan', 'chisha'], desc: '炼器的基础铜料。' },
-  { name: '妖皮', kind: '妖皮', tier: '凡品', year: 0, element: '无', regions: ['wanyao', 'xingyun'], desc: '低阶妖兽的皮，可制护甲。' },
+  { name: '灵草', kind: '灵草', year: 10, element: '木', regions: ['qingwu', 'luoxia', 'dayan', 'zijin', 'jiangguo' ], desc: '最常见的灵草，十年药性。' },
+  { name: '三七草', kind: '灵草', year: 5, element: '木', regions: ['qingwu', 'zijin' ], desc: '止血的凡药，修士也常备。' },
+  { name: '解毒草', kind: '灵草', year: 30, element: '木', regions: ['qingwu', 'luoxia', 'zijin', 'kuixing' ], desc: '解寻常蛇虫之毒。' },
+  { name: '灵泉水', kind: '灵液', tier: '凡品', year: 0, element: '水', regions: ['qingwu', 'luoxia', 'hanyuan', 'zijin', 'kuixing' ], desc: '含灵气的地泉，炼丹常用。' },
+  { name: '玄铁', kind: '矿石', tier: '凡品', year: 0, element: '金', regions: ['dayan', 'chisha', 'zijin', 'jiuguo' ], desc: '打制法器的寻常精铁。' },
+  { name: '赤铜', kind: '矿石', tier: '凡品', year: 0, element: '金', regions: ['dayan', 'chisha', 'jiuguo' ], desc: '炼器的基础铜料。' },
+  { name: '妖皮', kind: '妖皮', tier: '凡品', year: 0, element: '无', regions: ['wanyao', 'xingyun', 'kuixing' ], desc: '低阶妖兽的皮，可制护甲。' },
 
   // ---- 灵品（百年）----
-  { name: '百年灵草', kind: '灵草', year: 100, element: '木', regions: ['qingwu', 'luoxia', 'dayan'], desc: '百年药性，可入筑基丹方。' },
-  { name: '回春草', kind: '灵草', year: 120, element: '木', regions: ['qingwu', 'luoxia'], desc: '疗伤丹的主药。' },
+  { name: '百年灵草', kind: '灵草', year: 100, element: '木', regions: ['qingwu', 'luoxia', 'dayan', 'jiangguo', 'jiuguo', 'kuixing' ], desc: '百年药性，可入筑基丹方。' },
+  { name: '回春草', kind: '灵草', year: 120, element: '木', regions: ['qingwu', 'luoxia', 'zijin' ], desc: '疗伤丹的主药。' },
   { name: '续骨花', kind: '灵花', year: 150, element: '木', regions: ['dayan'], desc: '续骨膏的主药。' },
   { name: '化毒花', kind: '灵花', year: 200, element: '木', regions: ['chisha', 'xingyun'], desc: '化毒丹的主药，微毒。', toxic: true },
   { name: '洗髓花', kind: '灵花', year: 300, element: '木', regions: ['hanyuan'], desc: '洗髓丹的主药，极难得。' },
   { name: '筑基灵药', kind: '灵草', year: 200, element: '木', regions: ['qingwu', 'dayan'], desc: '筑基丹的三味主药之一。' },
-  { name: '妖丹', kind: '妖丹', tier: '灵品', year: 0, element: '无', regions: ['wanyao', 'hanyuan', 'xingyun'], desc: '妖兽内丹，炼丹炼器的通用引子。' },
-  { name: '妖骨粉', kind: '妖骨', tier: '灵品', year: 0, element: '无', regions: ['wanyao', 'xingyun'], desc: '妖骨磨粉，续骨与炼器都用。' },
-  { name: '寒铁', kind: '矿石', tier: '玄品', year: 0, element: '水', regions: ['hanyuan'], desc: '海底寒铁，性阴寒。' },
-  { name: '灵玉', kind: '矿石', tier: '灵品', year: 0, element: '土', regions: ['guixu', 'dayan'], desc: '储灵之物，制符炼器皆可。' },
+  { name: '妖丹', kind: '妖丹', tier: '灵品', year: 0, element: '无', regions: ['wanyao', 'hanyuan', 'xingyun', 'jiuguo', 'wubian', 'kuixing' ], desc: '妖兽内丹，炼丹炼器的通用引子。' },
+  { name: '妖骨粉', kind: '妖骨', tier: '灵品', year: 0, element: '无', regions: ['wanyao', 'xingyun', 'kuixing' ], desc: '妖骨磨粉，续骨与炼器都用。' },
+  { name: '寒铁', kind: '矿石', tier: '玄品', year: 0, element: '水', regions: ['hanyuan', 'wubian', 'kuixing' ], desc: '海底寒铁，性阴寒。' },
+  { name: '灵玉', kind: '矿石', tier: '灵品', year: 0, element: '土', regions: ['guixu', 'dayan', 'dajin' ], desc: '储灵之物，制符炼器皆可。' },
   { name: '符纸', kind: '灵木', year: 0, element: '木', regions: ['qingwu', 'luoxia', 'dayan'], desc: '以灵木纤维抄成，画符的底子（第 92 章）。' },
-  { name: '朱砂', kind: '矿石', year: 0, element: '火', regions: ['dayan', 'chisha'], desc: '画符的颜料，性阳。' },
+  { name: '朱砂', kind: '矿石', year: 0, element: '火', regions: ['dayan', 'chisha', 'jiangguo', 'dajin' ], desc: '画符的颜料，性阳。' },
   { name: '灵墨', kind: '灵液', year: 0, element: '水', regions: ['luoxia', 'guixu'], desc: '掺了灵气的墨，高阶符箓要用。' },
 
   // ---- 玄品（五百年）----
   { name: '生肌草', kind: '灵草', year: 550, element: '木', regions: ['hanyuan'], desc: '生肌丹的主药。' },
-  { name: '玄元果', kind: '灵果', year: 600, element: '木', regions: ['guixu'], desc: '玄元丹的主药。' },
+  { name: '玄元果', kind: '灵果', year: 600, element: '木', regions: ['guixu', 'dajin' ], desc: '玄元丹的主药。' },
   { name: '结金草', kind: '灵草', year: 800, element: '金', regions: ['xingyun'], desc: '结金丹不可缺的一味。' },
   { name: '续命草', kind: '灵草', year: 600, element: '木', regions: ['luoxia', 'guixu'], desc: '续命丹的主药。' },
   { name: '驻颜花', kind: '灵花', year: 700, element: '木', regions: ['qingqiu', 'luoxia'], desc: '驻颜丹的主药。' },
@@ -61,16 +61,16 @@ export const MATERIALS = [
   { name: '玄阴草', kind: '灵草', year: 600, element: '阴', regions: ['chisha'], desc: '玄阴丹的主药，性阴。', toxic: true },
   { name: '破障花', kind: '灵花', year: 850, element: '木', regions: ['hanyuan', 'guixu'], desc: '破障丹的主药。' },
   { name: '蚀骨花', kind: '灵花', year: 900, element: '阴', regions: ['chisha'], desc: '禁丹主药，蚀骨腐血。', toxic: true },
-  { name: '阴煞之气', kind: '奇物', tier: '玄品', year: 0, element: '阴', regions: ['chisha', 'xingyun'], desc: '阴煞凝聚之物，禁丹引子。', toxic: true },
+  { name: '阴煞之气', kind: '奇物', tier: '玄品', year: 0, element: '阴', regions: ['chisha', 'xingyun', 'jiangguo' ], desc: '阴煞凝聚之物，禁丹引子。', toxic: true },
   { name: '血煞石', kind: '矿石', tier: '玄品', year: 0, element: '阴', regions: ['xingyun'], desc: '浸血之石，炼禁丹用。', toxic: true },
   { name: '雷击木', kind: '灵木', tier: '玄品', year: 0, element: '雷', regions: ['wanyao', 'xingyun'], desc: '遭天雷劈过的灵木，制符与炼器皆佳。' },
   { name: '星砂', kind: '矿石', tier: '玄品', year: 0, element: '金', regions: ['xingyun'], desc: '陨星碎砂，炼器上品。' },
 
   // ---- 仙品（千年）----
   { name: '千年血参', kind: '灵草', year: 1000, element: '木', regions: ['wanyao', 'hanyuan'], desc: '大还丹与凝婴丹的主药。' },
-  { name: '九幽草', kind: '灵草', year: 1200, element: '阴', regions: ['xingyun'], desc: '九转还魂丹的主药。', toxic: true },
+  { name: '九幽草', kind: '灵草', year: 1200, element: '阴', regions: ['xingyun', 'wubian' ], desc: '九转还魂丹的主药。', toxic: true },
   { name: '凝婴果', kind: '灵果', year: 1500, element: '木', regions: ['wanyao'], desc: '凝婴丹的主药，千年一熟。' },
-  { name: '大衍神木', kind: '灵木', year: 2000, element: '木', regions: ['wanyao'], desc: '大衍丹的主药，亦是极品炼器材料。' },
+  { name: '大衍神木', kind: '灵木', year: 2000, element: '木', regions: ['wanyao', 'dajin' ], desc: '大衍丹的主药，亦是极品炼器材料。' },
   { name: '化形果', kind: '灵果', year: 2000, element: '木', regions: ['wanyao'], desc: '化形丹的主药，妖族至宝。' },
   { name: '妖王真血', kind: '妖血', tier: '仙品', year: 0, element: '无', regions: ['wanyao'], desc: '妖王精血，化形丹引子。' },
   { name: '太清灵液', kind: '灵液', tier: '仙品', year: 0, element: '水', regions: ['taiqing'], desc: '仙域灵液，太清丹主药。' },
@@ -78,7 +78,7 @@ export const MATERIALS = [
   { name: '陨铁', kind: '矿石', tier: '仙品', year: 0, element: '金', regions: ['xingyun'], desc: '陨星之铁，炼器至宝。' },
 
   // ---- 神品（万年）----
-  { name: '万年灵乳', kind: '灵液', year: 10000, element: '水', regions: ['hanyuan', 'taiqing'], desc: '万年钟乳，延寿丹与仙丹的主药。' },
+  { name: '万年灵乳', kind: '灵液', year: 10000, element: '水', regions: ['hanyuan', 'taiqing', 'wubian', 'dajin' ], desc: '万年钟乳，延寿丹与仙丹的主药。' },
 ];
 
 const BY_NAME = new Map(MATERIALS.map((m) => [m.name, m]));

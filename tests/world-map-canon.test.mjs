@@ -12,6 +12,8 @@ import {
   travelDays,
   factionsIn,
   pickStarter,
+  macroOf,
+  travelPlan,
 } from '../public/world.js';
 
 const EXPECT = [
@@ -19,10 +21,16 @@ const EXPECT = [
   ['luoxia', '黄枫谷坊市'],
   ['dayan', '元武国'],
   ['chisha', '天罗国'],
-  ['hanyuan', '乱星海·尾星岛'],
-  ['guixu', '天星城'],
+  ['zijin', '紫金国'],
+  ['jiangguo', '姜国'],
+  ['jiuguo', '九国盟'],
   ['wanyao', '慕兰草原'],
+  ['wubian', '无边海'],
+  ['hanyuan', '乱星海·尾星岛'],
+  ['kuixing', '乱星海·魁星岛'],
+  ['guixu', '天星城'],
   ['xingyun', '奇渊岛'],
+  ['dajin', '大晋·湾南州'],
   ['taiqing', '灵界·天渊城'],
 ];
 
@@ -47,24 +55,36 @@ test('距离感与原著一致：越国挨着元武，天罗隔着两个小国�
   assert.ok(toQingwu('dayan') <= 25, '越国与元武国交界，走陆路，不该超过一个月');
   assert.ok(toQingwu('chisha') >= 40, '天罗国隔着姜国、车骑国，路要走上月余');
   assert.ok(toQingwu('wanyao') >= 60, '慕兰草原在九国之外，更远');
-  assert.ok(toQingwu('hanyuan') >= 100, '乱星海要过古传送阵，不是走去就到的');
+  assert.equal(toQingwu('hanyuan'), null, '跨海没有陆路，走的是传送阵（见 travel-network）');
   assert.ok(travelDays('hanyuan', 'guixu') < 40, '乱星海内部：尾星岛到天星城不算远');
   assert.ok(travelDays('hanyuan', 'xingyun') < 40, '尾星岛到奇渊岛同在外海');
+  assert.ok(toQingwu('zijin') <= 40, '紫金国是越国南面的邻国');
+  assert.ok(toQingwu('jiangguo') <= 60, '姜国在越国与天罗国之间');
+  assert.ok(toQingwu('jiuguo') >= 50, '九国盟要穿过好几个国家');
+  assert.ok(toQingwu('wubian') >= 90, '无边海在天南极北');
 });
 
-test('凡界各域互通，灵界只能飞升', () => {
-  const mortal = EXPECT.filter(([id]) => id !== 'taiqing').map(([id]) => id);
-  for (const a of mortal) {
-    for (const b of mortal) {
-      if (a === b) continue;
-      const days = travelDays(a, b);
-      assert.ok(Number.isFinite(days) && days > 0, `${a} → ${b} 应当可达`);
+test('同大区内陆路互通；跨海走传送阵；灵界只能飞升', () => {
+  const groups = { 天南: [], 乱星海: [], 大晋: [] };
+  for (const [id] of EXPECT) {
+    if (id === 'taiqing') continue;
+    const m = macroOf(regionById(id)).macro;
+    if (groups[m]) groups[m].push(id);
+  }
+  for (const [macro, ids] of Object.entries(groups)) {
+    for (const a of ids) {
+      for (const b of ids) {
+        if (a === b) continue;
+        const days = travelDays(a, b);
+        assert.ok(Number.isFinite(days) && days > 0, `${macro}：${a} → ${b} 应当有陆路/海路`);
+      }
     }
   }
-  for (const id of mortal) {
+  for (const [id] of EXPECT) {
+    if (id === 'taiqing') continue;
     assert.equal(travelDays(id, 'taiqing'), null, `${id} 不该有通往灵界的路`);
+    assert.equal(travelPlan(id, 'taiqing'), null);
   }
-  assert.equal(travelDays('qingwu', 'taiqing'), null);
 });
 
 test('地气有梯度：建州最薄，元武稍厚，天星城与奇渊岛最浓，灵界最高', () => {
@@ -87,8 +107,8 @@ test('每个区域都有本地势力，驻地都对得上', () => {
   }
 });
 
-test('开局只从这四个地方起步：建州、坊市、元武、天罗', () => {
-  const allowed = new Set(['qingwu', 'luoxia', 'dayan', 'chisha']);
+test('开局只从这几个地方起步：建州、坊市、元武、紫金、天罗', () => {
+  const allowed = new Set(['qingwu', 'luoxia', 'dayan', 'zijin', 'chisha']);
   let seed = 7;
   const rand = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
   for (let i = 0; i < 60; i += 1) {

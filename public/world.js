@@ -11,7 +11,7 @@
 
 import { materialNamesInRegion } from './materials.js';
 
-export const WORLD_VERSION = '1.6.0';
+export const WORLD_VERSION = '1.7.0';
 
 // ============================================================
 //  凡界地图（按《凡人修仙传》的地理骨架搭）
@@ -33,55 +33,91 @@ const REGIONS = [
   {
     id: 'qingwu', name: '越国·建州', terrain: '丘陵山林', qi: 2, danger: 1,
     products: ['凡品', '灵品'],
-    travel_days: { luoxia: 2, dayan: 20, chisha: 60, hanyuan: 120, guixu: 130, wanyao: 90, xingyun: 125 },
+    travel_days: { luoxia: 2, dayan: 20, chisha: 60, wanyao: 90, zijin: 30, jiangguo: 45, jiuguo: 70, wubian: 110 },
     desc: '越国十三州之一，北接元武国。太岳山脉横在州西，连绵数千里，野兽猛禽层出不穷，山里有黄枫谷。七派共护此地，凡人王朝只管凡俗事。',
   },
   {
     id: 'luoxia', name: '黄枫谷坊市', terrain: '山谷集市', qi: 2, danger: 1,
     products: ['凡品', '灵品'],
-    travel_days: { qingwu: 2, dayan: 18, chisha: 55, hanyuan: 120, guixu: 130, wanyao: 85, xingyun: 125 },
+    travel_days: { qingwu: 2, dayan: 18, chisha: 55, wanyao: 85, zijin: 30, jiangguo: 45, jiuguo: 70, wubian: 110 },
     desc: '太岳山脉脚下由黄枫谷开的坊市，在越国颇有名气——一因靠近元武国，邻国修士常来换货；二因坊内禁斗，杀人者遭全坊通缉。',
   },
   {
     id: 'dayan', name: '元武国', terrain: '山川丘陵', qi: 3, danger: 2,
     products: ['灵品', '玄品'],
-    travel_days: { qingwu: 20, luoxia: 18, chisha: 45, hanyuan: 100, guixu: 110, wanyao: 70, xingyun: 105 },
+    travel_days: { qingwu: 20, luoxia: 18, chisha: 45, wanyao: 70, zijin: 25, jiangguo: 40, jiuguo: 60, wubian: 100 },
     desc: '与越国交界的中等国家，修仙界与越国不敌对。矿产与灵药都从这儿过路，坊市里能见着越国没有的稀罕货。',
   },
   {
     id: 'chisha', name: '天罗国', terrain: '荒漠戈壁', qi: 3, danger: 4,
     products: ['灵品', '玄品'],
-    travel_days: { qingwu: 60, luoxia: 55, dayan: 45, hanyuan: 80, guixu: 90, wanyao: 40, xingyun: 85 },
+    travel_days: { qingwu: 60, luoxia: 55, dayan: 45, wanyao: 40, zijin: 55, jiangguo: 20, jiuguo: 50, wubian: 95 },
     desc: '这一带的大国，魔道六宗盘踞其中。正道不过来，黑市倒是日夜开着——只认钱，不问来路。',
   },
   {
     id: 'hanyuan', name: '乱星海·尾星岛', terrain: '群岛深海', qi: 3, danger: 4,
     products: ['玄品', '仙品'],
-    travel_days: { qingwu: 120, luoxia: 120, dayan: 100, chisha: 80, guixu: 25, wanyao: 70, xingyun: 15 },
+    travel_days: { guixu: 25, xingyun: 15, kuixing: 5 },
     desc: '乱星海西南角的大岛之一。附近还有魁星岛、桑星岛与几十座中小岛；海上三大天灾里最神秘的就是鬼雾，遇上了十死无生。',
   },
   {
     id: 'guixu', name: '天星城', terrain: '海岛巨城', qi: 4, danger: 2,
     products: ['玄品'],
-    travel_days: { qingwu: 130, luoxia: 130, dayan: 110, chisha: 90, hanyuan: 25, wanyao: 75, xingyun: 20 },
+    travel_days: { hanyuan: 25, xingyun: 20, kuixing: 20 },
     desc: '乱星海的中枢，星宫的驻地。内星海、外星海的修士都来此议价，城里规矩只有一条：不许见血。',
   },
   {
     id: 'wanyao', name: '慕兰草原', terrain: '游牧草原', qi: 3, danger: 4,
     products: ['玄品', '仙品'],
-    travel_days: { qingwu: 90, luoxia: 85, dayan: 70, chisha: 40, hanyuan: 70, guixu: 75, xingyun: 65 },
+    travel_days: { qingwu: 90, luoxia: 85, dayan: 70, chisha: 40, zijin: 70, jiangguo: 40, jiuguo: 30, wubian: 60 },
     desc: '慕兰族世代游牧之地，部落大小不一；法士以血祭催动法术，与九国盟打了许多年。草原上兽群成群，一般人不敢独自过境。',
   },
   {
     id: 'xingyun', name: '奇渊岛', terrain: '深渊海城', qi: 4, danger: 5,
     products: ['玄品', '仙品'],
-    travel_days: { qingwu: 125, luoxia: 125, dayan: 105, chisha: 85, hanyuan: 15, guixu: 20, wanyao: 65 },
+    travel_days: { hanyuan: 15, guixu: 20, kuixing: 12 },
     desc: '深渊海域上的孤岛，黑石城在此。二十多年前上万妖兽自深渊涌出，把城围了个水泄不通；如今岛上矿脉与兽巢都还在，敢来的都是不要命的。',
+  },
+  {
+    id: 'zijin', name: '紫金国', terrain: '临海丘陵', qi: 2, danger: 2,
+    products: ['凡品', '灵品'],
+    travel_days: { qingwu: 30, luoxia: 30, dayan: 25, chisha: 55, wanyao: 70, jiangguo: 15, jiuguo: 20, wubian: 85 },
+    desc: '越国南面的中等国家，与越国向来交好。当年魔道六宗打越国，紫金国的修士是第一批应援来的。',
+  },
+  {
+    id: 'jiangguo', name: '姜国', terrain: '破碎山道', qi: 2, danger: 3,
+    products: ['灵品'],
+    travel_days: { qingwu: 45, luoxia: 45, dayan: 40, chisha: 20, wanyao: 40, zijin: 15, jiuguo: 35, wubian: 90 },
+    desc: '越国与天罗国之间的小国之一。半月前就被魔道六宗的先锋推平了，如今只剩几处残宗守着山道，散修与溃兵混在一处。',
+  },
+  {
+    id: 'jiuguo', name: '九国盟', terrain: '盟会城寨', qi: 3, danger: 4,
+    products: ['灵品', '玄品'],
+    travel_days: { qingwu: 70, luoxia: 70, dayan: 60, chisha: 50, wanyao: 30, zijin: 20, jiangguo: 35, wubian: 40 },
+    desc: '越国南面穿过五六个国家，就是九国结成的盟。为的是对付慕兰族法士的入侵大军——军需、战利品、伤兵都从这儿过。',
+  },
+  {
+    id: 'wubian', name: '无边海', terrain: '极北死海', qi: 1, danger: 5,
+    products: ['玄品'],
+    travel_days: { qingwu: 110, luoxia: 110, dayan: 100, chisha: 95, wanyao: 60, zijin: 85, jiangguo: 90, jiuguo: 40 },
+    desc: '天南极北的海。海水浑浊无比、无边无际，连结丹修士掉进去都九死一生；曾有元婴高人沿海飞了年余，也没见到尽头。',
+  },
+  {
+    id: 'kuixing', name: '乱星海·魁星岛', terrain: '环礁岛链', qi: 3, danger: 3,
+    products: ['灵品', '玄品'],
+    travel_days: { hanyuan: 5, guixu: 20, xingyun: 12 },
+    desc: '乱星海西南角的另一座大岛，岛外环礁密布，船行要熟手引路。岛上有几处散修集市，专收外海的妖兽材料。',
+  },
+  {
+    id: 'dajin', name: '大晋·湾南州', terrain: '皇朝海疆', qi: 5, danger: 2,
+    products: ['玄品', '仙品'],
+    travel_days: {  },
+    desc: '大晋皇朝的东南海疆，修仙界真正的中枢所在。天符门、四海真院这类大宗都在这儿设了分院；坊市里卖的，是别处听都没听过的东西。',
   },
   {
     id: 'taiqing', name: '灵界·天渊城', terrain: '灵界边城', qi: 6, danger: 3,
     products: ['仙品', '神品'],
-    travel_days: {}, // 凡人界无路可至：只能飞升
+    travel_days: {  },
     desc: '灵界边城，飞升者须在此服役百年，每年领一粒灭尘丹压下两色雷劫。凡界无路可至，唯有渡劫飞升。',
   },
 ];
@@ -107,6 +143,18 @@ const FACTIONS = [
   { id: 'yuntie', name: '陨铁盟', type: '帮派', alignment: '魔道', tier: 3, seat: 'xingyun', desc: '以陨铁锻兵起家的矿帮，强征遗族矿洞，血债累累。' },
   { id: 'taiqing_gong', name: '太清仙宫', type: '朝廷', alignment: '正道', tier: 1, seat: 'taiqing', desc: '灵界秩序的执掌者，飞升者在此登记服役，仙籍与凡籍一刀两断。' },
   { id: 'taishu', name: '太清书院', type: '宗门', alignment: '中立', tier: 2, seat: 'taiqing', desc: '天渊城里的讲道之所，藏有天书残卷，对下界飞升者既不亲也不拒。' },
+  { id: 'zijin_pass', name: '紫金关', type: '帮派', alignment: '中立', tier: 4, seat: 'zijin', desc: '紫金国官道上的关卡帮，收过路钱，也替商队护镖。' },
+  { id: 'jiang_remnant', name: '姜门残部', type: '散修联盟', alignment: '中立', tier: 4, seat: 'jiangguo', desc: '姜国被推平后剩下的几支残宗，抱团守在山道上。' },
+  { id: 'jiuguo_hall', name: '九国议事堂', type: '朝廷', alignment: '中立', tier: 3, seat: 'jiuguo', desc: '九国轮流坐庄的议事之所，军令与赏格都从这里发下去。' },
+  { id: 'wubian_pirates', name: '断桅帮', type: '帮派', alignment: '魔道', tier: 3, seat: 'wubian', desc: '无边海上的亡命船帮，专劫走错航线的商船。' },
+  { id: 'kuixing_dock', name: '魁星码头', type: '商会', alignment: '中立', tier: 4, seat: 'kuixing', desc: '魁星岛上的散修集市，收外海妖兽材料，价钱全看眼力。' },
+  { id: 'dajin_sea', name: '湾南船行', type: '商会', alignment: '中立', tier: 2, seat: 'dajin', desc: '大晋湾南州的海运行会，远洋货与灵材都经它手。' },
+  { id: 'zijin_marquis', name: '紫金侯府', type: '世家', alignment: '中立', tier: 2, seat: 'zijin', desc: '紫金国世代镇守南境的侯府，与越国七派有几代交情。' },
+  { id: 'jiang_shan', name: '守山堂', type: '宗门', alignment: '正道', tier: 2, seat: 'jiangguo', desc: '姜国旧宗里没散的那一支，守着入川的山道，收流亡的修士。' },
+  { id: 'jiuguo_left', name: '盟军左营', type: '帮派', alignment: '正道', tier: 2, seat: 'jiuguo', desc: '九国盟常备的左营，专司巡边与接应溃兵。' },
+  { id: 'wubian_watch', name: '死海哨船', type: '散修联盟', alignment: '中立', tier: 2, seat: 'wubian', desc: '几条不肯走的旧船，专在无边海边缘捞浮尸与沉货。' },
+  { id: 'kuixing_lord', name: '魁星岛主府', type: '朝廷', alignment: '中立', tier: 2, seat: 'kuixing', desc: '魁星岛世袭的岛主，管着环礁的引路人与集市规矩。' },
+  { id: 'dajin_patrol', name: '大晋巡海司', type: '朝廷', alignment: '正道', tier: 1, seat: 'dajin', desc: '大晋皇朝的巡海衙门，管远洋航路与外来修士的登岸凭引。' },
 ];
 
 const RELATIONS = [
@@ -132,6 +180,11 @@ const RELATIONS = [
   { a: 'taiqing_gong', b: 'taishu', type: '竞争', note: '仙宫管仙籍，书院管传道，谁说了算争了万年。' },
   { a: 'taiqing_gong', b: 'jiaoren', type: '从属', note: '鲛人族的祖鳞是仙宫赐下的，故奉其号令。' },
   { a: 'xingluo', b: 'xingyun_clan', type: '盟约', note: '两族都自称星官后裔，认了同宗，互通沉船与星砂的消息。' },
+  { a: 'jiang_remnant', b: 'xuedao', type: '世仇', note: '魔道六宗推平姜国，残部与血刀寨结下死仇。' },
+  { a: 'jiuguo_hall', b: 'wubian_pirates', type: '敌对', note: '九国盟的军需船被断桅帮劫过两回。' },
+  { a: 'kuixing_dock', b: 'qiyao', type: '交易', note: '魁星码头收妖兽材料，妖王那边的货也走这条线。' },
+  { a: 'dajin_sea', b: 'wanbao', type: '竞争', note: '万宝阁想做远洋生意，湾南船行寸步不让。' },
+  { a: 'zijin_pass', b: 'shiyun', type: '交易', note: '紫金关替拾云门押过两趟矿货。' },
 ];
 
 // 价格带：以「下品灵石」为单位。稀有度由获得难度决定，与提取器口径一致。
@@ -403,6 +456,7 @@ export function pickStarter(rand = Math.random) {
     { region: 'qingwu', w: 6 },
     { region: 'luoxia', w: 2 },
     { region: 'dayan', w: 2 },
+    { region: 'zijin', w: 1.5 },
     { region: 'chisha', w: 1 },
   ], rand);
 }
@@ -437,6 +491,7 @@ export function currentRegion(world) {
 export const MACROS = {
   天南: { id: '天南', label: '天南', note: '越国、元武、天罗这一带，陆路相连，国与国之间走上月余' },
   乱星海: { id: '乱星海', label: '乱星海', note: '海外群岛，内星海由星宫管辖，外海凶险，往来靠舟船与古传送阵' },
+  大晋: { id: '大晋', label: '大晋', note: '皇朝海疆，修仙界中枢；与乱星海有海路可通，离天南极远' },
   灵界: { id: '灵界', label: '灵界', note: '上界，凡界无路可至' },
 };
 
@@ -450,12 +505,20 @@ export const REGION_META = {
   hanyuan: { macro: '乱星海', kind: '岛' },
   guixu: { macro: '乱星海', kind: '岛城' },
   xingyun: { macro: '乱星海', kind: '岛' },
+  zijin: { macro: '天南', kind: '国' },
+  jiangguo: { macro: '天南', kind: '国' },
+  jiuguo: { macro: '天南', kind: '盟地' },
+  wubian: { macro: '天南', kind: '海域' },
+  kuixing: { macro: '乱星海', kind: '岛' },
+  dajin: { macro: '大晋', kind: '国' },
   taiqing: { macro: '灵界', kind: '边城' },
 };
 
 // 古传送阵：点对点，跨大区的唯一定期通路，开一次要灵石（第 364 章：韩立以低阶灵石启动古阵）
 export const GATES = [
   { a: 'qingwu', b: 'hanyuan', days: 1, cost: 200, name: '古传送阵', note: '建州太岳山脉深处的古阵，另一头在外海' },
+  // 第 583、589 章：大晋修士能到乱星海来走动——两地之间有跨海的大阵（这里按"远洋传送阵"计）
+  { a: 'guixu', b: 'dajin', days: 3, cost: 300, name: '远洋传送阵', note: '天星城外的远洋古阵，通大晋湾南州' },
 ];
 
 export function macroOf(region) {
@@ -565,6 +628,14 @@ export function buildSlice(player, world) {
       return `${r.name}${plan.days}日（${tag}）`;
     })
     .filter(Boolean).join('、');
+  // 本地可用的传送阵（跨大区的唯一通路）
+  const gates = GATES
+    .filter((g) => g.a === region.id || g.b === region.id)
+    .map((g) => {
+      const other = regionById(g.a === region.id ? g.b : g.a, world);
+      return other ? `${other.name} ${g.days}日 / ${g.cost}灵石（${g.name}）` : '';
+    })
+    .filter(Boolean);
   const mult = priceMultiplier(region.id, world.eraType, world);
   const topRarity = region.products[region.products.length - 1];
   const mats = materialNamesInRegion(region.id, 4);
@@ -583,7 +654,8 @@ export function buildSlice(player, world) {
     facText ? `已知势力：${facText}。` : '',
     unknownCount > 0 ? `此外还有 ${unknownCount} 家势力未与之打过交道。` : '',
     roads ? `可达：${roads}。` : '',
-    '跨海须借古传送阵（200 灵石）；灵界无路，只能飞升。',
+    gates.length ? `另有传送阵：${gates.join('、')}。` : '',
+    '跨海须借传送阵（要灵石）；灵界无路，只能飞升。',
     `物价×${mult.toFixed(2)}；本地产出上限${topRarity}。`,
     mats.length ? `可采：${mats.join('、')}。` : '',
     revealedText ? `【已查明】${revealedText}` : '',
